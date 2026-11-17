@@ -32,7 +32,7 @@
     enabled: false,
     terms: [],
     me: null,
-    view: "library",
+    view: "research",
     results: [],
     selected: new Map(),
     fields: [],
@@ -536,9 +536,9 @@
   }
   async function view(name) {
     if (
-      !["library", "research", "mine", "writer", "admin"].includes(name)
+      !["research", "mine", "writer", "admin"].includes(name)
     )
-      name = "library";
+      name = "research"; // 11/18：知識図書館は廃止。古いリンク（?view=library）も Knowledge Lab を開く
     /* 11/17：前の画面のお知らせ（「検索結果を表示しました。」など）が、別の画面に移っても残っていた。移ったら消す */
     if (state.view !== name && !$("#status").classList.contains("error")) status("");
     state.view = name;
@@ -847,7 +847,7 @@
            公開されたと思って終わってしまう。 */
         status(
           payload.visibility === "public"
-            ? "公開しました。知識を読む・知識図書館に表示されます。"
+            ? "公開しました。知識を読むに表示されます。"
             : payload.visibility === "private"
               ? "自分用として保存しました（公開されていません）。"
               : "下書きに保存しました（まだ公開されていません）。マイライブラリーから続きを書いて公開できます。",
@@ -1177,7 +1177,7 @@
         });
         renderAIStatus(saved);
         aiSettingsFeedback(
-          `保存しました。分析：${saved.available ? "有効" : "停止中"}／意味検索：${saved.semanticAvailable ? "有効" : "停止中"}。分析は掛け合わせ研究所から始められます。`,
+          `保存しました。分析：${saved.available ? "有効" : "停止中"}／意味検索：${saved.semanticAvailable ? "有効" : "停止中"}。分析はKnowledge Lab から始められます。`,
         );
         $("#aiOpenResearch").hidden = !saved.available;
       }),
@@ -1876,7 +1876,7 @@
       });
       feedback.textContent =
         result.state === "ready"
-          ? `保存数の集計が完了しました（${result.processed}件確認済み）。知識図書館で「保存数順」を利用できます。`
+          ? `保存数の集計が完了しました（${result.processed}件確認済み）。`
           : `保存記録を${result.processed}件確認しました。もう一度押すと続きから集計します。`;
       // The successful write remains visible even if the separate summary refresh fails.
       await adminSummary();
@@ -2328,32 +2328,15 @@
     }
   });
   const tour = window.ReizoTour;
-  const tourId = (name) => "emu-lab-" + (name === "library" ? "welcome" : name);
+  const tourId = (name) => "emu-lab-" + (name === "research" ? "welcome" : name);
   if (tour) {
     const guides = {
-      library: [
+      research: [
         [
           "lab-intro",
-          "まずは、経験を探してみよう",
-          "図書館では投稿済みの経験を検索できるよ。見つからなかったら、あなたの経験を最初の知識として届けてみよう。",
+          "ここが Knowledge Lab",
+          "違う経験を2〜3つ重ねて、自分だけの答えを探す場所だよ。知識を一覧で読むのは「知識を読む」、ここは組み合わせて考えるところ。",
         ],
-        [
-          "lab-search",
-          "キーワードだけでも探せるよ",
-          "知りたいことを入力して「探す」。分野のカードを押すと、その分野だけで探せるよ。細かい条件は「詳しい条件で探す」にしまってあるよ。",
-        ],
-        [
-          "lab-tabs",
-          "見つけた経験から、次の発見へ",
-          "異なる経験を組み合わせるなら研究所へ。保存した知識と研究の続きは、マイライブラリーに残るよ。",
-        ],
-        [
-          "lab-back",
-          "Emu for SchoolParkへはここから戻れるよ",
-          "「Emu for SchoolParkに戻る」で、もとの画面へ。上の「冷蔵庫くん」から、この説明や今開いている画面の案内をいつでも見返せるよ。",
-        ],
-      ],
-      research: [
         [
           "lab-fields",
           "組み合わせたい分野を2〜3つ選ぼう",
@@ -2398,7 +2381,7 @@
         {
           label: "Knowledge Lab",
           brand: "Emu",
-          auto: name === "library",
+          auto: name === "research",
           isReady: () =>
             state.enabled && state.terms.length > 0 && state.view === name,
         },
@@ -2416,7 +2399,7 @@
     $("#guide").onclick = (event) => {
       if (state.view === "admin")
         return run(() =>
-          view("library").then(() => tour.restart(tourId("library"))),
+          view("research").then(() => tour.restart(tourId("research"))),
         );
       let host = null;
       try {
@@ -2471,11 +2454,10 @@
       showLogin();
     }
     renderFacets();
-    await search();
-    window.EmuAnalytics?.view("knowledge_lab_view", {section:"library"}, "library");
+    window.EmuAnalytics?.view("knowledge_lab_view", {section:"research"}, "research");
     const p = initialParams,
       initial = p.get("view");
-    if (initial && initial !== "library") await view(initial);
+    await view(initial || "research");
     if (p.get("post")) await detail(p.get("post"));
     if (p.get("note")) await showNote(p.get("note"));
     if (p.get("compose") === "1") compose();

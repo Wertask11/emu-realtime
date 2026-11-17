@@ -58,16 +58,14 @@ test('名前と文言：Knowledge Lab・Knowledge Text、説明文と3つのカ�
     assert.doesNotMatch(await w.page.content(), /人が考える研究ノートとして利用できます/);
     assert.equal((await w.page.locator('.lab-header > div:first-child').innerText()).trim(), 'KNOWLEDGE LAB');
     assert.equal((await w.page.locator('#backToEmu').innerText()).trim(), '← Emu for SchoolParkに戻る');
-    /* 11/17（2回目）：「ナレッジテキストと同じぐらいシンプルに」。3枚のカードはやめ、その文を各タブの最初の一言にした */
     assert.equal(await w.page.locator('.lab-step').count(), 0);
-    assert.deepEqual(await w.page.$$eval('.view .lead', ps => ps.map(p => p.textContent.trim())), [
-      '気になる言葉で、みんなの経験を探す',
-      '違う経験を2〜3つ重ねると、自分だけの答えが見えてくる',
-      '保存した知識・自分の経験知・研究ノートの置き場所',
-      'あなたの経験も、誰かの役に立つ。書いて届けよう']);
-    assert.equal(await w.page.locator('#moreSearch').evaluate(d => d.open), false, '細かい条件はたたんでおく');
-    assert.equal(await w.page.locator('#searchForm .search-row #query').count(), 1, '検索は1行');
-    assert.equal((await w.page.locator('#library [data-compose]').first().innerText()).trim(), '自分の経験を書く');
+    /* 11/18 オーナー：知識図書館は廃止。掛け合わせる画面の名前は「Knowledge Lab」で、開いたら最初にここ */
+    assert.deepEqual(await w.page.$$eval('nav.tabs button:not([hidden])', bs => bs.map(b => b.textContent.replace(/\s+/g, '').trim())),
+      ['KnowledgeLab', 'マイライブラリー', '書き手プロフィール']);
+    assert.equal(await w.page.locator('#library').isVisible(), false, '知識図書館は出さない');
+    assert.equal(await w.page.locator('#research').isVisible(), true, '最初に Knowledge Lab（掛け合わせ）を出す');
+    assert.equal((await w.page.locator('#research .lead').innerText()).trim(), '違う経験を2〜3つ重ねると、自分だけの答えが見えてくる');
+    assert.doesNotMatch(await w.page.locator('body').innerText(), /知識図書館|掛け合わせ研究所/);
     assert.doesNotMatch(intro, /別タブ/);
     assert.deepEqual(w.errors, []);
   } finally { await w.close(); }
@@ -137,7 +135,8 @@ test('ガイドの自動のずらしは、1つの手順につき1回だけ（自
   assert.match(src, /if \(!shifted\) \{\s*shifted = true;/);
   assert.match(src, /scrolled = false; shifted = false;/, '次の手順に進んだら、また1回ずらせる');
   const lab = fs.readFileSync(path.join(ROOT, 'knowledge-lab/lab.js'), 'utf8');
-  assert.match(lab, /"lab-search",\s*"キーワードだけでも探せるよ"/, '検索の案内は、画面全体ではなく検索欄を指す');
+  assert.doesNotMatch(lab, /"lab-search",\s*"キーワードだけでも探せるよ"/, '知識図書館の案内は外した（11/18）');
+  assert.match(lab, /"lab-intro",\s*"ここが Knowledge Lab"/, 'Knowledge Lab の案内から始まる');
 });
 
 /* 11/18 オーナー：「冷蔵庫くんは全部、Emu の冷蔵庫くんの窓（聞く・頼む・この画面のガイドを左上で切り替える）に統一して」 */
@@ -147,4 +146,61 @@ test('Lab の冷蔵庫くんボタンは、Emu の中では Emu の冷蔵庫く�
   assert.match(lab, /host\.ReizoTourAsk\(event\.currentTarget\)/);
   for (const f of ['admin/room1/index.html', 'knowledge.html', 'schoolpark/dao.html'])
     assert.doesNotMatch(fs.readFileSync(path.join(ROOT, f), 'utf8'), /\.choose\(/, f + ' も古い選ぶ窓を開かない');
+});
+
+/* 11/18 オーナー：「分類で絞って探す機能は、検索バーに追加して」。知識を読む（knowledge.html）の検索バーに「分類で絞る」 */
+test('知識を読む：検索バーの「分類で絞る」で、分野などから絞れる。外すと元に戻る', async () => {
+  const PARENT = `<!doctype html><meta charset="utf-8"><iframe id="k" src="/knowledge.html" style="width:1100px;height:900px;border:0"></iframe>
+<script>window.sent=[];const f=document.getElementById('k');window.toFrame=m=>f.contentWindow.postMessage(m,location.origin);
+addEventListener('message',e=>{if(e.source===f.contentWindow)window.sent.push(e.data||{});});</script>`;
+  const terms = [{ id: 'f-edu', axis: 'field', label: '教育・学び', active: true }, { id: 'f-it', axis: 'field', label: 'IT・AI', active: true }, { id: 'i-shop', axis: 'industry', label: '小売', active: true }];
+  const context = await browser.newContext({ viewport: { width: 1200, height: 950 } });
+  await context.route('**/*', route => {
+    const url = new URL(route.request().url());
+    if (url.pathname === '/test/parent') return route.fulfill({ contentType: 'text/html; charset=utf-8', body: PARENT });
+    if (url.pathname === '/api/knowledge-lab/taxonomy') return route.fulfill({ json: terms });
+    return url.origin === base ? route.continue() : route.abort();
+  });
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', e => errors.push(e.message));
+  try {
+    await page.goto(base + '/test/parent');
+    await page.waitForFunction(() => window.sent.some(m => m.type === 'emu-knowledge-ready'));
+    const frame = page.frames().find(f => f.url().endsWith('/knowledge.html'));
+    const now = new Date().toISOString();
+    const posts = [
+      { id: 'a', title: '授業の工夫', body: '本文', address: '0x' + '1'.repeat(40), displayName: 'A', createdAt: now, facets: { field: ['f-edu'] } },
+      { id: 'b', title: 'AIで効率化', body: '本文', address: '0x' + '2'.repeat(40), displayName: 'B', createdAt: now, facets: { field: ['f-it'], industry: ['i-shop'] } },
+      { id: 'c', title: '分類なしの知識', body: '本文', address: '0x' + '3'.repeat(40), displayName: 'C', createdAt: now }];
+    await page.evaluate(p => window.toFrame({ type: 'emu-knowledge-posts', posts: p, hasMore: false, totalCount: 3 }), posts);
+    await frame.waitForFunction(() => document.querySelectorAll('#posts .card').length === 3);
+    const titles = () => frame.$$eval('#posts .card h2, #posts .card h3', hs => hs.map(h => h.textContent.trim()).filter(t => /授業|AI|分類なし/.test(t)));
+    await frame.locator('#facetFilter').click();
+    await frame.locator('[data-term="f-it"]').click();
+    await frame.waitForFunction(() => document.querySelectorAll('#posts .card').length === 1);
+    assert.deepEqual(await titles(), ['AIで効率化'], '分野で絞れる');
+    assert.match(await frame.locator('#facetFilter').innerText(), /分類で絞る（1）/);
+    await frame.locator('[data-term="f-edu"]').click();
+    await frame.waitForFunction(() => document.querySelectorAll('#posts .card').length === 2);
+    assert.equal((await titles()).length, 2, '同じ分類の中は「どれか」');
+    await frame.locator('[data-term="i-shop"]').click();
+    await frame.waitForFunction(() => document.querySelectorAll('#posts .card').length === 1);
+    assert.deepEqual(await titles(), ['AIで効率化'], '違う分類どうしは「すべて」');
+    await frame.locator('[data-kf-clear]').click();
+    await frame.waitForFunction(() => document.querySelectorAll('#posts .card').length === 3);
+    assert.match(await frame.locator('#facetFilter').innerText(), /^分類で絞る$/);
+    assert.deepEqual(errors, []);
+  } finally { await context.close(); }
+});
+
+test('親（index.html）は、知識を読むへ渡す投稿に分類の ID を添える', () => {
+  const index = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+  const code = index.slice(index.indexOf('  function knowledgeFacetIds(data) {'), index.indexOf('\n  }\n', index.indexOf('  function knowledgeFacetIds(data) {')) + 4);
+  const raw = vm.runInNewContext(code + ';knowledgeFacetIds');
+  const fn = (v) => JSON.parse(JSON.stringify(raw(v)));
+  assert.deepEqual(fn({ knowledgeLab: { facets: { field: ['f-edu', 'bad id!'], industry: [] } } }), { field: ['f-edu'] });
+  assert.deepEqual(fn({ facets: { field: ['x1'] } }), { field: ['x1'] });
+  assert.deepEqual(fn({}), {});
+  assert.match(index, /facets: knowledgeFacetIds\(data\),/);
 });

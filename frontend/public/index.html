@@ -5501,7 +5501,7 @@ html[data-sp-time="night"] .ches-btn-email { background:rgba(255,255,255,.06); b
     <!-- Knowledge Lab（みんなの経験知）と Knowledge Text（運営の学習教材。旧 Room1）を、同じ大きさのカードで並べる。
          パソコンは横に2枚、スマホは縦に。Knowledge Text は独立タブではなく、全端末でここから開く（11/2 オーナーから） -->
     <div class="emu-knowledge-pair">
-      <div class="eth-card" data-tour="emu-lab-entry"><h3>Knowledge Lab</h3><p>教科書にない答えは、経験の中にある。違う経験同士を組み合わせて、自分だけの答えを探す場所。</p><button type="button" class="eth-btn primary" onclick="openEmuKnowledgeLab()">知識図書館・掛け合わせ研究所を開く →</button></div>
+      <div class="eth-card" data-tour="emu-lab-entry"><h3>Knowledge Lab</h3><p>教科書にない答えは、経験の中にある。違う経験同士を組み合わせて、自分だけの答えを探す場所。</p><button type="button" class="eth-btn primary" onclick="openEmuKnowledgeLab()">Knowledge Labを開く →</button></div>
       <div class="eth-card" data-tour="room1-entry emu-room1"><h3>Knowledge Text</h3><p>騙されないお金の守り方、炎上しないSNSの使い方、折れない心のつくり方。学校では教わらない「生きる知識」を、ここで。</p><button type="button" class="eth-btn primary emu-text-entry" onclick="openSpRoom('/admin/room1/index.html', 'Knowledge Text')">教科書をひらく →</button></div>
     </div>
     <!-- 11/7 オーナー決定：「知識を探しています（KNOWLEDGE REQUEST）」は廃止。知識を探すは Knowledge Lab と Knowledge Text の2つが主。
@@ -29565,8 +29565,21 @@ async function sendEmuFeedback() {
       acceptedChangeCount: Number(data.acceptedChangeCount) || 0,
       goodUsers: Array.isArray(data.goodUsers) ? data.goodUsers : [],
       changeUsers: Array.isArray(data.changeUsers) ? data.changeUsers : [],
+      /* 11/18：知識を読むの「分類で絞る」用。Knowledge Lab で付けた分類（分野・業種など）の ID だけを渡す */
+      facets: knowledgeFacetIds(data),
       createdAt: created
     };
+  }
+  function knowledgeFacetIds(data) {
+    const raw = (data.knowledgeLab && data.knowledgeLab.facets) || data.facets || {};
+    const out = {};
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
+    for (const axis of Object.keys(raw).slice(0, 12)) {
+      if (!/^[a-z]{1,20}$/.test(axis) || !Array.isArray(raw[axis])) continue;
+      const ids = raw[axis].map(String).filter(id => /^[A-Za-z0-9_-]{1,100}$/.test(id)).slice(0, 20);
+      if (ids.length) out[axis] = ids;
+    }
+    return out;
   }
   async function scheduledKnowledgeCount(account) {
     if (!account || !window.hasScheduleNFT) return 0;
