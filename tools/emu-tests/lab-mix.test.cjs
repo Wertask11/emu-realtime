@@ -228,11 +228,6 @@ test('混ぜる：フラスコの実験 → 光る → 新しい発見。保存�
     await w.f.locator('#mixActMsg').filter({ hasText: '保存しました' }).waitFor();
     assert.equal(w.seen.notes[0].visibility, 'private');
     assert.equal(w.seen.notes[0].mode, 'mix');
-    // 公開：演出して、みんなの新しい発見に載る
-    await w.f.locator('[data-act="public"]').click();
-    await w.f.locator('#mixActMsg').filter({ hasText: '公開しました' }).waitFor();
-    assert.equal(w.seen.notes[1].visibility, 'public');
-    assert.equal(await w.f.locator('#mixFeedList [data-note="note-1"]').count(), 1);
     // ギルドの議題：Lab の中で出す。中身から WORK（営業・常連）を選ぶ。やめると発見にもどる
     await w.f.locator('[data-act="guild"]').click();
     await w.f.locator('.mix-guild').waitFor();
@@ -244,6 +239,7 @@ test('混ぜる：フラスコの実験 → 光る → 新しい発見。保存�
     await w.f.locator('.mix-guild [data-guild="learn"]').click();
     await w.f.locator('#mixGuildGo').click();
     await w.f.locator('.mix-guild-done').waitFor();
+    assert.equal(w.seen.notes[1].visibility, 'public', '議題にする前に公開する');
     const prop = await w.page.evaluate(() => window.proposals[0]);
     assert.equal(prop.guildId, 'learn');
     assert.deepEqual(prop.options, ['クエストにして試す', 'いまはやらない']);
@@ -254,6 +250,14 @@ test('混ぜる：フラスコの実験 → 光る → 新しい発見。保存�
     // クエスト
     await w.f.locator('[data-act="quest"]').click();
     await w.page.waitForFunction(() => window.msgs.some((m) => m.action === 'quests'));
+    // 公開：演出して、みんなの新しい発見に載る。終わったら結果を閉じて、Lab のトップのその発見を見せる（11/18 オーナー）
+    await w.f.locator('[data-act="public"]').click();
+    await w.f.locator('#mixActMsg').filter({ hasText: '公開しました' }).waitFor();
+    assert.equal(w.seen.notes.at(-1).visibility, 'public');
+    await w.f.locator('#mixStage').waitFor({ state: 'hidden', timeout: 6000 });
+    assert.equal(await w.f.locator('#mixHome').isVisible(), true, 'Lab のトップに戻る');
+    assert.equal(await w.f.locator('#mixFeedList [data-note="note-1"].fresh').count(), 1, 'いま公開した発見が光る');
+    assert.match(await w.f.locator('#status').innerText(), /公開しました/);
     assert.deepEqual(w.errors, []);
   } finally { await w.close(); }
 });
