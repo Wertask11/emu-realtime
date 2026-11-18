@@ -17866,43 +17866,53 @@ window.spDaoLoadVotes = async function (app) {
   } catch (e) {}
   if (!window.db || !window.fbLib) return;
   const fb = window.fbLib;
+  /* 11/18：パスポート・特殊議題の資格・議題・クエスト・人数は、互いに待たなくてよいので同時に読む。
+     前は1つずつ順に待っていたので（最大で 8秒＋6秒＋8秒＋…）、そのあいだ一覧が「参加したい —」
+     「クエスト 0」のままに見えていた。 */
+  const memberReads = defs.map(function (g) {
+    return Promise.all([
+      _spReadAll('sp_guild_members/' + encodeURIComponent(g.id) + '/joins').catch(function () { return null; }),
+      _spReadAll('sp_guild_members/' + encodeURIComponent(g.id) + '/supports').catch(function () { return null; })
+    ]);
+  });
   /* 本人はパスポートから取る。ほかの画面と同じ道にそろえる。返ってこないときは見切る（11/18） */
-  const pr = await _spSoon(spPassportLoad(), 8000).catch(function () { return { ok: false }; });
-  const p = pr.ok ? pr.value : null;
-  const mine = p && p.addr ? String(p.addr).toLowerCase() : '';
+  const passportRead = _spSoon(spPassportLoad(), 8000).catch(function () { return { ok: false }; });
   /* 特殊議題に入れる人かどうか。入れない人には、押せない形で見せる。返ってこなければ「入れない」で出す */
-  const cg = await _spSoon(window.spCanGuild(), 6000).catch(function () { return { ok: false }; });
-  const canGuild = cg.ok ? !!cg.value : false;
-
-  try {
-    const q = fb.query(fb.collection(window.db, 'sp_votes'), fb.orderBy('createdAt', 'desc'), fb.limit(100));
-    const got = await _spSoon(fb.getDocs(q), 8000);
-    if (!got.ok) throw new Error('議題の読み込みが返ってきませんでした');
-    const list = [];
-    got.value.forEach(function (s) { list.push(Object.assign({ id: s.id }, s.data() || {})); });
-    _spVoteDocs = list;
-  } catch (e) { _spWarnDenied('議題', e); }
+  const guildRead = _spSoon(window.spCanGuild(), 6000).catch(function () { return { ok: false }; });
+  const voteRead = (async function () {
+    try {
+      const q = fb.query(fb.collection(window.db, 'sp_votes'), fb.orderBy('createdAt', 'desc'), fb.limit(100));
+      const got = await _spSoon(fb.getDocs(q), 8000);
+      if (!got.ok) throw new Error('議題の読み込みが返ってきませんでした');
+      const list = [];
+      got.value.forEach(function (s) { list.push(Object.assign({ id: s.id }, s.data() || {})); });
+      _spVoteDocs = list;
+    } catch (e) { _spWarnDenied('議題', e); }
+  })();
   /* ギルドは、クエスト一覧とは別にもう一度読んでいる。
      こちらにだけ逃げ道が無かったので、通信が切れていると
      「LEARN のクエスト 0」「まだクエストがありません」になっていた。
      一般 #001 は LEARN なのに、ギルドに出てこない。 */
   /* ギルドは、クエスト一覧と同じものをもう一度読んでいた。
      共有の読み口にそろえる（中身は同じで、読み取りは1回で済む）。 */
-  let questList = [];
-  try {
-    questList = (await _spAllQuests()) || [];
-  } catch (e) { _spWarnDenied('クエスト', e); }
+  const questRead = (async function () {
+    try { return (await _spAllQuests()) || []; }
+    catch (e) { _spWarnDenied('クエスト', e); return []; }
+  })();
+  const pr = await passportRead;
+  const p = pr.ok ? pr.value : null;
+  const mine = p && p.addr ? String(p.addr).toLowerCase() : '';
+  const cg = await guildRead;
+  const canGuild = cg.ok ? !!cg.value : false;
+  await voteRead;
+  const questList = await questRead;
   /* 読めなかったときは、前に出ていたものを消さない。 */
   if (questList.length || !_spGuildQuestDocs.length) _spGuildQuestDocs = questList;
 
-  /* ギルドごとに「参加したい」と「応援する」で2往復ある。
-     5ギルドを1つずつ順に待っていたので10往復ぶん待っていた。まとめて同時に投げる。 */
-  const guilds = await Promise.all(defs.map(async function (g) {
+  /* ギルドごとに「参加したい」と「応援する」で2往復ある。上で同時に投げてある。 */
+  const guilds = await Promise.all(defs.map(async function (g, i) {
     let joins = 0, supports = 0, iJoined = false, iSupport = false;
-    const [js, ss] = await Promise.all([
-      _spReadAll('sp_guild_members/' + encodeURIComponent(g.id) + '/joins').catch(function () { return null; }),
-      _spReadAll('sp_guild_members/' + encodeURIComponent(g.id) + '/supports').catch(function () { return null; })
-    ]);
+    const [js, ss] = await memberReads[i];
     if (js) js.forEach(function (d) { joins++; if (mine && d.id.toLowerCase() === mine) iJoined = true; });
     if (ss) ss.forEach(function (d) { supports++; if (mine && d.id.toLowerCase() === mine) iSupport = true; });
     /* 読めなかったときは null。0人ではない。

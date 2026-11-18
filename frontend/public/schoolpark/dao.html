@@ -33,6 +33,53 @@
 .sp-guild-rules-btn:hover{background:#fff4e6}
 .sp-guild-rules-back{position:fixed;inset:0;z-index:60;background:rgba(20,19,16,.32)}
 .sp-guild-rules-panel{box-sizing:border-box;position:fixed;z-index:61;top:16px;right:16px;bottom:16px;width:min(420px,calc(100vw - 32px));overflow:auto;-webkit-overflow-scrolling:touch;box-shadow:0 18px 50px rgba(20,19,16,.28)}
+/* ───── ギルドホール（11/18）：扉の絵は guild-hall/。位置と文字の場所は Claude Design の見本どおり ───── */
+.gh-hall{position:relative;width:100%;aspect-ratio:2/1;border-radius:12px;overflow:hidden;background:#d8c4a2 url(guild-hall/hall-pc.webp) center/100% 100% no-repeat;box-shadow:0 10px 30px rgba(60,40,15,.18)}
+.gh-swipe{display:none}
+.gh-swipe-hint{display:none}
+.gh-door{position:absolute;display:block;appearance:none;border:0;padding:0;margin:0;background:none;cursor:pointer;container-type:inline-size;perspective:900px;-webkit-tap-highlight-color:transparent;font:inherit;color:inherit}
+.gh-hall .gh-door{top:30.58%;width:16.667%;height:54.17%}
+.gh-door:focus-visible{outline:3px solid #f08300;outline-offset:4px;border-radius:12px}
+.gh-l{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;user-select:none}
+.gh-leaf{transition:transform 1.1s cubic-bezier(.6,0,.2,1);backface-visibility:hidden}
+.gh-leaf-l{transform-origin:22.5% 50%}
+.gh-leaf-r{transform-origin:77.5% 50%}
+.gh-door[data-open="1"] .gh-leaf-l{transform:rotateY(78deg)}
+.gh-door[data-open="1"] .gh-leaf-r{transform:rotateY(-78deg)}
+.gh-bloom{position:absolute;left:-20%;right:-20%;top:20%;height:70%;pointer-events:none;background:radial-gradient(closest-side,rgba(255,240,200,.85),rgba(255,210,140,0));mix-blend-mode:screen;opacity:0;transition:opacity .9s .3s}
+.gh-sparkle{position:absolute;left:-15%;width:130%;top:25%;pointer-events:none;mix-blend-mode:screen;opacity:0;transition:opacity .8s .5s, transform 1.4s .4s ease-out}
+.gh-door[data-open="1"] .gh-bloom{opacity:1}
+.gh-door[data-open="1"] .gh-sparkle{opacity:1;transform:translateY(-6%) scale(1.08)}
+.gh-text{position:absolute;inset:0;pointer-events:none;color:#fff;text-align:center;transition:opacity .4s;text-shadow:0 1px 3px rgba(0,0,0,.55)}
+.gh-door[data-open="1"] .gh-text{opacity:0}
+.gh-text > span{position:absolute;box-sizing:border-box}
+.gh-me{left:30%;right:30%;top:25.5%;padding:.6cqw 0;border-radius:99px;background:rgba(240,131,0,.92);font-size:max(9px,3.4cqw);font-weight:700;text-shadow:none}
+.gh-name{left:0;right:0;top:32%;height:8%;display:flex;align-items:center;justify-content:center;font-family:'Zen Old Mincho',serif;font-weight:900;font-size:max(12px,8cqw);letter-spacing:.04em;color:#f7e3a6}
+.gh-line{left:12%;right:12%;top:41.5%;min-height:10%;display:flex;align-items:center;justify-content:center;font-size:max(9px,4.3cqw);line-height:1.35;font-weight:700;text-wrap:balance;word-break:auto-phrase}
+.gh-stats{left:14%;right:14%;top:60%;height:10%;display:grid;grid-template-columns:1fr 1fr;align-content:center;gap:.8cqw 1.5cqw;font-size:max(9px,3.6cqw);font-weight:700;color:#f3e6c8}
+.gh-stats b{font-family:Inter,sans-serif;color:#ffd27a;font-size:1.15em}
+.gh-btn{left:20%;right:20%;top:74%;height:8%;display:flex;align-items:center;justify-content:center;border:max(1px,.5cqw) solid #e2bb62;border-radius:2cqw;font-size:max(10px,4cqw);font-weight:700;background:rgba(0,0,0,.22);transition:background .2s}
+@media (hover:hover){
+  .gh-door:hover .gh-leaf-l{transform:rotateY(10deg)}
+  .gh-door:hover .gh-leaf-r{transform:rotateY(-10deg)}
+  .gh-door:hover .gh-btn{background:rgba(226,187,98,.35)}
+  .gh-door:hover{filter:drop-shadow(0 0 14px rgba(255,214,140,.6))}
+}
+.gh-hall[data-entering="1"]::after,.gh-swipe[data-entering="1"]::after{content:"";position:absolute;inset:0;pointer-events:none;background:radial-gradient(circle at 50% 55%,rgba(255,248,225,.95),rgba(255,236,190,.55) 40%,rgba(255,236,190,0) 75%);animation:ghFlash 1.15s ease-in forwards}
+@keyframes ghFlash{0%,45%{opacity:0}100%{opacity:1}}
+/* スマホ・狭い画面：扉を1枚ずつ横にスワイプ */
+@media (max-width:899px){
+  .gh-hall{display:none}
+  .gh-swipe{position:relative;display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;padding:0 5% 8px;margin:0 -4px;scrollbar-width:none}
+  .gh-swipe::-webkit-scrollbar{display:none}
+  .gh-slide{position:relative;flex:0 0 90%;max-width:420px;aspect-ratio:1080/1920;scroll-snap-align:center;border-radius:16px;overflow:hidden;background:#d8c4a2 url(guild-hall/hall-sp.webp) center/100% 100% no-repeat;box-shadow:0 8px 24px rgba(60,40,15,.18)}
+  .gh-slide .gh-door{left:12.96%;top:19.48%;width:74.07%;height:67.71%}
+  .gh-swipe-hint{display:block;text-align:center;font-size:12px;color:#8a7a62}
+}
+@media (prefers-reduced-motion:reduce){
+  .gh-leaf,.gh-bloom,.gh-sparkle,.gh-text{transition:none}
+  .gh-hall[data-entering="1"]::after,.gh-swipe[data-entering="1"]::after{animation:none}
+}
 .sp-guild-rules-close{border:0;background:transparent;font-size:22px;line-height:1;color:#6E695C;cursor:pointer;padding:4px 6px}
 /* スマホ（11/7）：#000 のカードは「SchoolPark／−物語はこの場所から−（小さめ）／全文を読む」だけ。パソコンは変えない */
 @media (max-width:760px){
@@ -523,8 +570,52 @@ if (window.top === window.self) window.location.replace('/');
                 <button type="button" class="sp-guild-rules-btn" data-tour="guild-rules" aria-haspopup="dialog" onClick="{{ openGuildRules }}">詳細</button>
               </div>
 
+              <!-- 11/18 オーナー：ギルドを、ホールに並んだ扉にする（絵は Claude Design の guild-hall/*.webp。文字と数字はここで重ねる）。
+                   扉を押すと左右に開いて光り、そのギルドの画面へ入る。スマホは扉を1枚ずつ横にスワイプ -->
+              <div class="gh-hall" data-entering="{{ ghEntering }}">
+                <sc-for list="{{ guildDoors }}" as="d" hint-placeholder-count="5">
+                  <button type="button" class="gh-door" data-open="{{ d.isOpen }}" aria-label="{{ d.aria }}" data-tour="{{ d.tour }}" onClick="{{ d.enter }}" style="{{ d.pos }}">
+                    <img class="gh-l" src="{{ d.glow }}" alt="" loading="lazy" decoding="async" draggable="false">
+                    <img class="gh-l gh-leaf gh-leaf-l" src="{{ d.left }}" alt="" loading="lazy" decoding="async" draggable="false">
+                    <img class="gh-l gh-leaf gh-leaf-r" src="{{ d.right }}" alt="" loading="lazy" decoding="async" draggable="false">
+                    <img class="gh-l gh-frame" src="{{ d.frame }}" alt="" loading="lazy" decoding="async" draggable="false">
+                    <span class="gh-bloom"></span>
+                    <img class="gh-sparkle" src="guild-hall/sparkle.webp" alt="" loading="lazy" decoding="async" draggable="false">
+                    <span class="gh-text">
+                      <span class="gh-me" style="display:{{ d.meShow }}">{{ d.meLabel }}</span>
+                      <span class="gh-name">{{ d.short }}</span>
+                      <span class="gh-line">{{ d.concept }}</span>
+                      <span class="gh-stats"><span>参加したい <b>{{ d.joinCount }}</b></span><span>応援 <b>{{ d.supportCount }}</b></span><span>議題 <b>{{ d.proposalCount }}</b></span><span>クエスト <b>{{ d.questCount }}</b></span></span>
+                      <span class="gh-btn">活動を見る →</span>
+                    </span>
+                  </button>
+                </sc-for>
+              </div>
+              <div class="gh-swipe" data-entering="{{ ghEntering }}">
+                <sc-for list="{{ guildDoors }}" as="d" hint-placeholder-count="5">
+                  <div class="gh-slide">
+                  <button type="button" class="gh-door" data-open="{{ d.isOpen }}" aria-label="{{ d.aria }}" data-tour="{{ d.tour }}" onClick="{{ d.enter }}" >
+                    <img class="gh-l" src="{{ d.glow }}" alt="" loading="lazy" decoding="async" draggable="false">
+                    <img class="gh-l gh-leaf gh-leaf-l" src="{{ d.left }}" alt="" loading="lazy" decoding="async" draggable="false">
+                    <img class="gh-l gh-leaf gh-leaf-r" src="{{ d.right }}" alt="" loading="lazy" decoding="async" draggable="false">
+                    <img class="gh-l gh-frame" src="{{ d.frame }}" alt="" loading="lazy" decoding="async" draggable="false">
+                    <span class="gh-bloom"></span>
+                    <img class="gh-sparkle" src="guild-hall/sparkle.webp" alt="" loading="lazy" decoding="async" draggable="false">
+                    <span class="gh-text">
+                      <span class="gh-me" style="display:{{ d.meShow }}">{{ d.meLabel }}</span>
+                      <span class="gh-name">{{ d.short }}</span>
+                      <span class="gh-line">{{ d.concept }}</span>
+                      <span class="gh-stats"><span>参加したい <b>{{ d.joinCount }}</b></span><span>応援 <b>{{ d.supportCount }}</b></span><span>議題 <b>{{ d.proposalCount }}</b></span><span>クエスト <b>{{ d.questCount }}</b></span></span>
+                      <span class="gh-btn">活動を見る →</span>
+                    </span>
+                  </button>
+                  </div>
+                </sc-for>
+              </div>
+              <div class="gh-swipe-hint">← 横にスワイプして、ほかのギルドも見られるよ →</div>
+              <sc-if value="{{ hasOtherGuilds }}">
               <div style="display:grid; grid-template-columns:{{ L.g2 }}; gap:14px">
-                <sc-for list="{{ guilds }}" as="g" hint-placeholder-count="5">
+                <sc-for list="{{ guildsOther }}" as="g" hint-placeholder-count="5">
                   <div role="button" tabindex="0" class="sp-ux-guild-card" data-tour="guild-card" onClick="{{ g.open }}" style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-left:4px solid {{ g.accent }}; border-radius:12px; padding:20px; display:flex; flex-direction:column; gap:12px; cursor:pointer" style-hover="background:#F4F1EA">
                     <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap">
                       <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.16em; color:#9A9484">{{ g.code }}</div>
@@ -543,6 +634,7 @@ if (window.top === window.self) window.location.replace('/');
                   </div>
                 </sc-for>
               </div>
+              </sc-if>
 
               <sc-if value="{{ hasUnsorted }}">
                 <div onClick="{{ guildUnsorted.open }}" style="background:#FBF9F3; border:1px dashed rgba(20,19,16,.22); border-radius:12px; padding:18px 20px; display:flex; align-items:center; gap:12px; cursor:pointer; flex-wrap:wrap" style-hover="background:#F4F1EA">
@@ -1039,6 +1131,9 @@ const LAYOUTS = {
        gPropose:'1fr', libCols:'1', table:'minmax(0,1.5fr) repeat(4,minmax(0,1fr))', colHide:'block', tableGap:'8px', tablePad:'12px', memAvatar:'none', stick:'static', cardPad:'22px', bigNum:'38px', ctaLabel:'＋'}
 };
 
+/* ギルドホールの扉の並び（左から）と、PC の背景（2400px 幅）の上での扉の左端（px） */
+const GH_KEYS = ['learn','work','play','connect','web3'];
+const GH_LEFTS = [160,580,1000,1420,1840];
 const requestedScreen = new URLSearchParams(window.location.search).get('screen');
 const initialScreen = ['logs','experiments','library','city','tasks','yeargoals','propose'].includes(requestedScreen) ? requestedScreen : 'experiments';
 
@@ -1068,6 +1163,15 @@ class Component extends DCLogic {
 
   scroller = React.createRef();
   toTop(){ if(this.scroller.current) this.scroller.current.scrollTop = 0; window.scrollTo(0,0); }
+  /* ギルドの扉を開けて入る（11/18）。扉が開いて光ってから、ギルドの画面へ。動きを減らす設定ではすぐ入る */
+  enterGuild(g){
+    if (!g || typeof g.open !== 'function' || this._entering) return;
+    const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduce) { g.open(); return; }
+    this._entering = true;
+    this.setState({doorOpen:g.id});
+    setTimeout(() => { this._entering = false; this.setState({doorOpen:''}); try { g.open(); } catch (e) {} }, 1150);
+  }
   /* 絞り込みは画面遷移ではない。draw がスクロール位置を引き継ぐ。 */
   setQuestFilter(patch){
     this.setState(patch);
@@ -1306,6 +1410,16 @@ class Component extends DCLogic {
       isLogs:s.screen==='logs', isGuild:s.screen==='guild', isLibrary:s.screen==='library',
       /* ギルドの決まり（11/18）。「詳細」を押したときだけ出す。ほかの画面へ移ったら閉じたことにする */
       guildRulesOpen:!!s.guildRulesOpen && s.screen==='logs',
+      /* ギルドホールの扉（11/18）。決まった5つは扉に、それ以外（あとから増えたギルド）は今までのカードで出す */
+      guildDoors:(s.guilds || []).filter(g => GH_KEYS.includes(g.id)).map(g => {
+        const k = g.id, at = GH_KEYS.indexOf(k);
+        return {...g, glow:'guild-hall/' + k + '-glow.webp', left:'guild-hall/' + k + '-door-left.webp', right:'guild-hall/' + k + '-door-right.webp', frame:'guild-hall/' + k + '-frame.webp',
+          pos:'left:' + (GH_LEFTS[at] / 24) + '%', isOpen: s.doorOpen === k ? '1' : '0', aria:(g.short || '') + ' ギルドに入る', tour: at === 0 ? 'guild-card' : '',
+          enter:() => this.enterGuild(g)};
+      }),
+      guildsOther:(s.guilds || []).filter(g => !GH_KEYS.includes(g.id)),
+      hasOtherGuilds:(s.guilds || []).some(g => !GH_KEYS.includes(g.id)),
+      ghEntering: s.doorOpen ? '1' : '0',
       openGuildRules:() => this.setState({guildRulesOpen:true}),
       closeGuildRules:() => this.setState({guildRulesOpen:false}),
       isPropose:s.screen==='propose', isTasks:s.screen==='tasks',
