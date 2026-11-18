@@ -99,9 +99,28 @@ test('PC：ギルドはホールの扉。数・参加したいの印が扉に重
     assert.equal(await w.f.locator('.gh-swipe').isVisible(), false, 'PC ではスワイプの並びを出さない');
     const learn = doors.nth(0);
     assert.equal((await learn.locator('.gh-name').textContent()).trim(), 'LEARN');
-    assert.match(await learn.locator('.gh-stats').textContent(), /参加したい 1.*応援 0.*議題 0.*クエスト 0/);
-    assert.equal(await doors.nth(1).locator('.gh-me').isVisible(), true, '自分が参加したいギルドには印');
-    assert.equal(await learn.locator('.gh-me').isVisible(), false);
+    // 扉には名前だけ。ひとこと・数・参加したいの印は、扉の上の札に出す（11/18 オーナー：扉に文字を重ねすぎない）
+    assert.equal(await learn.locator('.gh-stats, .gh-line, .gh-me').count(), 0, '扉には名前だけ');
+    const infos = w.f.locator('.gh-hall .gh-info');
+    assert.equal(await infos.count(), 5);
+    const floors = w.f.locator('.gh-hall .gh-floor');
+    assert.match(await floors.nth(0).locator('.gh-stats').textContent(), /参加したい 1.*応援 0.*議題 0.*クエスト 0/, '数は扉の前の札');
+    assert.match(await infos.nth(0).locator('.gh-line').textContent(), /知識を、やってみるに変える。/);
+    assert.equal(await floors.nth(1).locator('.gh-me').isVisible(), true, '自分が参加したいギルドには印');
+    assert.equal(await floors.nth(0).locator('.gh-me').isVisible(), false);
+    for (let i = 0; i < 5; i++) {
+      const ib = await infos.nth(i).boundingBox(), db = await doors.nth(i).boundingBox();
+      assert.ok(ib.y + ib.height <= db.y + 2, '札は扉の上（扉に重ならない）');
+      const fb = await floors.nth(i).boundingBox();
+      assert.ok(fb.y >= db.y + db.height - 2, '数の札は扉の前（扉に重ならない）');
+      assert.ok(Math.abs((ib.x + ib.width / 2) - (db.x + db.width / 2)) < 4, '札は扉の真上');
+      const fs = await infos.nth(i).locator('.gh-line').evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+      assert.ok(fs >= 11, '文字が小さすぎない');
+    }
+    // 横断幕
+    assert.match(await w.f.locator('.gh-banner').textContent(), /SchoolPark/);
+    const bb = await w.f.locator('.gh-banner').boundingBox();
+    assert.ok(bb.y + bb.height <= (await infos.nth(1).boundingBox()).y, '横断幕は札より上');
     // 扉は左から順に並び、ホールの中に収まる
     const hall = await w.f.locator('.gh-hall').boundingBox();
     const xs = [];
@@ -130,6 +149,7 @@ test('スマホ：扉を1枚ずつ横にスワイプ。押すと開いて入る�
     const first = await slides.nth(0).boundingBox();
     assert.ok(first.width > 280 && first.width < 390, '1枚がほぼ画面の幅');
     assert.ok(await w.f.locator('.gh-swipe').evaluate((el) => el.scrollWidth > el.clientWidth * 3), '横に並んでいる');
+    assert.match(await slides.nth(0).locator('.gh-info .gh-line').textContent(), /知識を、やってみるに変える。/, 'スマホでも扉の上に札');
     await w.f.locator('.gh-swipe').evaluate((el) => { el.scrollLeft = el.scrollWidth; });
     await w.f.locator('.gh-swipe .gh-door').nth(4).click();
     await w.page.waitForFunction(() => window.entered.length === 1, null, { timeout: 4000 });
