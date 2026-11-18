@@ -124,17 +124,23 @@ test('AI が一時的にだめで自動でやり直したときも、本人の�
   assert.equal((await ai.mixQuota(me)).used, 1);
 });
 
-test('掛け合わせは最大4つ。0こ・5こは断る。書き手が同意していない知識・外部AIへの同意が無いときも断る', async () => {
+test('掛け合わせは最大4つ。0こ・5こは断る。公開されていない知識・外部AIへの同意が無いときも断る', async () => {
   const { ai, calls } = setup();
   await assert.rejects(go(ai, 'main', []), /AI_SOURCE_COUNT/);
   await assert.rejects(go(ai, 'main', ['main']), /AI_SOURCE_COUNT/, 'メインと同じものだけ');
   await assert.rejects(go(ai, 'main', ['b', 'c', 'd', 'e', 'f']), /INVALID_LIST/);
-  await assert.rejects(go(ai, 'main', ['nope']), /AI_SOURCE_CONSENT_REQUIRED/);
+  // 11/18 オーナー：書き手ごとの AI 利用の同意は求めない（ログインのときの同意で足りる）。公開されていない知識は送らない
+  POSTS.hidden = { ...POSTS.nope, title: '非公開の知識', visibility: 'private' };
+  await assert.rejects(go(ai, 'main', ['hidden']), /NOT_FOUND/);
+  delete POSTS.hidden;
   await assert.rejects(go(ai, 'main', ['b'], { externalAIConsent: false }), /AI_REQUEST_CONSENT_REQUIRED/);
   await assert.rejects(go(ai, 'main', ['kt_missing']), /NOT_FOUND/);
   await assert.rejects(go(ai, 'main', ['kt_t2']), /NOT_FOUND/, '本文の無い教材');
   assert.equal(calls.length, 0);
   assert.equal((await ai.mixQuota(me)).used, 0);
+  // 書き手が AI の利用を選んでいない知識も混ぜられる
+  const withNope = await go(ai, 'main', ['nope']);
+  assert.deepEqual(withNope.sources.map((x) => x.id), ['main', 'nope']);
   // メイン＋4つ（合計5つ）は通る
   const run = await go(ai, 'main', ['b', 'c', 'd', 'e']);
   assert.equal(run.sources.length, 5);

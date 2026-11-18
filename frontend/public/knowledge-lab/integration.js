@@ -239,6 +239,14 @@
         await window.spDaoOpenWhenReady();
         return;
       }
+      /* 11/18 掛け合わせから出した議題を、ギルドの画面で見る */
+      if (action === "guild-view" && /^[a-z0-9_-]{1,40}$/.test(String(message.guildId || ""))) {
+        if (!await window.openEmuPractice?.("logs")) return;
+        if (window.closeSpRoom() === false) return;
+        const app = document.getElementById("spDaoFrame")?.contentWindow?.app;
+        if (app && typeof window.spGuildOpen === "function") await window.spGuildOpen(message.guildId, app);
+        return;
+      }
       /* 11/18 掛け合わせの結果から「クエストに参加する」：知識を試すのクエスト一覧を開く（参加はクエストの画面で、今までどおり） */
       if (action === "quests") {
         if (!await window.openEmuPractice?.("experiments")) return;

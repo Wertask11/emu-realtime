@@ -4973,6 +4973,13 @@ body.emu-maintenance-open{overflow:hidden}
             <span>ウォレットではじめる（有料パス）</span>
             <span class="ws-btn-shimmer"></span>
           </button>
+          <!-- 11/18 オーナー：運営が作った書き手のアカウントで入る（運営画面で発行した「書き手キー」） -->
+          <button type="button" id="chesWriterToggle" class="ches-adv-toggle" onclick="wsToggleWriterForm()">運営の書き手キーで入る</button>
+          <form id="chesWriterForm" class="ches-email-form" style="display:none;" onsubmit="wsWriterLogin();return false;">
+            <input id="chesWriterKey" type="password" autocomplete="off" spellcheck="false" placeholder="emw_…" aria-label="書き手キー">
+            <button type="submit" id="chesWriterSend">書き手として入る</button>
+            <p class="ches-email-note">運営から渡された書き手キーを入れてください。キーは他の人に見せないでください。</p>
+          </form>
         </div>
       </div>
 
@@ -5197,6 +5204,22 @@ html[data-sp-time="night"] .ches-btn-email { background:rgba(255,255,255,.06); b
     var open = panel.style.display === 'none' || !panel.style.display;
     panel.style.display = open ? 'block' : 'none';
     if (toggle) toggle.textContent = open ? 'その他の方法を閉じる ▴' : 'その他の方法で入る ▾';
+  };
+
+  // ───── 運営の書き手キーで入る（11/18） ─────
+  window.wsToggleWriterForm = function() {
+    var form = document.getElementById('chesWriterForm');
+    if (!form) return;
+    var open = form.style.display === 'none' || !form.style.display;
+    form.style.display = open ? 'flex' : 'none';
+    if (open) { var i = document.getElementById('chesWriterKey'); if (i) i.focus(); }
+  };
+  window.wsWriterLogin = function() {
+    var input = document.getElementById('chesWriterKey');
+    if (!input || !window.CHES || typeof window.CHES.writerLogin !== 'function') return;
+    var key = input.value;
+    input.value = '';   // 画面にキーを残さない
+    window.CHES.writerLogin(key);
   };
 
   // ───── メールではじめる ─────
@@ -18465,6 +18488,50 @@ async function spVoteSubmit() {
   if (_spVoteFormApp) await window.spDaoLoadVotes(_spVoteFormApp);
 }
 
+/* Knowledge Lab の掛け合わせの結果から、議題を出す（11/18 オーナー）。
+   前は知識を試すの議題フォームへ移っていた。間違ってほかの場所を触ると、フォームも Lab の結果も消えて戻れなかった。
+   Lab の中で、選んだギルド・題・説明・選択肢を決めて、ここで出す（中身の決まりは spVoteSubmit と同じ）。
+   返り値 … { ok:true, guildId } か { ok:false, reason }。画面は Lab のまま */
+window.emuSubmitGuildProposal = async function (input) {
+  input = input || {};
+  const title = String(input.title || '').trim().slice(0, 120);
+  const body = String(input.body || '').trim().slice(0, 600);
+  const labels = (Array.isArray(input.options) ? input.options : []).map(function (x) { return String(x || '').trim().slice(0, 60); }).filter(Boolean).slice(0, 4);
+  const guildId = String(input.guildId || '');
+  if (!title) return { ok:false, reason:'議題を書いてください。' };
+  if (labels.length < 2) return { ok:false, reason:'選択肢は2つ以上いります。' };
+  if (!SpGuildStore.isValidId(guildId)) return { ok:false, reason:'どのギルドの議題かを選んでください。' };
+  const p = await spPassportLoad();
+  if (!p) return { ok:false, reason:'議題を出すにはログインが必要です。' };
+  if (!(await window.spCanGuild())) {
+    return { ok:false, reason:'議題を出せるのは、運営・有料の方・信用が足りている方です。信用は、クエストを完走する・知恵カードを置く・引用されると増えます。' };
+  }
+  const days = Math.max(1, Math.min(30, parseInt(input.days, 10) || 7));
+  const fromPostId = /^[A-Za-z0-9_-]{1,80}$/.test(String(input.fromPostId || '')) ? String(input.fromPostId) : '';
+  try {
+    const fb = window.fbLib;
+    await fb.addDoc(fb.collection(window.db, 'sp_votes'), {
+      title: title,
+      body: body,
+      options: labels.map(function (l, i) { return { id: 'o' + (i + 1), label: l }; }),
+      kind: 'free',
+      guildId: guildId,
+      fromPostId: fromPostId,
+      fromPostTitle: fromPostId ? String(input.fromPostTitle || '').slice(0, 120) : '',
+      createdBy: p.addr,
+      createdAt: Date.now(),
+      closesAt: Date.now() + days * 86400000
+    });
+  } catch (e) {
+    console.warn('議題を出せませんでした:', e && (e.message || e));
+    return { ok:false, reason:'議題を出せませんでした。もう一度お試しください。' };
+  }
+  _spGuildOpenId = guildId;
+  const app = document.getElementById('spDaoFrame')?.contentWindow?.app;
+  if (app) window.spDaoLoadVotes(app).catch(function () {});
+  return { ok:true, guildId: guildId };
+};
+
 /* Emu の投稿から「議題を立てる」。
    SchoolPark は枠の中（iframe）にあるので、
      ① SchoolPark を開く（まだ開いていなければ）
@@ -28546,7 +28613,9 @@ async function sendEmuFeedback() {
       || "https://emu-realtime.onrender.com/api/auth/line",
     // ウォレット（MetaMask等）ログインの署名検証エンドポイント（LINEと同じバックエンド）
     walletAuthEndpoint: (window.CHES_CONFIG && window.CHES_CONFIG.walletAuthEndpoint)
-      || "https://emu-realtime.onrender.com/api/auth/wallet"
+      || "https://emu-realtime.onrender.com/api/auth/wallet",
+    // 運営の書き手キーのログイン（11/18）
+    writerTokenEndpoint: "https://emu-realtime.onrender.com/api/auth/writer"
   };
 
   // ───── ユーティリティ ─────
@@ -29117,6 +29186,37 @@ async function sendEmuFeedback() {
       restoreLoginScreen("ログインの準備に時間がかかっています。もう一度お試しください。");
     });
     return true;
+  };
+
+  /* 運営の書き手（11/18 オーナー）。運営画面で発行した書き手キーをサーバーへ送り、ログインの証をもらって入る。
+     入ったあとは、LINE と同じ流れ（アカウント・パスポート・入園）。キーはこの画面にも記録にも残さない */
+  CHES.writerLogin = async function (key) {
+    key = String(key || "").trim();
+    if (!/^emw_[A-Za-z0-9_-]{32}$/.test(key)) { statusMsg("書き手キーの形が違います。運営から渡されたキーをそのまま入れてください。", true); return; }
+    window._chesBusy = true;
+    var logo = document.getElementById("logoScreen"); if (logo) logo.style.display = "none";
+    var ws = document.getElementById("walletScreen"); if (ws) ws.style.display = "none";
+    showLoading();
+    whenFirebaseReady(async function () {
+      try {
+        var res = await fetch(CHES.config.writerTokenEndpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ key: key })
+        });
+        var out = await res.json().catch(function () { return {}; });
+        if (!res.ok || !out.firebaseToken) throw new Error(out.error || ("writer " + res.status));
+        var cred = await window.fbAuth.signInWithCustomToken(window.auth, out.firebaseToken);
+        await completeCommonFlow(cred.user, "writer", out.profile);
+      } catch (e) {
+        console.error("[CHES] 書き手キーのログインエラー:", e && e.message);
+        restoreLoginScreen(e && e.message === "INVALID_WRITER_KEY"
+          ? "書き手キーが違うか、止められています。運営に確かめてください。"
+          : "書き手キーでログインできませんでした。もう一度お試しください。");
+      }
+    }, function () {
+      restoreLoginScreen("ログインの準備に時間がかかっています。もう一度お試しください。");
+    });
   };
 
   // ───── 再訪時の自動サインイン（認証済みセッションの復元） ─────

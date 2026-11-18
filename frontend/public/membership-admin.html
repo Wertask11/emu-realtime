@@ -93,6 +93,7 @@ label{display:block;margin-top:12px;font-size:12px;font-weight:600;color:var(--m
       <button data-tab="schoolpark">SchoolPark（ギルド・クエスト・#000）</button>
       <button data-tab="camellia">Camellia</button>
       <button data-tab="contacts">お問い合わせ</button>
+      <button data-tab="writers">書き手アカウント</button>
     </div>
 
     <section id="tab-members"></section>
@@ -105,6 +106,7 @@ label{display:block;margin-top:12px;font-size:12px;font-weight:600;color:var(--m
     <section id="tab-emu" class="hide"></section>
     <section id="tab-camellia" class="hide"></section>
     <section id="tab-contacts" class="hide"></section>
+    <section id="tab-writers" class="hide"></section>
   </main>
 </div>
 
@@ -4330,14 +4332,93 @@ function stopInboxWatch() {
 /* 画面に戻ってきたら、待たずに1回読む */
 document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshInbox(); });
 
+/* ───────── 書き手アカウント（11/18 オーナー） ─────────
+   ChatGPT・Muse などに、書き手として本番に投稿してもらうためのアカウント。
+   オーナーのアカウントで入ると、オーナーが書いたことになってしまうので、書き手ごとに別のアカウントを作る。
+   作ると「書き手キー」が1回だけ出る。書き手は、ログイン画面の「その他の方法で入る → 運営の書き手キーで入る」にキーを入れて入る。
+   キーはサーバーに残らない（ハッシュだけ）。なくしたら「キーを作り直す」（前のキーは使えなくなる）。 */
+async function renderWriters() {
+  const el = $("#tab-writers");
+  el.innerHTML = '<h2 style="margin:0 0 4px">書き手アカウント</h2>'
+    + '<p class="lead" style="margin:0 0 12px">ChatGPT・Muse などが、書き手として投稿するためのアカウントです。投稿には、ここで付けた名前が出ます。'
+    + '書き手はログイン画面の「その他の方法で入る → 運営の書き手キーで入る」から入ります。運営の権限は持ちません。</p>'
+    + '<form id="wrNew" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin:0 0 12px">'
+    + '<label style="display:grid;gap:4px;font-size:12px">名前（投稿に出る）<input id="wrName" maxlength="40" required placeholder="例：みどり先生" style="padding:8px 10px;border:1px solid var(--line);border-radius:8px"></label>'
+    + '<label style="display:grid;gap:4px;font-size:12px">メモ（運営だけが見る）<input id="wrNote" maxlength="120" placeholder="例：ChatGPT 1人目" style="padding:8px 10px;border:1px solid var(--line);border-radius:8px;min-width:220px"></label>'
+    + '<button type="submit" class="btn">書き手を作る</button></form>'
+    + '<div id="wrKey"></div><div id="wrList">読み込んでいます…</div>';
+  $("#wrNew").onsubmit = async (e) => {
+    e.preventDefault();
+    const btn = e.submitter || $("#wrNew button");
+    btn.disabled = true;
+    try {
+      const r = await api("/api/admin/writer-accounts", { method: "POST", body: { name: $("#wrName").value, note: $("#wrNote").value } });
+      $("#wrName").value = ""; $("#wrNote").value = "";
+      showWriterKey(r.account, r.key);
+      await loadWriters();
+    } catch (err) {
+      alert("作れませんでした：" + (err.code || err.message));
+    } finally { btn.disabled = false; }
+  };
+  await loadWriters();
+}
+function showWriterKey(account, key) {
+  $("#wrKey").innerHTML = '<div class="warnbox" style="margin:0 0 12px">'
+    + '<b>' + esc(account.name) + '</b> の書き手キー（この画面を閉じると、もう見られません）<br>'
+    + '<code id="wrKeyText" style="display:inline-block;margin:8px 0;padding:6px 10px;background:#fff;border-radius:6px;word-break:break-all;font-size:14px">' + esc(key) + '</code><br>'
+    + '<button type="button" class="btn" id="wrCopy">キーをコピー</button> '
+    + '<small>書き手（ChatGPT・Muse）に渡すときは、ほかの人の目に触れない方法で。</small></div>';
+  $("#wrCopy").onclick = async () => {
+    try { await navigator.clipboard.writeText(key); $("#wrCopy").textContent = "コピーしました"; }
+    catch (_) { $("#wrCopy").textContent = "コピーできませんでした（選んでコピーしてください）"; }
+  };
+}
+async function loadWriters() {
+  const box = $("#wrList");
+  try {
+    const { items } = await api("/api/admin/writer-accounts");
+    const when = (ms) => ms ? new Date(ms).toLocaleString("ja-JP") : "まだ";
+    box.innerHTML = items.length ? '<table><thead><tr><th>名前</th><th>メモ</th><th>状態</th><th>最後に入った</th><th>アドレス</th><th></th></tr></thead><tbody>'
+      + items.map((w) => '<tr data-wr="' + esc(w.id) + '">'
+        + '<td><b>' + esc(w.name) + '</b></td><td>' + esc(w.note) + '</td>'
+        + '<td>' + (w.active ? '<span class="state ok">使える</span>' : '<span class="state ng">止めている</span>') + '</td>'
+        + '<td>' + esc(when(w.lastLoginAt)) + '</td>'
+        + '<td><code style="font-size:11px">' + esc(w.address.slice(0, 6) + "…" + w.address.slice(-4)) + '</code></td>'
+        + '<td style="white-space:nowrap"><button type="button" class="btn" data-wr-rename>名前を変える</button> '
+        + '<button type="button" class="btn" data-wr-key>キーを作り直す</button> '
+        + '<button type="button" class="btn" data-wr-active="' + (w.active ? "0" : "1") + '">' + (w.active ? "止める" : "使えるように戻す") + '</button></td></tr>').join("")
+      + '</tbody></table>' : '<p class="lead">まだ書き手アカウントはありません。</p>';
+    const row = (b) => b.closest("[data-wr]").dataset.wr;
+    box.querySelectorAll("[data-wr-rename]").forEach((b) => (b.onclick = async () => {
+      const name = prompt("新しい名前（投稿に出る名前）");
+      if (!name) return;
+      try { await api("/api/admin/writer-accounts/" + row(b), { method: "PATCH", body: { name } }); await loadWriters(); }
+      catch (err) { alert("変えられませんでした：" + (err.code || err.message)); }
+    }));
+    box.querySelectorAll("[data-wr-key]").forEach((b) => (b.onclick = async () => {
+      if (!confirm("キーを作り直します。いまのキーは使えなくなります。よいですか？")) return;
+      try { const r = await api("/api/admin/writer-accounts/" + row(b) + "/key", { method: "POST" }); showWriterKey(r.account, r.key); await loadWriters(); }
+      catch (err) { alert("作り直せませんでした：" + (err.code || err.message)); }
+    }));
+    box.querySelectorAll("[data-wr-active]").forEach((b) => (b.onclick = async () => {
+      const active = b.dataset.wrActive === "1";
+      if (!active && !confirm("この書き手を止めます。止めると、ログインできなくなります。よいですか？")) return;
+      try { await api("/api/admin/writer-accounts/" + row(b), { method: "PATCH", body: { active } }); await loadWriters(); }
+      catch (err) { alert("変えられませんでした：" + (err.code || err.message)); }
+    }));
+  } catch (err) {
+    box.innerHTML = '<p class="state ng">読み込めませんでした（' + esc(err.code || err.message) + '）</p>';
+  }
+}
+
 document.querySelectorAll(".tabs button").forEach(b => {
   b.onclick = () => {
     document.querySelectorAll(".tabs button").forEach(x => x.classList.toggle("active", x === b));
-    ["members","review","refunds","kyc","dialogue","metrics","schoolpark","emu","camellia","contacts"].forEach(t =>
+    ["members","review","refunds","kyc","dialogue","metrics","schoolpark","emu","camellia","contacts","writers"].forEach(t =>
       document.getElementById("tab-" + t).classList.toggle("hide", t !== b.dataset.tab));
     /* Emuタブを離れたら、お預かり箱の読み直しを止める */
     if (b.dataset.tab !== "emu") stopInboxWatch();
-    ({ members: renderMembers, review: renderReview, refunds: renderRefunds, kyc: renderKyc, dialogue: renderDialogue, metrics: renderMetrics, schoolpark: renderSchoolPark, emu: renderEmu, camellia: renderCamellia, contacts: renderContacts })[b.dataset.tab]();
+    ({ members: renderMembers, review: renderReview, refunds: renderRefunds, kyc: renderKyc, dialogue: renderDialogue, metrics: renderMetrics, schoolpark: renderSchoolPark, emu: renderEmu, camellia: renderCamellia, contacts: renderContacts, writers: renderWriters })[b.dataset.tab]();
   };
 });
 
