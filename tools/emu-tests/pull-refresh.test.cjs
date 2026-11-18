@@ -176,5 +176,5 @@ test('index.html：知識を読む・SchoolPark・価値プロフィール・ほ
   assert.equal(await window.emuInAppRefresh(null), 'view');
   classes = new Set(['emu-practice-open']);
   assert.equal(await window.emuInAppRefresh(null), 'view');
-  assert.deepEqual(called, ['knowledge:{"append":false}', 'sp:引っぱって読み直し', 'sp:引っぱって読み直し', 'profile', 'requests', 'practice']);
+  assert.deepEqual(called, ['knowledge:{"append":false,"strict":true}', 'sp:引っぱって読み直し', 'sp:引っぱって読み直し', 'profile', 'requests', 'practice']);
 });
