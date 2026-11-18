@@ -4973,6 +4973,13 @@ body.emu-maintenance-open{overflow:hidden}
             <span>ウォレットではじめる（有料パス）</span>
             <span class="ws-btn-shimmer"></span>
           </button>
+          <!-- 11/18 オーナー：運営が作った書き手のアカウントで入る（運営画面で発行した「書き手キー」） -->
+          <button type="button" id="chesWriterToggle" class="ches-adv-toggle" onclick="wsToggleWriterForm()">運営の書き手キーで入る</button>
+          <form id="chesWriterForm" class="ches-email-form" style="display:none;" onsubmit="wsWriterLogin();return false;">
+            <input id="chesWriterKey" type="password" autocomplete="off" spellcheck="false" placeholder="emw_…" aria-label="書き手キー">
+            <button type="submit" id="chesWriterSend">書き手として入る</button>
+            <p class="ches-email-note">運営から渡された書き手キーを入れてください。キーは他の人に見せないでください。</p>
+          </form>
         </div>
       </div>
 
@@ -5197,6 +5204,22 @@ html[data-sp-time="night"] .ches-btn-email { background:rgba(255,255,255,.06); b
     var open = panel.style.display === 'none' || !panel.style.display;
     panel.style.display = open ? 'block' : 'none';
     if (toggle) toggle.textContent = open ? 'その他の方法を閉じる ▴' : 'その他の方法で入る ▾';
+  };
+
+  // ───── 運営の書き手キーで入る（11/18） ─────
+  window.wsToggleWriterForm = function() {
+    var form = document.getElementById('chesWriterForm');
+    if (!form) return;
+    var open = form.style.display === 'none' || !form.style.display;
+    form.style.display = open ? 'flex' : 'none';
+    if (open) { var i = document.getElementById('chesWriterKey'); if (i) i.focus(); }
+  };
+  window.wsWriterLogin = function() {
+    var input = document.getElementById('chesWriterKey');
+    if (!input || !window.CHES || typeof window.CHES.writerLogin !== 'function') return;
+    var key = input.value;
+    input.value = '';   // 画面にキーを残さない
+    window.CHES.writerLogin(key);
   };
 
   // ───── メールではじめる ─────
@@ -28590,7 +28613,9 @@ async function sendEmuFeedback() {
       || "https://emu-realtime.onrender.com/api/auth/line",
     // ウォレット（MetaMask等）ログインの署名検証エンドポイント（LINEと同じバックエンド）
     walletAuthEndpoint: (window.CHES_CONFIG && window.CHES_CONFIG.walletAuthEndpoint)
-      || "https://emu-realtime.onrender.com/api/auth/wallet"
+      || "https://emu-realtime.onrender.com/api/auth/wallet",
+    // 運営の書き手キーのログイン（11/18）
+    writerTokenEndpoint: "https://emu-realtime.onrender.com/api/auth/writer"
   };
 
   // ───── ユーティリティ ─────
@@ -29161,6 +29186,37 @@ async function sendEmuFeedback() {
       restoreLoginScreen("ログインの準備に時間がかかっています。もう一度お試しください。");
     });
     return true;
+  };
+
+  /* 運営の書き手（11/18 オーナー）。運営画面で発行した書き手キーをサーバーへ送り、ログインの証をもらって入る。
+     入ったあとは、LINE と同じ流れ（アカウント・パスポート・入園）。キーはこの画面にも記録にも残さない */
+  CHES.writerLogin = async function (key) {
+    key = String(key || "").trim();
+    if (!/^emw_[A-Za-z0-9_-]{32}$/.test(key)) { statusMsg("書き手キーの形が違います。運営から渡されたキーをそのまま入れてください。", true); return; }
+    window._chesBusy = true;
+    var logo = document.getElementById("logoScreen"); if (logo) logo.style.display = "none";
+    var ws = document.getElementById("walletScreen"); if (ws) ws.style.display = "none";
+    showLoading();
+    whenFirebaseReady(async function () {
+      try {
+        var res = await fetch(CHES.config.writerTokenEndpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ key: key })
+        });
+        var out = await res.json().catch(function () { return {}; });
+        if (!res.ok || !out.firebaseToken) throw new Error(out.error || ("writer " + res.status));
+        var cred = await window.fbAuth.signInWithCustomToken(window.auth, out.firebaseToken);
+        await completeCommonFlow(cred.user, "writer", out.profile);
+      } catch (e) {
+        console.error("[CHES] 書き手キーのログインエラー:", e && e.message);
+        restoreLoginScreen(e && e.message === "INVALID_WRITER_KEY"
+          ? "書き手キーが違うか、止められています。運営に確かめてください。"
+          : "書き手キーでログインできませんでした。もう一度お試しください。");
+      }
+    }, function () {
+      restoreLoginScreen("ログインの準備に時間がかかっています。もう一度お試しください。");
+    });
   };
 
   // ───── 再訪時の自動サインイン（認証済みセッションの復元） ─────

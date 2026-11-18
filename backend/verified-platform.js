@@ -7,6 +7,9 @@ const deriveAddress = uid => ethers.utils.getAddress('0x' + ethers.utils.keccak2
 async function ensureVerifiedAccount(db, decoded) {
   const uid = decoded.uid;
   if (typeof uid !== 'string' || !uid || uid.includes('/')) throw new Error('INVALID_UID');
+  /* 運営の書き手（11/18）：運営画面で止めた書き手は入れない */
+  const writer = uid.startsWith('writer:') ? await require('./writer-accounts').writerStatus(db, uid) : null;
+  if (writer && !writer.active) throw new Error('WRITER_DISABLED');
   const chesAddress = deriveAddress(uid);
   const walletLogin = uid.startsWith('wallet:');
   const ref = db.collection('ches_accounts').doc(uid);
@@ -34,9 +37,10 @@ async function ensureVerifiedAccount(db, decoded) {
          そのまま書くとパスポートの「入り方」が「不明」になっていた。uid（line:…）か
          token の provider で LINE と書く。表示と記録のためだけの欄（権限には使わない）。 */
       provider: walletLogin ? 'wallet'
+        : writer ? 'writer'
         : ((String(uid).indexOf('line:') === 0 || decoded.provider === 'line') ? 'line'
         : (decoded.firebase?.sign_in_provider || 'custom')),
-      displayName: old.displayName || decoded.name || '', email: old.email || decoded.email || '',
+      displayName: old.displayName || (writer && writer.name) || decoded.name || '', email: old.email || decoded.email || '',
       photoURL: old.photoURL || decoded.picture || '', createdAt: old.createdAt || now, lastLogin: now,
       membership: old.membership || { tier: 'free', offchain: true, issuedAt: now },
     };
@@ -100,7 +104,7 @@ function accountRouter({ db, firebaseAdmin, onVerified = () => {} }) {
       onVerified(decoded.uid);
       return res.json({ account });
     } catch (error) {
-      if (['WALLET_LOGIN_REQUIRED', 'ADDRESS_MISMATCH', 'INVALID_UID'].includes(error.message)) return res.status(403).json({ error: error.message });
+      if (['WALLET_LOGIN_REQUIRED', 'ADDRESS_MISMATCH', 'INVALID_UID', 'WRITER_DISABLED'].includes(error.message)) return res.status(403).json({ error: error.message });
       if (noteQuotaError(error)) return res.status(503).json({ error: 'SERVICE_MAINTENANCE', retryAt: quotaState.until });
       return res.status(503).json({ error: 'ACCOUNT_UNAVAILABLE' });
     }
