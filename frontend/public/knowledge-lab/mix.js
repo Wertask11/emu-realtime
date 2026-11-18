@@ -117,10 +117,24 @@
   }
 
   /* ───── 分野・教材の一覧 ───── */
+  /* 11/18 オーナー：分野ごとの知識の数を、カードの右上に出す。数えられなかったときは出さない（0件と見せない） */
+  function countBadge(n) {
+    return typeof n === "number" ? `<em class="mix-count" aria-label="${n}件の知識">${n}件</em>` : "";
+  }
+  async function loadCounts() {
+    if (st.countsAt && Date.now() - st.countsAt < 300000) return;
+    try {
+      st.counts = (await core().api("/field-counts")).counts || null;
+      st.countsAt = Date.now();
+    } catch (_) {
+      st.counts = null;
+    }
+    renderFields();
+  }
   function renderFields() {
     const terms = (core().terms() || []).filter((t) => t.axis === "field" && t.active !== false && !t.mergedInto);
     $("#mixFields").innerHTML = terms.length
-      ? terms.map((t) => `<button type="button" class="mix-card" data-field="${esc(t.id)}"><b>${esc(t.label)}</b><span>${esc(FIELD_NOTE[t.id] || "みんなの経験から")}</span></button>`).join("")
+      ? terms.map((t) => `<button type="button" class="mix-card" data-field="${esc(t.id)}">${countBadge(st.counts?.[t.id])}<b>${esc(t.label)}</b><span>${esc(FIELD_NOTE[t.id] || "みんなの経験から")}</span></button>`).join("")
       : '<p class="mix-empty">分野を読み込めませんでした。少し待って、開き直してね。</p>';
     $("#mixFields").querySelectorAll("[data-field]").forEach((b) => (b.onclick = () => core().run(() => openField(b.dataset.field))));
   }
@@ -147,7 +161,7 @@
     st.texts.forEach((t) => (groups[t.theme] = (groups[t.theme] || 0) + 1));
     const keys = Object.keys(groups);
     $("#mixThemes").innerHTML = keys.length
-      ? keys.map((k) => `<button type="button" class="mix-card" data-theme="${esc(k)}"><b>${esc(TEXT_THEMES[k] || k || "Knowledge Text")}</b><span>${groups[k]}つの教材</span></button>`).join("")
+      ? keys.map((k) => `<button type="button" class="mix-card" data-theme="${esc(k)}">${countBadge(groups[k])}<b>${esc(TEXT_THEMES[k] || k || "Knowledge Text")}</b><span>運営がまとめた学習教材</span></button>`).join("")
       : '<p class="mix-empty">まだ教材がありません。</p>';
     $("#mixThemes").querySelectorAll("[data-theme]").forEach((b) => (b.onclick = () => openTheme(b.dataset.theme)));
   }
@@ -458,6 +472,7 @@
       if (!core()) return;
       build();
       renderFields();
+      loadCounts();
       syncTray();
       if (st.mode) await quota().catch(() => {});
     },
