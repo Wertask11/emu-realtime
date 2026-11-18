@@ -1,0 +1,113 @@
+/* Knowledge Text を本で選んで開く（11/18 オーナー「文字ばっかりだから、本を選んだり・開く演出・エフェクトにして楽しく」）
+   ・「どれを磨く？」とコンテンツの一覧は、本棚に並んだ本の表紙
+   ・本を押すと、本が開いて中からいろいろなものが飛び出し、最後に本文が出る（book-fx.js） */
+#list .grid, #detailList, ul.sub-list {
+  display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:22px 16px;
+  padding:10px 6px 22px; margin-bottom:8px;
+  border-bottom:14px solid #c98a4b; border-radius:6px;
+  box-shadow:0 16px 0 -8px #a96c32, 0 22px 26px -10px #0003;
+  background:linear-gradient(180deg, #fffaf2, #f6ecdc);
+}
+#list .card, #detailList .card, ul.sub-list li {
+  --b1:#ef7d00; --b2:#f6a64a;
+  position:relative; display:flex; flex-direction:column; gap:6px;
+  aspect-ratio:3 / 4; min-height:0; padding:18px 14px 14px 24px; border:0; overflow:hidden;
+  border-radius:4px 14px 14px 4px; color:#fff; background:linear-gradient(140deg, var(--b1), var(--b2));
+  box-shadow:inset 7px 0 0 #0000002e, inset 10px 0 0 #ffffff26, 0 10px 18px #00000026;
+  transform-origin:left bottom; transition:transform .2s ease, box-shadow .2s ease; cursor:pointer;
+}
+#list .card:hover, #detailList .card:hover, ul.sub-list li:hover,
+#list .card:focus-visible, #detailList .card:focus-visible, ul.sub-list li:focus-visible {
+  transform:translateY(-8px) rotate(-2deg); background:linear-gradient(140deg, var(--b1), var(--b2)); color:#fff;
+  box-shadow:inset 7px 0 0 #0000002e, inset 10px 0 0 #ffffff26, 0 18px 26px #00000033;
+}
+#list .card h2, #detailList .card strong, ul.sub-list li { font:800 15px/1.45 "Noto Sans JP", system-ui, sans-serif; color:#fff; text-shadow:0 1px 2px #0003; }
+#list .card h2 { margin:0; }
+#list .card p, #detailList .card p { margin:0; font-size:12px !important; line-height:1.6; color:#ffffffd9 !important;
+  display:-webkit-box; -webkit-line-clamp:4; -webkit-box-orient:vertical; overflow:hidden; }
+#detailList .card span { margin-top:auto; font-size:10px !important; color:#ffffffb3 !important; }
+/* 表紙の飾り：帯と、右下の大きなしるし */
+#list .card::before, #detailList .card::before, ul.sub-list li::before {
+  content:""; position:absolute; left:24px; right:14px; bottom:36px; height:6px; border-radius:3px; background:#ffffff40;
+}
+#list .card::after, #detailList .card::after, ul.sub-list li::after {
+  content:var(--mark, "📘"); position:absolute; right:10px; bottom:6px; font-size:34px; opacity:.9; filter:drop-shadow(0 2px 2px #0003);
+}
+ul.sub-list li { list-style:none; justify-content:flex-start; }
+/* 本の色（並び順で変える） */
+#list .card:nth-child(6n+1), #detailList .card:nth-child(6n+1), ul.sub-list li:nth-child(6n+1) { --b1:#ef7d00; --b2:#f6a64a; --mark:"💡"; }
+#list .card:nth-child(6n+2), #detailList .card:nth-child(6n+2), ul.sub-list li:nth-child(6n+2) { --b1:#2f7dd1; --b2:#62a8f0; --mark:"📈"; }
+#list .card:nth-child(6n+3), #detailList .card:nth-child(6n+3), ul.sub-list li:nth-child(6n+3) { --b1:#3c9b62; --b2:#6fcf93; --mark:"🌱"; }
+#list .card:nth-child(6n+4), #detailList .card:nth-child(6n+4), ul.sub-list li:nth-child(6n+4) { --b1:#6b4fd8; --b2:#9b85f0; --mark:"🔮"; }
+#list .card:nth-child(6n+5), #detailList .card:nth-child(6n+5), ul.sub-list li:nth-child(6n+5) { --b1:#d6456b; --b2:#f07c98; --mark:"💗"; }
+#list .card:nth-child(6n+6), #detailList .card:nth-child(6n+6), ul.sub-list li:nth-child(6n+6) { --b1:#1f5c3f; --b2:#3d8c63; --mark:"🧭"; }
+@media (max-width:760px) {
+  #list .grid, #detailList, ul.sub-list { grid-template-columns:repeat(2, minmax(0, 1fr)); gap:18px 12px; }
+  #list .card, #detailList .card, ul.sub-list li { padding:14px 10px 12px 20px; }
+  #list .card h2, #detailList .card strong, ul.sub-list li { font-size:13px; }
+}
+#detailList:empty { display:none; }
+#detailList > p { grid-column:1 / -1; margin:0; }
+/* 本棚に本が順に並ぶ */
+#list .card, #detailList .card, ul.sub-list li { animation:bkShelf .45s cubic-bezier(.3,1.4,.5,1) backwards; }
+#list .card:nth-child(2), #detailList .card:nth-child(2), ul.sub-list li:nth-child(2) { animation-delay:.05s; }
+#list .card:nth-child(3), #detailList .card:nth-child(3), ul.sub-list li:nth-child(3) { animation-delay:.1s; }
+#list .card:nth-child(4), #detailList .card:nth-child(4), ul.sub-list li:nth-child(4) { animation-delay:.15s; }
+#list .card:nth-child(5), #detailList .card:nth-child(5), ul.sub-list li:nth-child(5) { animation-delay:.2s; }
+#list .card:nth-child(n+6), #detailList .card:nth-child(n+6), ul.sub-list li:nth-child(n+6) { animation-delay:.25s; }
+@keyframes bkShelf { from { opacity:0; transform:translateY(-26px) rotate(-6deg); } }
+/* 開いた本のページ（本文） */
+#detailBody:not(:empty) {
+  background:#fffdf7; border:1px solid #eadfcc; border-radius:6px 16px 16px 6px; padding:26px clamp(18px, 4vw, 40px);
+  box-shadow:inset 14px 0 18px -14px #0000002e, 0 12px 30px #0000001a;
+}
+#detailBody.bk-reveal { animation:bkReveal .6s cubic-bezier(.3,1.3,.5,1) both; }
+@keyframes bkReveal { from { opacity:0; transform:translateY(24px) scale(.96); } }
+
+/* ───── 本を開く演出 ───── */
+.bk-stage { position:fixed; inset:0; z-index:2000; display:flex; align-items:center; justify-content:center; overflow:hidden; cursor:pointer;
+  background:radial-gradient(circle at 50% 45%, #fff6e0 0%, #f3e3c3 45%, #e5cfa3 100%); }
+.bk-stage::before { content:""; position:absolute; left:50%; top:46%; width:170vmax; height:170vmax; margin:-85vmax 0 0 -85vmax;
+  background:repeating-conic-gradient(from 0deg, #ffffff55 0 7deg, transparent 7deg 20deg); opacity:0; animation:bkRays 6s linear .7s infinite, bkFadeIn .5s ease .7s forwards; }
+@keyframes bkRays { to { transform:rotate(360deg); } }
+@keyframes bkFadeIn { to { opacity:1; } }
+.bk-book { --b1:#ef7d00; --b2:#f6a64a; position:relative; width:min(220px, 46vw); aspect-ratio:3 / 4; perspective:1400px;
+  animation:bkDrop .55s cubic-bezier(.3,1.5,.5,1) both, bkAway .5s ease-in 2.15s forwards; }
+@keyframes bkDrop { from { transform:translateY(-60vh) rotate(-14deg) scale(.6); } }
+@keyframes bkAway { to { transform:scale(1.9); opacity:0; } }
+.bk-back, .bk-pages i, .bk-cover { position:absolute; inset:0; border-radius:4px 14px 14px 4px; }
+.bk-back { background:linear-gradient(140deg, var(--b1), var(--b2)); filter:brightness(.8); box-shadow:0 20px 40px #0004; }
+.bk-pages i { inset:6px 8px 6px 4px; background:#fffdf7; border-radius:2px 10px 10px 2px; transform-origin:left center; box-shadow:inset -6px 0 10px #0000001a;
+  background-image:repeating-linear-gradient(transparent 0 14px, #eadfcc 14px 15px); }
+.bk-pages i:nth-child(1) { animation:bkPage .7s ease-in-out 1.15s both; }
+.bk-pages i:nth-child(2) { animation:bkPage .7s ease-in-out 1.35s both; }
+.bk-pages i:nth-child(3) { animation:bkPage .7s ease-in-out 1.55s both; }
+@keyframes bkPage { to { transform:rotateY(-170deg); } }
+.bk-cover { display:flex; flex-direction:column; justify-content:center; padding:20px 18px 20px 28px; color:#fff; transform-origin:left center; backface-visibility:hidden;
+  background:linear-gradient(140deg, var(--b1), var(--b2)); box-shadow:inset 8px 0 0 #0000002e, inset 11px 0 0 #ffffff26;
+  font:800 15px/1.5 "Noto Sans JP", system-ui, sans-serif; text-shadow:0 1px 2px #0003; animation:bkOpen .7s cubic-bezier(.6,0,.3,1) .55s both; }
+.bk-cover small { display:block; margin-bottom:8px; font-size:10px; letter-spacing:.14em; opacity:.85; }
+@keyframes bkOpen { to { transform:rotateY(-165deg); } }
+.bk-glow { position:absolute; left:50%; top:50%; width:10px; height:10px; margin:-5px; border-radius:50%; background:#fff;
+  box-shadow:0 0 60px 40px #fff7c2, 0 0 140px 80px #ffd76688; opacity:0; animation:bkGlow 1.2s ease .8s both; }
+@keyframes bkGlow { 30% { opacity:1; } 100% { opacity:.2; transform:scale(1.4); } }
+/* 本から飛び出すもの */
+.bk-fly { position:absolute; left:50%; top:50%; width:0; height:0; pointer-events:none; }
+.bk-fly span { position:absolute; left:0; top:0; font-size:var(--s, 34px); opacity:0; transform:translate(-50%, -50%) scale(.2);
+  animation:bkFly 1.3s cubic-bezier(.2,.8,.3,1) var(--d) forwards; filter:drop-shadow(0 4px 6px #0003); }
+@keyframes bkFly {
+  15% { opacity:1; }
+  70% { opacity:1; transform:translate(calc(-50% + var(--x)), calc(-50% + var(--y))) rotate(var(--r)) scale(1); }
+  100% { opacity:0; transform:translate(calc(-50% + var(--x) * 1.15), calc(-50% + var(--y) * 1.15 + 30px)) rotate(var(--r)) scale(.9); }
+}
+.bk-fly i { position:absolute; left:0; top:0; width:8px; height:8px; border-radius:50%; background:#ffd84d; box-shadow:0 0 10px #ffd84d; opacity:0;
+  animation:bkSpark .9s ease-out var(--d) forwards; }
+@keyframes bkSpark { 10% { opacity:1; } to { opacity:0; transform:translate(var(--x), var(--y)) scale(.3); } }
+.bk-tap { position:absolute; bottom:24px; left:0; right:0; margin:0; text-align:center; font-size:12px; font-weight:700; color:#8a6a3c; }
+.bk-title { position:absolute; top:12%; left:0; right:0; margin:0; padding:0 20px; text-align:center; font:800 18px/1.5 "Noto Sans JP", system-ui, sans-serif; color:#5b3f17;
+  opacity:0; animation:bkFadeIn .5s ease 1.2s forwards; }
+@media (prefers-reduced-motion: reduce) {
+  .bk-stage { display:none; }
+  #detailBody.bk-reveal { animation:none; }
+  #list .card, #detailList .card, ul.sub-list li { transition:none; animation:none; }
+}
