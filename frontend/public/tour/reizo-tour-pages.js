@@ -130,7 +130,7 @@
       {
         "target": "guild-rules",
         "label": "ギルドの決まり",
-        "text": "ギルド・議題・クエストの関係は、ここで確かめられるよ。",
+        "text": "ギルド・議題・クエストの関係は、この「詳細」を押すと確かめられるよ。",
         "screen": "guild"
       },
       {
@@ -448,8 +448,8 @@
   register("emu-feed","01 知識を読む",v2["emu-read"].steps.filter(function(item){return !(item.target==='emu-search'&&window.matchMedia&&window.matchMedia('(max-width:760px)').matches);}).map(specificationStep),null,"emuKnowledgeFrame");
   register("emu-requests","02 知識を探す",v2["emu-search"].steps.map(specificationStep),null,null);
   register('sp-guild','ギルドの詳細',[
-    step('screen-heading','ギルドの詳細','まずは活動を読むだけでも大丈夫。「参加したい」は意思の登録で、クエストの受注とは別の操作です。'),
-    step('guild-detail','決めごとの見方','ルールと議題を読んでから判断できます。投票や参加はこの案内の条件ではありません。')
+    step('guild-detail','ギルドの詳細','まずは活動を読むだけでも大丈夫。「参加したい」は意思の登録で、クエストの受注とは別の操作です。'),
+    step('guild-before-join','決めごとの見方','ルールと議題を読んでから判断できます。投票や参加はこの案内の条件ではありません。')
   ],'guild');
   register('sp-quest-detail','クエストの詳細',[
     step('screen-heading','内容を読む','概要と現場の資料を確認する画面です。'),
