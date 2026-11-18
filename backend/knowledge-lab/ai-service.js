@@ -104,7 +104,169 @@ function createAI({
     );
     return makeSources(posts, now());
   }
+  /* ───── 掛け合わせ（11/18 オーナー）─────
+     メインの知識1つに、最大4つを掛け合わせる。材料は、公開されていて書き手が AI の利用に同意した知識と、
+     Knowledge Text の教材（運営が載せたもの。room1_contents。ID は「kt_」＋記録の ID）。
+     回数は1人1日3回（ai-budget の perPassportAnalysis。同じ組み合わせの2回目は数えない）。 */
+  const KT = /^kt_([A-Za-z0-9]{1,90})$/;
+  const plain = (v) => String(v || "").replace(/<[^>]*>/g, " ").replace(/&nbsp;/g, " ").replace(/[ \t]+/g, " ").trim();
+  async function textMaterial(id) {
+    const hit = KT.exec(id);
+    if (!hit) m.fail("INVALID_ID");
+    const s = await db.collection("room1_contents").doc(hit[1]).get();
+    if (!s.exists || typeof s.data().body !== "string" || !plain(s.data().body)) m.fail("NOT_FOUND", 404);
+    const d = s.data();
+    return {
+      id,
+      title: plain(d.summary || d.subSubTheme || d.subTheme || d.title || "Knowledge Text").slice(0, 160) || "Knowledge Text",
+      body: plain(d.body),
+      displayName: "Knowledge Text",
+      knowledgeText: true,
+      theme: String(d.theme || ""),
+      subTheme: String(d.subTheme || ""),
+      updatedAt: d.updatedAt || d.createdAt || "",
+    };
+  }
+  async function mixSources(a, ids) {
+    if (ids.length < 2 || ids.length > 5) m.fail("AI_SOURCE_COUNT");
+    // 1回に送る量（12,000字）を超えないよう、1つあたりの本文を等しく切る
+    const per = Math.max(400, Math.floor(11000 / ids.length) - 160);
+    const out = [];
+    for (const id of ids) {
+      const raw = KT.test(id) ? await textMaterial(id) : { id, ...(await service.rawPost(id, a)) };
+      if (!raw.knowledgeText && (!m.publicPost(raw) || raw.knowledgeLab?.aiUseConsent?.allowed !== true))
+        m.fail("AI_SOURCE_CONSENT_REQUIRED", 403);
+      const fullBody = raw.knowledgeText ? raw.body : String(raw.body || "");
+      const title = m.text(String(raw.title || "").slice(0, 160) || "（題名なし）", 160, true),
+        body = m.text(fullBody.slice(0, per) || title, per, true);
+      if (containsSensitiveText(title + "\n" + body)) m.fail("AI_SENSITIVE_SOURCE", 403);
+      out.push({
+        id,
+        title,
+        body,
+        kind: raw.knowledgeText ? "knowledge-text" : "post",
+        authorSchoolParkId: raw.knowledgeText ? null : raw.authorSchoolParkId || null,
+        displayName: raw.knowledgeText ? "Knowledge Text" : String(raw.displayName || "Emuer"),
+        revision: raw.knowledgeText ? 0 : raw.knowledgeLab?.revision || 0,
+        hash: m.hash(raw.knowledgeText
+          ? [raw.title, raw.body, raw.updatedAt]
+          : [raw.title, raw.body, raw.updatedAt, raw.knowledgeLab?.revision]),
+        atMs: now(),
+        visibility: "public",
+        inputCharacters: body.length,
+        totalCharacters: fullBody.length,
+        truncated: fullBody.length > body.length,
+      });
+    }
+    return out;
+  }
+  async function mix(a, input) {
+    const config = await requireEnabled();
+    if (input.externalAIConsent !== true) m.fail("AI_REQUEST_CONSENT_REQUIRED", 403);
+    const mainId = m.id(input.mainId);
+    const others = m.list(input.otherIds, 4).filter((id) => id !== mainId);
+    if (!others.length) m.fail("AI_SOURCE_COUNT");
+    const ids = [mainId, ...others];
+    const src = await mixSources(a, ids);
+    const cacheId = m.hash([a.spid, src.map((s) => [s.id, s.hash]), config.model, "mix-v1"]),
+      cacheRef = service.ref("ai_cache", cacheId),
+      previous = await cacheRef.get();
+    if (previous.exists && previous.data().state === "complete" && now() - previous.data().createdAtMs < 86400000) {
+      await budget.cacheHit();
+      return { ...(await get(a, previous.data().runId)), cacheHit: true, quota: await budget.usage(a) };
+    }
+    const lease = m.hash([cacheId, now(), Math.random()]),
+      id = m.hash([cacheId, input.key ? m.id(input.key) : lease]),
+      r = service.ref("ai_runs", id);
+    const existing = await r.get();
+    if (existing.exists && existing.data().state === "complete")
+      return { ...(await current(a, { id, ...existing.data() })), cacheHit: true, quota: await budget.usage(a) };
+    await db.runTransaction(async (tx) => {
+      const s = await tx.get(cacheRef);
+      if (s.data()?.state === "generating" && s.data()?.leaseUntil > now()) m.fail("AI_BUSY", 429);
+      tx.set(cacheRef, { state: "generating", lease, leaseUntil: now() + 60000, authorSchoolParkId: a.spid, createdAtMs: now() });
+    });
+    try {
+      const result = await budget.call(
+        a,
+        "analysis",
+        () => provider.analyze(config.model, [], src, { mainSourceId: mainId }),
+        budget.estimateAnalysis(src.flatMap((p) => [p.title, p.body])),
+      );
+      const latest = await mixSources(a, ids);
+      if (latest.some((p, i) => p.hash !== src[i].hash)) m.fail("AI_SOURCES_CHANGED", 409);
+      const value = {
+        state: "complete",
+        mode: "mix",
+        mainId,
+        authorSchoolParkId: a.spid,
+        fields: [],
+        fieldLabels: [],
+        sources: src.map(({ body, ...s }) => s),
+        analysis: result.analysis,
+        model: result.model,
+        resolvedModel: result.resolvedModel || null,
+        usage: result.usage,
+        createdAtMs: now(),
+        origin: "ai-hypothesis",
+        verification: "unverified",
+        consentAtMs: now(),
+        provider: "gemini",
+        costStatus: "free-project-attested",
+        estimatedCharge: 0,
+      };
+      await db.runTransaction(async (tx) => {
+        const c = await tx.get(cacheRef);
+        if (c.data()?.lease !== lease) m.fail("AI_BUSY", 429);
+        tx.create(r, value);
+        tx.set(cacheRef, { state: "complete", runId: id, createdAtMs: now(), authorSchoolParkId: a.spid });
+      });
+      return { id, ...value, cacheHit: false, quota: await budget.usage(a) };
+    } catch (e) {
+      await db.runTransaction(async (tx) => {
+        const s = await tx.get(cacheRef);
+        if (s.data()?.lease === lease) {
+          if (previous.exists) tx.set(cacheRef, previous.data());
+          else tx.delete(cacheRef);
+        }
+      });
+      throw e;
+    }
+  }
+  async function mixQuota(a) {
+    const [st, use] = await Promise.all([status(), budget.usage(a)]);
+    return { available: st.available, ...use };
+  }
+  /* 掛け合わせの材料にできる Knowledge Text の教材の一覧（本文の頭だけ）。誰でも読める（Knowledge Text と同じ） */
+  let textsCache = null, textsAt = 0;
+  async function texts() {
+    if (textsCache && now() - textsAt < 600000) return textsCache;
+    const snap = await db.collection("room1_contents").get();
+    textsCache = snap.docs
+      .filter((d) => typeof d.data().body === "string" && d.data().body.trim())
+      .map((d) => {
+        const v = d.data();
+        return {
+          id: "kt_" + d.id,
+          title: plain(v.summary || v.subSubTheme || v.subTheme || v.title || "Knowledge Text").slice(0, 160),
+          theme: String(v.theme || ""),
+          subTheme: String(v.subTheme || ""),
+          subSubTheme: String(v.subSubTheme || ""),
+          excerpt: plain(v.body).slice(0, 160),
+          createdAt: String(v.createdAt || ""),
+        };
+      })
+      .filter((t) => KT.test(t.id))
+      .sort((x, y) => x.createdAt.localeCompare(y.createdAt));
+    textsAt = now();
+    return textsCache;
+  }
   async function current(a, run) {
+    if (run.mode === "mix") {
+      const latest = await mixSources(a, run.sources.map((s) => s.id));
+      if (latest.some((p, i) => p.hash !== run.sources[i].hash)) m.fail("AI_SOURCES_CHANGED", 409);
+      return run;
+    }
     const posts = await sources(
       a,
       run.sources.map((s) => s.id),
@@ -283,6 +445,10 @@ function createAI({
     sources,
     get,
     analyze,
+    mix,
+    mixQuota,
+    texts,
+    textMaterial,
   };
 }
 module.exports = { createAI };

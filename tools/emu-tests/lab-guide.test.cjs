@@ -60,12 +60,13 @@ test('名前と文言：Knowledge Lab・Knowledge Text、説明文と3つのカ�
     assert.doesNotMatch(await w.page.locator('body').innerText(), /KNOWLEDGE LAB/);
     assert.equal((await w.page.locator('#backToEmu').innerText()).trim(), '← Emu for SchoolParkに戻る');
     assert.equal(await w.page.locator('.lab-step').count(), 0);
-    /* 11/18 オーナー：知識図書館は廃止。掛け合わせる画面の名前は「Knowledge Lab」で、開いたら最初にここ */
-    assert.deepEqual(await w.page.$$eval('nav.tabs button:not([hidden])', bs => bs.map(b => b.textContent.replace(/\s+/g, '').trim())),
-      ['KnowledgeLab', 'マイライブラリー', '書き手プロフィール']);
+    /* 11/18 オーナー：知識図書館は廃止。タブは出さない（マイライブラリー・書き手プロフィールは Emu のプロフィールボタンから、
+       運営管理は管理画面から）。開いたら最初に「分野 → 掛け合わせ」の画面（#mix） */
+    assert.equal(await w.page.locator('nav.tabs').isVisible(), false, 'タブは出さない');
     assert.equal(await w.page.locator('#library').isVisible(), false, '知識図書館は出さない');
-    assert.equal(await w.page.locator('#research').isVisible(), true, '最初に Knowledge Lab（掛け合わせ）を出す');
-    assert.equal((await w.page.locator('#research .lead').innerText()).trim(), '違う経験を2〜3つ重ねると、自分だけの答えが見えてくる');
+    assert.equal(await w.page.locator('#research').isVisible(), false, '前の研究の画面は最初に出さない');
+    assert.equal(await w.page.locator('#mix').count(), 1, '掛け合わせの画面がある');
+    assert.equal(await w.page.locator('#mix').evaluate(el => el.hidden), false, '最初に掛け合わせの画面');
     assert.doesNotMatch(await w.page.locator('body').innerText(), /知識図書館|掛け合わせ研究所/);
     assert.doesNotMatch(intro, /別タブ/);
     assert.deepEqual(w.errors, []);
