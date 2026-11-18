@@ -16667,8 +16667,21 @@ window.spDaoOpenWhenReady = spDaoOpenWhenReady;
    すぐ見たいときは、タブに戻れば読み直る。 */
 let _spRefreshAt = 0;
 let _spRefreshTimer = null;
+/* 11/18 オーナー：「読み直したんならちゃんと表示して」。引っぱって読み直したとき（why が '引っぱって読み直し'）は、
+   ・8秒の間引きを飛ばして、必ず読み直す（間引きで何もしていないのに「読み直しました」と出ていた）
+   ・読み直せたかを返す（true / false）。読めなかったら呼んだ側が「読み直せませんでした」と出す
+   ・options.frame … City など、小部屋（spRoomFrame）に開いた SchoolPark を読み直すときの枠
+   ほかの呼び方（タブに戻った・定期など）は今までどおり。返り値は使っていない
+
+   11/7（オーナー）：画面に戻るたびの読み直しを減らす。Firestore の1日の読み取り枠を使い切っていた。
+   パソコンでは SchoolPark の枠の中と外をクリックで行き来するだけでも「画面に戻った」（focus）が起き、
+   8秒あけるたびに6種類の一覧を読み直していた。戻ったときは、前の読み直しから5分たっているときだけにする
+   （5分ごとの定期と同じ間隔。運営が承認を変えたときなどの読み直しは今までどおりすぐ） */
 async function spDaoRefreshNow(why) {
-  if (!document.body.classList.contains('sp-dao-open')) return;
+  const options = arguments[1];
+  const pulled = why === '引っぱって読み直し';
+  const target = options && options.frame;
+  if (!target && !document.body.classList.contains('sp-dao-open')) return false;
   /* 今日のぶんの読み取り枠を使い切っているあいだは、読み直さない。
      読みに行っても断られるだけで、断られた記録がまた枠を削る。
      混んでいるだけ（数秒で開く）のときは、これまでどおり回す。 */
@@ -16677,36 +16690,41 @@ async function spDaoRefreshNow(why) {
     if (st && st.reason === 'quota' && Date.now() < st.blockedUntil) {
       console.warn('今日のぶんの読み取り枠を使い切っています。'
         + '読み直しを見合わせます（' + Math.ceil((st.blockedUntil - Date.now()) / 60000) + '分後にもう一度）。');
-      return;
+      return false;
     }
   } catch (e) {}
   const now = Date.now();
-  if (now - _spRefreshAt < 8000) return;
-  /* 11/7（オーナー）：画面に戻るたびの読み直しを減らす。Firestore の1日の読み取り枠を使い切っていた。
-     パソコンでは SchoolPark の枠の中と外をクリックで行き来するだけでも「画面に戻った」（focus）が起き、
-     8秒あけるたびに6種類の一覧を読み直していた。戻ったときは、前の読み直しから5分たっているときだけにする
-     （5分ごとの定期と同じ間隔。運営が承認を変えたときなどの読み直しは今までどおりすぐ） */
-  if ((why === 'タブに戻った' || why === '画面に戻った') && now - _spRefreshAt < SP_RETURN_MIN_MS) return;
+  if (!pulled && now - _spRefreshAt < 8000) return false;
+  /* 戻ったときは5分あける（11/7・上の説明） */
+  if ((why === 'タブに戻った' || why === '画面に戻った') && now - _spRefreshAt < SP_RETURN_MIN_MS) return false;
   _spRefreshAt = now;
   let app = null;
   try {
-    const fr = document.getElementById('spDaoFrame');
+    const fr = target || document.getElementById('spDaoFrame');
     app = (fr && fr.contentWindow && fr.contentWindow.app) || null;
   } catch (e) { app = null; }
-  if (!app) return;
+  if (!app) return false;
   /* 持っている資格（Emu for SchoolPark light など）も、管理画面で変わる。 */
   if (typeof emuEnsureEntitlement === 'function') {
-    try { await emuEnsureEntitlement(true); } catch (e) {}
+    try { await _spSoon(emuEnsureEntitlement(true), 6000); } catch (e) {}
   }
   const names = ['spDaoWhoAmI', 'spDaoLoadTasks', 'spDaoLoadVotes', 'spDaoLoadQuests',
                  'spDaoLoadWisdom', 'spDaoLoadMembers'];
-  await Promise.all(names.map(function (n) {
+  let failed = 0;
+  const jobs = Promise.all(names.map(function (n) {
     const fn = window[n];
     if (typeof fn !== 'function') return Promise.resolve();
-    try { return Promise.resolve(fn(app)).catch(function () {}); }
-    catch (e) { return Promise.resolve(); }
+    try { return Promise.resolve(fn(app)).catch(function () { failed++; }); }
+    catch (e) { failed++; return Promise.resolve(); }
   }));
+  /* 引っぱったときは、待つのを15秒で見切る（返ってこない読み込みで「読み直しています…」のまま止めない） */
+  const finished = pulled ? (await _spSoon(jobs, 15000)).ok : (await jobs, true);
   console.warn('SchoolPark を読み直しました（' + (why || '定期') + '）');
+  if (!pulled) return true;
+  let guilds = 0;
+  try { guilds = ((app.state && app.state.guilds) || []).length; } catch (e) {}
+  /* 全部の読み込みが転んだ・時間内に終わらなかった・ギルドすら出ていない … 読み直せていない */
+  return finished && failed < names.length && guilds > 0;
 }
 window.spDaoRefreshNow = spDaoRefreshNow;
 
@@ -17792,20 +17810,36 @@ async function _spShapeVote(v, mine, canGuild, p, app, defs) {
    componentDidMount からはこの名前で呼ばれている（旧・議題の読み込み）。 */
 window.spDaoLoadVotes = async function (app) {
   if (!app || typeof app.setState !== 'function') return;
+  /* 11/18 オーナー：ギルドの一覧が空のまま（見出しと決まりだけ）になっていた。
+     ここはパスポート・信用・議題を読み終えてから一覧を出していたので、どれか1つが返ってこないと
+     （SDK の常時接続が返事をしないことがある）、いつまでもギルドが出なかった。
+     ギルドの5つは画面に書いてあるので、まだ1枚も出ていなければ先に出す（人数などは「—」）。
+     読み終えたら、いつもどおり数を入れて出し直す。 */
+  const defs = await spGuildDefs();
+  try {
+    if (!((app.state && app.state.guilds) || []).length && defs.length) {
+      app.setState({
+        guilds: defs.map(g => _spGuildCard(g, { joins: null, supports: null }, defs, app)),
+        guildCount: defs.length
+      });
+    }
+  } catch (e) {}
   if (!window.db || !window.fbLib) return;
   const fb = window.fbLib;
-  /* 本人はパスポートから取る。ほかの画面と同じ道にそろえる。 */
-  const p = await spPassportLoad();
+  /* 本人はパスポートから取る。ほかの画面と同じ道にそろえる。返ってこないときは見切る（11/18） */
+  const pr = await _spSoon(spPassportLoad(), 8000).catch(function () { return { ok: false }; });
+  const p = pr.ok ? pr.value : null;
   const mine = p && p.addr ? String(p.addr).toLowerCase() : '';
-  /* 特殊議題に入れる人かどうか。入れない人には、押せない形で見せる。 */
-  const canGuild = await window.spCanGuild();
-  const defs = await spGuildDefs();
+  /* 特殊議題に入れる人かどうか。入れない人には、押せない形で見せる。返ってこなければ「入れない」で出す */
+  const cg = await _spSoon(window.spCanGuild(), 6000).catch(function () { return { ok: false }; });
+  const canGuild = cg.ok ? !!cg.value : false;
 
   try {
     const q = fb.query(fb.collection(window.db, 'sp_votes'), fb.orderBy('createdAt', 'desc'), fb.limit(100));
-    const snap = await fb.getDocs(q);
+    const got = await _spSoon(fb.getDocs(q), 8000);
+    if (!got.ok) throw new Error('議題の読み込みが返ってきませんでした');
     const list = [];
-    snap.forEach(function (s) { list.push(Object.assign({ id: s.id }, s.data() || {})); });
+    got.value.forEach(function (s) { list.push(Object.assign({ id: s.id }, s.data() || {})); });
     _spVoteDocs = list;
   } catch (e) { _spWarnDenied('議題', e); }
   /* ギルドは、クエスト一覧とは別にもう一度読んでいる。
@@ -30709,7 +30743,11 @@ window.emuInAppRefresh = async function (source) {
   }
   if (source && (frameOf('spDaoFrame') || frameOf('spRoomFrame'))) {
     /* SchoolPark の読み直し。読み取り枠を守る間引き（8秒）と、枠を使い切ったときの見合わせはそのまま */
-    if (typeof window.spDaoRefreshNow === 'function') await window.spDaoRefreshNow('引っぱって読み直し');
+    /* 11/18：読み直せなかったときは失敗を返す（引っぱった画面に「読み直せませんでした」と出る） */
+    if (typeof window.spDaoRefreshNow === 'function') {
+      const ok = await window.spDaoRefreshNow('引っぱって読み直し', { frame: frameOf('spDaoFrame') || frameOf('spRoomFrame') });
+      if (ok === false) throw new Error('REFRESH_FAILED');
+    }
     return 'schoolpark';
   }
   const b = document.body.classList;
@@ -30722,7 +30760,7 @@ window.emuInAppRefresh = async function (source) {
     return 'profile';
   }
   if (b.contains('sp-dao-open') && typeof window.spDaoRefreshNow === 'function') {
-    await window.spDaoRefreshNow('引っぱって読み直し');
+    if (await window.spDaoRefreshNow('引っぱって読み直し') === false) throw new Error('REFRESH_FAILED');
     return 'schoolpark';
   }
   /* 知識を探す・知識を試すは読み込むデータが無いので、画面を出し直すだけ */
