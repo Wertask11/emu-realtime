@@ -767,6 +767,15 @@
     return st.note;
   }
   /* 公開したら、発見のカードが「みんなの新しい発見」へ飛んでいく */
+  function backToFeed(id) {
+    if ($("#mixStage").hidden) return;
+    closeStage();
+    setSource("posts");
+    renderFeed(id);
+    core().status("公開しました！「みんなの新しい発見」に載っています。");
+    const card = $('#mixFeedList [data-note="' + CSS.escape(id) + '"]');
+    (card || $("#mixFeed"))?.scrollIntoView?.({ block: "center", behavior: reduced() ? "auto" : "smooth" });
+  }
   function publishFx() {
     const run = st.run;
     const item = {
@@ -798,6 +807,10 @@
         await save("public");
         publishFx();
         say("公開しました！ Knowledge Lab の「みんなの新しい発見」に載りました。");
+        /* 11/18 オーナー「公開し終わったんなら画面戻して」：演出が終わったら結果を閉じて、
+           Lab のトップの「みんなの新しい発見」で、いま公開した発見を見せる */
+        const id = st.note.id;
+        setTimeout(() => backToFeed(id), reduced() ? 0 : 2300);
       } else if (what === "guild") {
         openGuildSheet();
       } else if (what === "quest") {
