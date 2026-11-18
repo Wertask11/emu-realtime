@@ -10,7 +10,10 @@
      （LINE と同じ、サーバーが発行する証。メールや外部のログインは要らない）
    ・止める・キーを作り直す（前のキーは使えなくなる）・名前を変えるができる
    ・投稿には、運営画面で付けた名前だけが出る（11/18 オーナー：「運営の書き手」の印は付けない）
-   ・運営の権限は持たない（requireOwner のアドレスとは別。書き手のアドレスは uid から決まる） */
+   ・運営の権限は持たない（requireOwner のアドレスとは別。書き手のアドレスは uid から決まる）
+   ・公開できる段（pro）を付ける（11/18：付けていなかったので「見学」扱いになり、公開できなかった）。
+     置き場は entitlements/{uid}（運営の付与と同じ。サーバーだけが書ける）。source は "writer"。
+     止めたら期限を切り、戻したら付け直す。書き手の uid（writer:…）の分だけを書く。 */
 
 const crypto = require("crypto");
 const ethers = require("ethers");
@@ -21,6 +24,17 @@ const hashKey = (key) => crypto.createHash("sha256").update("emu-writer-key:v1:"
 const newKey = () => "emw_" + crypto.randomBytes(24).toString("base64url");
 const newId = () => crypto.randomBytes(6).toString("hex");
 const KEY_FORMAT = /^emw_[A-Za-z0-9_-]{32}$/;
+const WRITER_PLAN = "pro";
+
+/* 書き手の公開できる段。止めているときは期限を今にして切る。
+   expiresAt を null で書くとルールの比較が通らないので、生きているあいだは欄ごと持たない（上書きで入れ直す）。 */
+async function setWriterGrant(db, uid, active, now) {
+  if (!String(uid || "").startsWith("writer:")) return;
+  const at = new Date(now());
+  const doc = { plan: WRITER_PLAN, source: "writer", startsAt: at, grantedAt: at };
+  if (!active) doc.expiresAt = at;
+  await db.collection("entitlements").doc(uid).set(doc);
+}
 
 function cleanName(v) {
   const s = String(v == null ? "" : v).replace(/[\u0000-\u001f\u007f]/g, "").trim();
@@ -43,7 +57,7 @@ function publicView(id, d) {
   };
 }
 
-function createWriterAccountsRouter({ db, firebaseAdmin, requireOwner, rateLimit, now = Date.now }) {
+function createWriterAccountsRouter({ db, firebaseAdmin, requireOwner, rateLimit, now = Date.now, forgetEntitlement = () => {} }) {
   const express = require("express");
   const admin = express.Router();
   const auth = express.Router();
@@ -73,6 +87,7 @@ function createWriterAccountsRouter({ db, firebaseAdmin, requireOwner, rateLimit
         createdAt: now(), keyIssuedAt: now(), createdBy: req.identity.walletAddress,
       };
       await col().doc(id).create(doc);
+      await setWriterGrant(db, uid, true, now);
       res.json({ account: publicView(id, doc), key });
     } catch (e) {
       console.error("writer-accounts create:", e.message);
@@ -116,6 +131,8 @@ function createWriterAccountsRouter({ db, firebaseAdmin, requireOwner, rateLimit
       await ref.set(patch, { merge: true });
       // 名前を変えたら、アカウントの表示名も合わせる（次に開いたときから、その名前で投稿される）
       if (patch.name) await db.collection("ches_accounts").doc(snap.data().uid).set({ displayName: patch.name }, { merge: true });
+      // 止めたら公開できる段も切る。戻したら付け直す
+      if (patch.active !== undefined) { await setWriterGrant(db, snap.data().uid, patch.active, now); forgetEntitlement(snap.data().uid); }
       // 止めたら、いま持っているログインの証も使えなくする
       if (patch.active === false && firebaseAdmin) await firebaseAdmin.auth().revokeRefreshTokens(snap.data().uid).catch(() => {});
       res.json({ account: publicView(id, { ...snap.data(), ...patch }) });
@@ -136,6 +153,9 @@ function createWriterAccountsRouter({ db, firebaseAdmin, requireOwner, rateLimit
       if (!d || d.data().active === false) return res.status(401).json({ error: "INVALID_WRITER_KEY" });
       const v = d.data();
       await col().doc(d.id).set({ lastLoginAt: now() }, { merge: true }).catch(() => {});
+      /* 段を付ける前に作った書き手（11/18 より前）にも、ログインのときに付ける */
+      await setWriterGrant(db, v.uid, true, now);
+      forgetEntitlement(v.uid);
       const firebaseToken = await firebaseAdmin.auth().createCustomToken(v.uid, { provider: "writer", name: v.name });
       res.json({ firebaseToken, profile: { name: v.name, picture: "", email: "" } });
     } catch (e) {
@@ -155,4 +175,4 @@ async function writerStatus(db, uid) {
   return { active: snap.data().active !== false, name: snap.data().name || "" };
 }
 
-module.exports = { createWriterAccountsRouter, writerStatus, hashKey, deriveAddress, KEY_FORMAT };
+module.exports = { createWriterAccountsRouter, writerStatus, setWriterGrant, hashKey, deriveAddress, KEY_FORMAT, WRITER_PLAN };

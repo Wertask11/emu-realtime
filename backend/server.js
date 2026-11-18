@@ -122,7 +122,9 @@ async function requireFirebaseUser(req, res, next) {
 
 app.use("/api/auth", accountRouter({ db, firebaseAdmin, onVerified: uid => identityAccountCache.delete(uid) }));
 /* 運営の書き手アカウント（11/18 オーナー）。作る・止めるは運営だけ。書き手は「書き手キー」でログインする */
-const writerAccounts = require("./writer-accounts").createWriterAccountsRouter({ db, firebaseAdmin, requireOwner, rateLimit });
+/* 書き手の段を付け替えたら、利用資格の覚えを捨てる（entitlement は下で作るので、呼ばれたときに引く） */
+const writerAccounts = require("./writer-accounts").createWriterAccountsRouter({ db, firebaseAdmin, requireOwner, rateLimit,
+  forgetEntitlement: (uid) => { try { entitlement.forget(uid); } catch (e) {} } });
 app.use("/api/auth", writerAccounts.auth);
 app.use("/api/admin/writer-accounts", writerAccounts.admin);
 app.use("/api/activity", activityRouter({ db, requireFirebaseUser }));

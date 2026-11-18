@@ -111,3 +111,34 @@ test("書き手でログインすると、書き手の名前・自分のアド�
     await assert.rejects(ensureVerifiedAccount(t.db, { uid, provider: "writer", firebase: { sign_in_provider: "custom" } }), /WRITER_DISABLED/);
   } finally { t.close(); }
 });
+
+test("書き手は公開できる段（pro）になる。止めると見学に戻り、戻すとまた公開できる。前に作った書き手もログインで付く", async () => {
+  const t = await setup();
+  const { createEntitlement } = require("./entitlement");
+  const ent = createEntitlement({ db: t.db });
+  try {
+    const { body } = await t.call("POST", "/api/admin/writer-accounts", { name: "店長" });
+    const uid = "writer:" + body.account.id;
+    const grant = (await t.db.collection("entitlements").doc(uid).get()).data();
+    assert.equal(grant.plan, "pro");
+    assert.equal(grant.source, "writer");
+    assert.equal(grant.expiresAt, undefined, "生きているあいだは期限の欄を持たない");
+    assert.equal((await ent.getEntitlement(uid)).plan, "pro");
+
+    await t.call("PATCH", "/api/admin/writer-accounts/" + body.account.id, { active: false });
+    ent.forget(uid);
+    assert.equal((await ent.getEntitlement(uid)).plan, "guest");
+    await t.call("PATCH", "/api/admin/writer-accounts/" + body.account.id, { active: true });
+    ent.forget(uid);
+    assert.equal((await ent.getEntitlement(uid)).plan, "pro");
+
+    // 段を付ける前に作った書き手（付与の記録が無い）
+    const key = "emw_" + "A".repeat(32);
+    await t.db.collection("writer_accounts").doc("0123456789ab").set({ name: "手帖", active: true, uid: "writer:0123456789ab", keyHash: hashKey(key), createdAt: 1 });
+    assert.equal((await t.db.collection("entitlements").doc("writer:0123456789ab").get()).exists, false);
+    const login = await t.call("POST", "/api/auth/writer", { key });
+    assert.equal(login.status, 200);
+    ent.forget("writer:0123456789ab");
+    assert.equal((await ent.getEntitlement("writer:0123456789ab")).plan, "pro");
+  } finally { t.close(); }
+});
