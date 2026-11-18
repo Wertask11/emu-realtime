@@ -105,7 +105,7 @@ function createAI({
     return makeSources(posts, now());
   }
   /* ───── 掛け合わせ（11/18 オーナー）─────
-     メインの知識1つに、最大4つを掛け合わせる。材料は、公開されていて書き手が AI の利用に同意した知識と、
+     メインの知識1つに、最大4つを掛け合わせる。材料は、公開されている知識と、
      Knowledge Text の教材（運営が載せたもの。room1_contents。ID は「kt_」＋記録の ID）。
      回数は1人1日3回（ai-budget の perPassportAnalysis。同じ組み合わせの2回目は数えない）。 */
   const KT = /^kt_([A-Za-z0-9]{1,90})$/;
@@ -134,8 +134,10 @@ function createAI({
     const out = [];
     for (const id of ids) {
       const raw = KT.test(id) ? await textMaterial(id) : { id, ...(await service.rawPost(id, a)) };
-      if (!raw.knowledgeText && (!m.publicPost(raw) || raw.knowledgeLab?.aiUseConsent?.allowed !== true))
-        m.fail("AI_SOURCE_CONSENT_REQUIRED", 403);
+      /* 11/18 オーナー：利用の同意はログイン・登録のとき（利用規約・プライバシーポリシー）に取っている。
+         書き手ごとの AI 利用の同意は、掛け合わせでは求めない（プライバシーポリシーの「Knowledge Labの外部AI利用」を同じ日に改定）。
+         公開されていない知識・連絡先などが入った知識は、今までどおり送らない */
+      if (!raw.knowledgeText && !m.publicPost(raw)) m.fail("NOT_FOUND", 404);
       const fullBody = raw.knowledgeText ? raw.body : String(raw.body || "");
       const title = m.text(String(raw.title || "").slice(0, 160) || "（題名なし）", 160, true),
         body = m.text(fullBody.slice(0, per) || title, per, true);

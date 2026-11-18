@@ -18465,6 +18465,50 @@ async function spVoteSubmit() {
   if (_spVoteFormApp) await window.spDaoLoadVotes(_spVoteFormApp);
 }
 
+/* Knowledge Lab の掛け合わせの結果から、議題を出す（11/18 オーナー）。
+   前は知識を試すの議題フォームへ移っていた。間違ってほかの場所を触ると、フォームも Lab の結果も消えて戻れなかった。
+   Lab の中で、選んだギルド・題・説明・選択肢を決めて、ここで出す（中身の決まりは spVoteSubmit と同じ）。
+   返り値 … { ok:true, guildId } か { ok:false, reason }。画面は Lab のまま */
+window.emuSubmitGuildProposal = async function (input) {
+  input = input || {};
+  const title = String(input.title || '').trim().slice(0, 120);
+  const body = String(input.body || '').trim().slice(0, 600);
+  const labels = (Array.isArray(input.options) ? input.options : []).map(function (x) { return String(x || '').trim().slice(0, 60); }).filter(Boolean).slice(0, 4);
+  const guildId = String(input.guildId || '');
+  if (!title) return { ok:false, reason:'議題を書いてください。' };
+  if (labels.length < 2) return { ok:false, reason:'選択肢は2つ以上いります。' };
+  if (!SpGuildStore.isValidId(guildId)) return { ok:false, reason:'どのギルドの議題かを選んでください。' };
+  const p = await spPassportLoad();
+  if (!p) return { ok:false, reason:'議題を出すにはログインが必要です。' };
+  if (!(await window.spCanGuild())) {
+    return { ok:false, reason:'議題を出せるのは、運営・有料の方・信用が足りている方です。信用は、クエストを完走する・知恵カードを置く・引用されると増えます。' };
+  }
+  const days = Math.max(1, Math.min(30, parseInt(input.days, 10) || 7));
+  const fromPostId = /^[A-Za-z0-9_-]{1,80}$/.test(String(input.fromPostId || '')) ? String(input.fromPostId) : '';
+  try {
+    const fb = window.fbLib;
+    await fb.addDoc(fb.collection(window.db, 'sp_votes'), {
+      title: title,
+      body: body,
+      options: labels.map(function (l, i) { return { id: 'o' + (i + 1), label: l }; }),
+      kind: 'free',
+      guildId: guildId,
+      fromPostId: fromPostId,
+      fromPostTitle: fromPostId ? String(input.fromPostTitle || '').slice(0, 120) : '',
+      createdBy: p.addr,
+      createdAt: Date.now(),
+      closesAt: Date.now() + days * 86400000
+    });
+  } catch (e) {
+    console.warn('議題を出せませんでした:', e && (e.message || e));
+    return { ok:false, reason:'議題を出せませんでした。もう一度お試しください。' };
+  }
+  _spGuildOpenId = guildId;
+  const app = document.getElementById('spDaoFrame')?.contentWindow?.app;
+  if (app) window.spDaoLoadVotes(app).catch(function () {});
+  return { ok:true, guildId: guildId };
+};
+
 /* Emu の投稿から「議題を立てる」。
    SchoolPark は枠の中（iframe）にあるので、
      ① SchoolPark を開く（まだ開いていなければ）

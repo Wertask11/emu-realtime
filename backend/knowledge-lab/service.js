@@ -256,6 +256,44 @@ function createService({
     });
     invalidate();
   }
+  /* 11/18 オーナー：「公開する」を押した掛け合わせの発見を、新しい順に並べる（みんなの発見）。
+     公開・掛け合わせの印は等しいかの条件だけで読む（索引を足さない）。元の知識が取り下げられたものは出さない。
+     画面に出すのは題・新しい発見の一文・混ぜた知識の題だけ。1分は覚えておく */
+  let discoveryCache = null,
+    discoveryAt = 0;
+  async function discoveries() {
+    if (discoveryCache && now() - discoveryAt < 60000) return discoveryCache;
+    const snap = await db
+      .collection(COL("notes"))
+      .where("visibility", "==", "public")
+      .where("mode", "==", "mix")
+      .limit(200)
+      .get();
+    const rows = snap.docs
+      .map((d) => ({ id: d.id, ...d.data() }))
+      .filter((v) => !v.archived && !v.moderated)
+      .sort((x, y) => (y.createdAtMs || 0) - (x.createdAtMs || 0))
+      .slice(0, 30);
+    const items = [];
+    for (const v of rows) {
+      try {
+        await mixPosts(v.sourceIds || [], null, true);
+      } catch (_) {
+        continue;
+      }
+      const find = (v.aiAnalysis?.hypotheses || [])[0]?.text || String(v.hypothesis || "").split("\n")[0];
+      items.push({
+        id: v.id,
+        title: String(v.title || "").slice(0, 160),
+        find: String(find || "").slice(0, 300),
+        sources: (v.aiSources || []).map((x) => ({ title: String(x.title || "").slice(0, 160), main: x.id === v.mainSourceId })),
+        createdAtMs: v.createdAtMs || 0,
+      });
+    }
+    discoveryCache = { items };
+    discoveryAt = now();
+    return discoveryCache;
+  }
   /* 11/18 オーナー：Knowledge Lab の分野のカードに、その分野の知識の数を出す。
      検索と同じ索引（catalog）から、分野ごとに検索と同じ条件で数える。Firestore の読み取りは増やさない */
   async function fieldCounts() {
@@ -1589,6 +1627,7 @@ function createService({
     comparison,
     saveNote,
     fieldCounts,
+    discoveries,
     note,
     publicNotes,
     archiveNote,

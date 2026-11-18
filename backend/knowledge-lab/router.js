@@ -410,6 +410,7 @@ function createKnowledgeLabRouter(deps) {
   router.get("/ai/mix/quota", ...signed, wrap((req) => ai.mixQuota(req.labActor)));
   router.post("/ai/mix", ...write, wrap((req) => ai.mix(req.labActor, req.body)));
   router.get("/field-counts", wrap(() => service.fieldCounts()));
+  router.get("/discoveries", wrap(() => service.discoveries()));
   router.get("/texts", wrap(() => ai.texts()));
   router.get("/texts/:id", wrap(async (req) => {
     const t = await ai.textMaterial(m.id(req.params.id));
