@@ -99,3 +99,28 @@ test("タグ案：5個まで・# やカンマは外す・重複は1つ", () => {
   assert.deepEqual(cleanTags(null), []);
   assert.deepEqual(parseReply('{"body":"本文","tags":["音読","#会議"]}').tags, ["音読", "会議"]);
 });
+
+test("11/18 整えてもらう：AI が空けた分類も全部うめる（文章の言葉→広い候補）。業種・職業は書いてあるときだけ。見出しから何が起きたか等も入れる", async () => {
+  const terms = {
+    field: [["field-money", "お金・金融"], ["field-life", "暮らし・人生"]],
+    industry: [["industry-food", "飲食"]], occupation: [["occupation-nurse", "看護師"]],
+    audience: [["audience-everyone", "どなたでも"], ["audience-parent", "子育て中の人"]],
+    period: [["period-unspecified", "時期を特定しない"]], difficulty: [["difficulty-basic", "基礎"]],
+    kind: [["kind-story", "体験談"]], purpose: [["purpose-experience", "誰かの経験を知りたい"]],
+    experience: [["experience-challenge", "挑戦"]], genre: [["genre-daily", "日常の工夫"]],
+  };
+  const s = await serve({ generate: async () => ({ title: "先取り貯金", body: "【何があった？】\nお金が足りなかった\n【何をした？】\n給料日に分けた\n【どうなった？】\n半年で10万円たまった\n【次の人へひとこと】\nまず千円から", lab: null }) });
+  try {
+    const r = await s.post({ body: "お金が足りなかった", terms });
+    const f = r.body.lab.facets;
+    assert.deepEqual(f.field, ["field-money"], "文章に出てくる言葉で選ぶ");
+    for (const axis of ["audience", "period", "difficulty", "kind", "purpose", "experience", "genre"]) assert.equal(f[axis].length, 1, axis + " もうまる");
+    assert.equal(f.industry, undefined, "業種は書いていなければ決めつけない");
+    assert.equal(f.occupation, undefined);
+    assert.equal(r.body.lab.happened, "お金が足りなかった");
+    assert.equal(r.body.lab.learned, "半年で10万円たまった");
+    assert.equal(r.body.lab.advice, "まず千円から");
+  } finally { await s.close(); }
+  const { SYSTEM_TEXT } = { SYSTEM_TEXT: require("fs").readFileSync(__dirname + "/proofread.js", "utf8") };
+  assert.match(SYSTEM_TEXT, /渡された軸は全部うめる/);
+});

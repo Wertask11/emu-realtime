@@ -13843,10 +13843,13 @@ console.log("🔄 画面をリロードせずに投稿一覧を更新します..
     /* 「権限がありません」だけでは、読んだ人に何もできない。
        9/1から段ごとの上限が効いているので、その心当たりを添える。 */
     const msg = _emuPostErrorText(error);
-    let detail = '';
-    try { detail = await _emuPostDiagnose(authorAddress); } catch (e) {}
-    alert(msg + (detail ? '\n\n───── 調べたこと ─────\n' + detail : ''));
+    /* 11/18：先に投稿画面へ「失敗」を返す。調べる処理（_emuPostDiagnose）は通信が切れていると
+       いつまでも終わらないことがあり、その間「公開しています…」のまま止まって見えていた。
+       調べるのは8秒まで。 */
     finishKnowledgeRequest(false, msg);
+    let detail = '';
+    try { const got = await _spSoon(_emuPostDiagnose(authorAddress), 8000); if (got.ok) detail = got.value || ''; } catch (e) {}
+    alert(msg + (detail ? '\n\n───── 調べたこと ─────\n' + detail : ''));
   }
 });
 
