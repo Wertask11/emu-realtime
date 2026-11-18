@@ -116,3 +116,17 @@ test("AI の返事は JSON の中身だけを使う。指示は本人の言葉�
   assert.match(ASK_SYSTEM, /1つだけ質問する/);
   assert.match(ASK_SYSTEM, /アドバイス・説教・評価・診断はしない/);
 });
+
+test("11/18 話して書く：まとめた下書きにも Knowledge Lab の分類を全部うめて返す", async () => {
+  const terms = { audience: [["audience-everyone", "どなたでも"]], period: [["period-unspecified", "時期を特定しない"]], field: [["field-life", "暮らし・人生"]] };
+  const s = await serve({ run: async ({ mode }) => mode === "draft"
+    ? { title: "朝の散歩", body: "【何があった？】\n眠れなかった\n【何をした？】\n朝歩いた\n【どうなった？】\nよく眠れた\n【次の人へひとこと】\nまず5分", tags: ["散歩"], lab: null } : { reply: "うん", ready: true } });
+  try {
+    const r = await s.post({ mode: "draft", turns: [{ role: "me", text: "朝歩いたらよく眠れた" }], terms });
+    assert.equal(r.status, 200);
+    assert.deepEqual(r.body.lab.facets, { audience: ["audience-everyone"], period: ["period-unspecified"], field: ["field-life"] });
+    assert.equal(r.body.lab.happened, "眠れなかった");
+    assert.equal(r.body.lab.advice, "まず5分");
+    assert.match(DRAFT_SYSTEM, /渡された軸は全部うめる/);
+  } finally { await s.close(); }
+});
