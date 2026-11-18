@@ -32,7 +32,7 @@
     enabled: false,
     terms: [],
     me: null,
-    view: "research",
+    view: "mix",
     results: [],
     selected: new Map(),
     fields: [],
@@ -285,7 +285,7 @@
       headers: h,
       body: body ? JSON.stringify(body) : undefined,
       signal: AbortSignal.timeout(
-        ["/ai/analyze", "/admin/semantic-index"].includes(path) ? 75000 : 20000,
+        ["/ai/analyze", "/admin/semantic-index"].includes(path) ? 75000 : path === "/ai/mix" ? 90000 : 20000,
       ),
     });
     if (path === "/config" && r.status === 404)
@@ -535,13 +535,16 @@
     if (parent === window) history.replaceState(null, "", sharedURL());
   }
   async function view(name) {
+    /* 11/18 オーナー：開いたら「分野 → 投稿 → 掛け合わせ」の画面（mix）。前の研究の画面（research）は ?view=research で開ける。
+       知識図書館（library）は廃止。古いリンクも掛け合わせの画面を開く */
     if (
-      !["research", "mine", "writer", "admin"].includes(name)
+      !["mix", "research", "mine", "writer", "admin"].includes(name)
     )
-      name = "research"; // 11/18：知識図書館は廃止。古いリンク（?view=library）も Knowledge Lab を開く
+      name = "mix";
     /* 11/17：前の画面のお知らせ（「検索結果を表示しました。」など）が、別の画面に移っても残っていた。移ったら消す */
     if (state.view !== name && !$("#status").classList.contains("error")) status("");
     state.view = name;
+    if ($("#labHome")) $("#labHome").hidden = name === "mix";
     document
       .querySelectorAll(".view")
       .forEach((el) => (el.hidden = el.id !== name));
@@ -559,6 +562,7 @@
     if (state.loadedViews[name] && Date.now() - state.loadedViews[name] < 30000)
       return;
     state.loadedViews[name] = Date.now();
+    if (name === "mix") await window.EmuLabMix?.enter();
     if (name === "mine") await loadMine();
     if (name === "research") await publicNotes();
     if (name === "writer") await loadWriters();
@@ -1206,8 +1210,11 @@
           : {}),
         title: $("#noteTitle").value,
         aiRunId: state.aiRun?.id || null,
-        sourceIds: [...state.selected.keys()],
-        fields,
+        /* 11/18：掛け合わせの発見（mode: "mix"）は、元の組み合わせのまま保存し直す（分野は選ばない） */
+        ...(state.note?.mode === "mix"
+          ? { mode: "mix", sourceIds: [...(state.note.sourceIds || []), ...(state.note.textSourceIds || [])] }
+          : { sourceIds: [...state.selected.keys()] }),
+        fields: state.note?.mode === "mix" ? [] : fields,
         question: $("#noteQuestion").value,
         hypothesis: $("#noteHypothesis").value,
         plan: $("#notePlan").value,
@@ -1305,7 +1312,7 @@
         )
         .join(
           "",
-        )}<h3>元になった知識</h3>${n.sourceIds.map((id) => `<p><button type="button" data-post="${esc(id)}">元知識 ${esc(id)} を読む</button></p>`).join("")}<div class="actions">${state.me?.schoolParkId === n.authorSchoolParkId && !n.archived ? '<button type="button" id="continueNote">結果を追記・編集</button><button type="button" id="archiveNote">ノートを非公開で保管</button><button type="button" id="publishExperience">試した結果を経験知として書く</button>' : ""}${n.archived && state.me?.schoolParkId === n.authorSchoolParkId ? '<button type="button" id="restoreNote">自分用に復元</button>' : ""}${state.me?.schoolParkId === n.authorSchoolParkId || state.me?.owner ? '<button type="button" id="noteHistory">更新履歴</button>' : ""}<button type="button" id="discussNote" ${n.archived ? "disabled" : ""}>ギルドの議題にする</button><button type="button" id="practiceNote" ${n.archived ? "disabled" : ""}>Quest・Guildで実践する</button></div><div class="report-controls"><label for="noteReport">通報理由</label><textarea id="noteReport" maxlength="1500"></textarea><button type="button" id="reportNote">運営へ通報</button></div>`;
+        )}<h3>元になった知識</h3>${n.sourceIds.map((id) => `<p><button type="button" data-post="${esc(id)}">元知識 ${esc(id)} を読む</button></p>`).join("")}${(n.textSourceIds || []).map((id) => `<p>📘 Knowledge Text の教材「${esc((n.aiSources || []).find((x) => x.id === id)?.title || id)}」</p>`).join("")}<div class="actions">${state.me?.schoolParkId === n.authorSchoolParkId && !n.archived ? '<button type="button" id="continueNote">結果を追記・編集</button><button type="button" id="archiveNote">ノートを非公開で保管</button><button type="button" id="publishExperience">試した結果を経験知として書く</button>' : ""}${n.archived && state.me?.schoolParkId === n.authorSchoolParkId ? '<button type="button" id="restoreNote">自分用に復元</button>' : ""}${state.me?.schoolParkId === n.authorSchoolParkId || state.me?.owner ? '<button type="button" id="noteHistory">更新履歴</button>' : ""}<button type="button" id="discussNote" ${n.archived ? "disabled" : ""}>ギルドの議題にする</button><button type="button" id="practiceNote" ${n.archived ? "disabled" : ""}>Quest・Guildで実践する</button></div><div class="report-controls"><label for="noteReport">通報理由</label><textarea id="noteReport" maxlength="1500"></textarea><button type="button" id="reportNote">運営へ通報</button></div>`;
     if (n.aiAnalysis)
       $("#detailBody").insertAdjacentHTML("beforeend", renderAI(n));
     $("#detailBody").insertAdjacentHTML(
@@ -2331,6 +2338,29 @@
   const tourId = (name) => "emu-lab-" + (name === "research" ? "welcome" : name);
   if (tour) {
     const guides = {
+      /* 11/18 オーナー：分野 → 投稿 → 掛け合わせ（メイン1つ＋最大4つ）→ 混ぜる */
+      mix: [
+        [
+          "lab-intro",
+          "ここが Knowledge Lab",
+          "違う経験を掛け合わせて、新しい発見を探す場所だよ。まず気になる分野を選んでね。",
+        ],
+        [
+          "mix-fields",
+          "分野を選ぶと、その分野の知識が出るよ",
+          "Knowledge Text の教材も、上の切り替えから選べるよ。",
+        ],
+        [
+          "mix-toggle",
+          "「掛け合わせる」をオンにしよう",
+          "オンにすると、知識に「枠に入れる」が出るよ。最初の1つがメイン、あとから最大4つを掛け合わせられるよ。",
+        ],
+        [
+          "mix-toggle",
+          "そろったら「混ぜる」",
+          "AIが混ぜて、新しい発見を出すよ。1日3回まで。出てきた発見は、保存・公開・ギルドの議題・クエストへ進めるよ。",
+        ],
+      ],
       research: [
         [
           "lab-intro",
@@ -2381,7 +2411,7 @@
         {
           label: "Knowledge Lab",
           brand: "Emu",
-          auto: name === "research",
+          auto: name === "mix",
           isReady: () =>
             state.enabled && state.terms.length > 0 && state.view === name,
         },
@@ -2399,7 +2429,7 @@
     $("#guide").onclick = (event) => {
       if (state.view === "admin")
         return run(() =>
-          view("research").then(() => tour.restart(tourId("research"))),
+          view("mix").then(() => tour.restart(tourId("mix"))),
         );
       let host = null;
       try {
@@ -2433,6 +2463,22 @@
     if (e.data?.type === "emu-lab-feedback")
       status(e.data.message || "既存画面へ移動しました。");
   });
+  /* 11/18：掛け合わせの画面（knowledge-lab/mix.js）が、同じ通信・ログイン・行き先を使えるように渡す */
+  window.EmuLabCore = {
+    api,
+    keyFor,
+    integration,
+    status,
+    run,
+    showLogin,
+    detail: (id) => run(() => detail(id)),
+    view: (name) => run(() => view(name)),
+    me: () => state.me,
+    enabled: () => state.enabled,
+    terms: () => state.terms,
+    aiStatus: () => state.aiStatus,
+    measure,
+  };
   async function init() {
     const initialParams = new URLSearchParams(location.search);
     const config = await api("/config");
@@ -2454,10 +2500,10 @@
       showLogin();
     }
     renderFacets();
-    window.EmuAnalytics?.view("knowledge_lab_view", {section:"research"}, "research");
+    window.EmuAnalytics?.view("knowledge_lab_view", {section:"mix"}, "mix");
     const p = initialParams,
       initial = p.get("view");
-    await view(initial || "research");
+    await view(initial || "mix");
     if (p.get("post")) await detail(p.get("post"));
     if (p.get("note")) await showNote(p.get("note"));
     if (p.get("compose") === "1") compose();

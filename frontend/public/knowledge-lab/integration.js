@@ -2,6 +2,7 @@
 (() => {
   "use strict";
   const allowed = [
+    "mix",
     "library",
     "research",
     "mine",
@@ -37,8 +38,9 @@
       })
     );
   }
-  window.openEmuKnowledgeLab = (view = "research", options = {}) => {
-    if (!allowed.includes(view)) view = "research";
+  /* 11/18 オーナー：開いたら「分野 → 投稿 → 掛け合わせ」の画面（mix） */
+  window.openEmuKnowledgeLab = (view = "mix", options = {}) => {
+    if (!allowed.includes(view)) view = "mix";
     const p = new URLSearchParams({ view });
     if (options.compose) p.set("compose", "1");
     if (validId(options.edit)) p.set("edit", options.edit);
@@ -235,6 +237,12 @@
         }
         if (window.closeSpRoom() === false) return;
         await window.spDaoOpenWhenReady();
+        return;
+      }
+      /* 11/18 掛け合わせの結果から「クエストに参加する」：知識を試すのクエスト一覧を開く（参加はクエストの画面で、今までどおり） */
+      if (action === "quests") {
+        if (!await window.openEmuPractice?.("experiments")) return;
+        if (window.closeSpRoom() === false) return;
         return;
       }
       if (action === "request") {

@@ -51,7 +51,9 @@ function createBudget({ db, ref, now = Date.now }) {
     }
     return { reservations, charged, reserved };
   }
-  async function reserve(a, kind, estimate) {
+  /* 11/18（オーナー：掛け合わせは1人1日3回）：countPerson が false のとき（失敗したときの1回だけのやり直し）は、
+     本人の回数に数えない。数えると、提供元の一時的な不調で1回の掛け合わせが2回分になる。全体の回数・量は今までどおり数える */
+  async function reserve(a, kind, estimate, countPerson = true) {
     if (!["analysis", "embedding"].includes(kind))
       m.fail("AI_INVALID_OPERATION");
     const tokens = Math.ceil(Number(estimate));
@@ -84,10 +86,11 @@ function createBudget({ db, ref, now = Date.now }) {
       if (
         (gd[kind] || 0) >= limit ||
         used + reserved + tokens > CAPS.totalTokens ||
-        (pd[kind] || 0) >=
-          CAPS[
-            kind === "analysis" ? "perPassportAnalysis" : "perPassportEmbedding"
-          ]
+        (countPerson &&
+          (pd[kind] || 0) >=
+            CAPS[
+              kind === "analysis" ? "perPassportAnalysis" : "perPassportEmbedding"
+            ])
       )
         m.fail("AI_DAILY_LIMIT", 429);
       if (active.length >= CAPS.concurrency) m.fail("AI_BUSY", 429);
@@ -106,11 +109,12 @@ function createBudget({ db, ref, now = Date.now }) {
           updatedAtMs: now(),
         },
       );
-      tx.set(
-        person,
-        { [kind]: (pd[kind] || 0) + 1, updatedAtMs: now() },
-        { merge: true },
-      );
+      if (countPerson)
+        tx.set(
+          person,
+          { [kind]: (pd[kind] || 0) + 1, updatedAtMs: now() },
+          { merge: true },
+        );
       tx.set(slots, { active: [...active, { token, until: now() + LEASE_MS }] });
     });
     return { token, bucket, kind, tokens };
@@ -189,7 +193,7 @@ function createBudget({ db, ref, now = Date.now }) {
   async function call(a, kind, fn, estimate) {
     const tokens = estimate ?? DEFAULT_ESTIMATE[kind];
     for (let attempt = 0; attempt < 2; attempt++) {
-      const lease = await reserve(a, kind, tokens);
+      const lease = await reserve(a, kind, tokens, attempt === 0);
       try {
         const result = await fn();
         await finish(lease, "success", result.usage);
@@ -216,6 +220,13 @@ function createBudget({ db, ref, now = Date.now }) {
       tx.set(r, { cacheHits: (s.data()?.cacheHits || 0) + 1 }, { merge: true });
     });
   }
-  return { call, cacheHit, caps: CAPS, estimateAnalysis, estimateEmbedding };
+  /* 今日、この人が使った回数（掛け合わせの画面の「今日あと○回」）。読むだけ */
+  async function usage(a, kind = "analysis") {
+    const s = await ref("ai_user_usage", m.hash([day(), a.spid])).get();
+    const used = Number(s.data()?.[kind]) || 0,
+      limit = CAPS[kind === "analysis" ? "perPassportAnalysis" : "perPassportEmbedding"];
+    return { used, limit, remaining: Math.max(0, limit - used) };
+  }
+  return { call, cacheHit, usage, caps: CAPS, estimateAnalysis, estimateEmbedding };
 }
 module.exports = { createBudget, CAPS, estimateAnalysis, estimateEmbedding };

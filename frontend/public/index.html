@@ -5365,6 +5365,9 @@ html[data-sp-time="night"] .ches-btn-email { background:rgba(255,255,255,.06); b
         <button type="button" role="menuitem" onclick="accountGo('themes')">興味のあるテーマ</button>
         <!-- Knowledge Text（旧 Room1）は独立タブではなく、全端末で「知識を探す」から開く -->
         <button type="button" role="menuitem" data-tour="emu-library" onclick="accountGo('library')">マイライブラリー</button>
+        <!-- 11/18 オーナー：Knowledge Lab のマイライブラリー（掛け合わせの発見・研究ノート・保存した知識）と書き手プロフィールは、ここから開く -->
+        <button type="button" role="menuitem" onclick="emuAccountLab('mine')">Knowledge Lab の記録</button>
+        <button type="button" role="menuitem" onclick="emuAccountLab('writer')">書き手プロフィール</button>
         <!-- 共通の設定（名前 / プロフィール画像もここから） -->
         <button type="button" role="menuitem" onclick="accountGo('settings')">設定</button>
         <button type="button" role="menuitem" onclick="accountGo('sessions')">対話の予定</button>
@@ -22958,6 +22961,11 @@ function accountGo(what, selectedPlan) {
   }
 }
 
+/* プロフィールボタンのメニューから Knowledge Lab の記録・書き手プロフィールを開く（11/18 オーナー） */
+function emuAccountLab(view) {
+  closeAccountMenu();
+  if (typeof window.openEmuKnowledgeLab === 'function') window.openEmuKnowledgeLab(view === 'writer' ? 'writer' : 'mine');
+}
 function emuShortAddr(addr) {
   const a = String(addr || '');
   return a.length > 10 ? a.slice(0, 6) + '...' + a.slice(-4) : a;

@@ -27,6 +27,7 @@
     />
     <link rel="stylesheet" href="/emu-theme.css" />
     <link rel="stylesheet" href="/knowledge-lab/lab.css" />
+    <link rel="stylesheet" href="/knowledge-lab/mix.css" />
     <link rel="stylesheet" href="/tour/reizo-tour.css" />
     <script src="/client-errors.js"></script><!-- 画面のエラーを運営に知らせる（人を特定する情報は送らない） -->
     <script src="/emu-analytics.js"></script>
@@ -69,7 +70,9 @@
           >既存のログイン方法で続ける</a
         >
       </div>
-      <nav class="tabs" aria-label="Knowledge Labの画面" data-tour="lab-tabs">
+      <!-- 11/18 オーナー：タブは出さない。マイライブラリー（Knowledge Lab の記録）と書き手プロフィールは、
+           Emu のプロフィールボタンのメニューから開く。運営管理は管理画面から開く（?view=admin） -->
+      <nav class="tabs" aria-label="Knowledge Labの画面" data-tour="lab-tabs" hidden>
         <!-- 11/18 オーナー：知識図書館は廃止（投稿の一覧は「知識を読む」で見る。分類で絞るも「知識を読む」の検索バーへ）。
              掛け合わせる画面の名前は「Knowledge Lab」。開いたら最初にここを出す -->
         <button type="button" data-view="research" aria-pressed="true">
@@ -197,7 +200,12 @@
         <div id="results" class="grid" aria-live="polite"></div>
         <button type="button" id="moreResults" hidden>さらに読む</button>
       </section>
-      <section id="research" class="view" data-tour="lab-research">
+      <!-- マイライブラリー・書き手プロフィール・運営管理を開いているときだけ、掛け合わせの画面へ戻るボタンを出す -->
+      <button type="button" id="labHome" class="mix-back" data-view="mix" hidden>← Knowledge Lab（掛け合わせ）へ</button>
+      <!-- 11/18 オーナー：分野 → 投稿 → 掛け合わせ（メイン1つ＋最大4つ）→ 混ぜる → 新しい発見（knowledge-lab/mix.js） -->
+      <section id="mix" class="view" data-tour="lab-mix"></section>
+      <!-- 前の研究の画面（分野を2〜3つ選んで分析）。?view=research で開ける -->
+      <section id="research" class="view" hidden data-tour="lab-research">
         <p class="lead">違う経験を2〜3つ重ねると、自分だけの答えが見えてくる</p>
         <form id="researchFind" class="card" data-tour="lab-fields">
           <h3>1. 分野を2〜3つ選ぶ</h3>
@@ -701,5 +709,6 @@
     </footer>
     <script src="/tour/reizo-tour.js"></script>
     <script src="/knowledge-lab/lab.js" defer></script>
+    <script src="/knowledge-lab/mix.js" defer></script>
   </body>
 </html>

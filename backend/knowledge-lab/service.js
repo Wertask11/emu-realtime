@@ -1140,6 +1140,18 @@ function createService({
       active: now() >= membershipPolicy.EFFECTIVE_AT,
     };
   }
+  /* 掛け合わせの研究に使った知識（0〜5件）。公開するときは、どれも公開されていること */
+  async function mixPosts(ids, a, publicOnly = false) {
+    if (ids.length > 5) m.fail("SELECT_TWO_TO_SIX_SOURCES");
+    const values = [];
+    for (const id of ids) {
+      const p = await rawPost(id, a);
+      if (publicOnly && p.visibility && p.visibility !== "public")
+        m.fail("PRIVATE_SOURCE", 403);
+      values.push(m.safePost(id, p, a));
+    }
+    return values;
+  }
   async function sources(ids, a, publicOnly = false) {
     if (ids.length < 2 || ids.length > 6) m.fail("SELECT_TWO_TO_SIX_SOURCES");
     const values = [];
@@ -1181,15 +1193,28 @@ function createService({
     const key = m.id(input.key),
       noteId = input.id ? m.id(input.id) : "note-" + m.hash([a.spid, key]);
     const visibility = input.visibility === "public" ? "public" : "private";
-    const sourceIds = m.list(input.sourceIds, 6);
+    /* 11/18 掛け合わせ（mode: "mix"）：分野は選ばない（0〜3）。材料は知識（posts）と Knowledge Text の教材（kt_…）。
+       知識は sourceIds、教材は textSourceIds に分けて残す（ほかの画面は今までどおり sourceIds を知識として読む） */
+    const mix = input.mode === "mix";
+    const allIds = m.list(input.sourceIds, 6);
+    const textSourceIds = mix ? allIds.filter((id) => /^kt_/.test(id)) : [];
+    const sourceIds = mix ? allIds.filter((id) => !/^kt_/.test(id)) : allIds;
     const fields = m.list(input.fields, 3);
-    if (fields.length < 2) m.fail("SELECT_TWO_OR_THREE_FIELDS");
+    if (!mix && fields.length < 2) m.fail("SELECT_TWO_OR_THREE_FIELDS");
     const previous = await ref("notes", noteId).get();
-    await validateFacets(
-      { field: fields },
-      previous.exists ? { field: previous.data().fields } : null,
-    );
-    await sources(sourceIds, a, visibility === "public");
+    if (fields.length)
+      await validateFacets(
+        { field: fields },
+        previous.exists ? { field: previous.data().fields } : null,
+      );
+    if (mix) {
+      if (allIds.length < 2 || allIds.length > 5) m.fail("SELECT_TWO_TO_SIX_SOURCES");
+      await mixPosts(sourceIds, a, visibility === "public");
+      for (const id of textSourceIds) {
+        const t = await db.collection("room1_contents").doc(id.slice(3)).get();
+        if (!t.exists) m.fail("NOT_FOUND", 404);
+      }
+    } else await sources(sourceIds, a, visibility === "public");
     const aiRunId =
       input.aiRunId === null
         ? null
@@ -1198,15 +1223,20 @@ function createService({
     if (
       run &&
       (m.hash(run.sources.map((s) => s.id).sort()) !==
-        m.hash([...sourceIds].sort()) ||
-        m.hash([...run.fields].sort()) !== m.hash([...fields].sort()))
+        m.hash([...allIds].sort()) ||
+        (!mix && m.hash([...run.fields].sort()) !== m.hash([...fields].sort())) ||
+        mix !== (run.mode === "mix"))
     )
       m.fail("AI_SOURCES_CHANGED", 409);
+    if (mix && !run) m.fail("AI_RUN_REQUIRED");
     const value = {
       authorSchoolParkId: a.spid,
       title: m.text(input.title, 160, true),
       fields,
       sourceIds,
+      ...(mix
+        ? { mode: "mix", textSourceIds, mainSourceId: run.mainId || allIds[0] }
+        : {}),
       question: m.text(input.question || "", 2000),
       hypothesis: m.text(input.hypothesis || "", 3000),
       plan: m.text(input.plan || "", 3000),
@@ -1306,7 +1336,8 @@ function createService({
     if (v.archived) m.fail("NOT_FOUND", 404);
     if (v.visibility !== "public") m.fail("NOT_FOUND", 404);
     try {
-      await sources(v.sourceIds, a, true);
+      if (v.mode === "mix") await mixPosts(v.sourceIds || [], a, true);
+      else await sources(v.sourceIds, a, true);
     } catch (_) {
       m.fail("SOURCE_WITHDRAWN", 404);
     }
