@@ -256,6 +256,16 @@ function createService({
     });
     invalidate();
   }
+  /* 11/18 オーナー：Knowledge Lab の分野のカードに、その分野の知識の数を出す。
+     検索と同じ索引（catalog）から、分野ごとに検索と同じ条件で数える。Firestore の読み取りは増やさない */
+  async function fieldCounts() {
+    const terms = await taxonomy(),
+      all = await catalog(),
+      counts = {};
+    for (const t of terms.filter((t) => t.axis === "field" && t.active !== false && !t.mergedInto))
+      counts[t.id] = m.select(all, m.searchParams({ field: t.id }), terms).length;
+    return { counts };
+  }
   async function search(q, a = null) {
     const params = m.searchParams(q),
       terms = await taxonomy(),
@@ -1578,6 +1588,7 @@ function createService({
     me,
     comparison,
     saveNote,
+    fieldCounts,
     note,
     publicNotes,
     archiveNote,

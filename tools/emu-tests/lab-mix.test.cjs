@@ -39,7 +39,7 @@ const POSTS = ['髪を傷めないブローのコツ', '開業1年目の資金�
   id: 'p' + i, title, body: '本文の例です。'.repeat(6), displayName: '書き手' + i,
   knowledgeLab: { aiUseConsent: { allowed: i !== 5 } }, facets: { field: ['field-beauty'] },
 }));
-async function open({ width = 390, remaining = 3 } = {}) {
+async function open({ width = 390, remaining = 3, counts = { 'field-beauty': 12, 'field-business': 0 } } = {}) {
   const context = await browser.newContext({ viewport: { width, height: 844 } });
   const seen = { mix: [], notes: [], search: [] };
   let quota = { available: true, used: 3 - remaining, limit: 3, remaining };
@@ -54,6 +54,7 @@ async function open({ width = 390, remaining = 3 } = {}) {
     if (p === '/ai/status') return json({ available: true, semanticAvailable: false, configured: true, environmentEnabled: true, stopped: false, model: 'm' });
     if (p === '/me') return json({ spid: 'sp-test', owner: false });
     if (p === '/search') { seen.search.push(Object.fromEntries(u.searchParams)); return json({ items: POSTS, next: null }); }
+    if (p === '/field-counts') return counts ? json({ counts }) : json({ error: 'INDEX_NOT_READY' }, 503);
     if (p === '/texts') return json([{ id: 'kt_a1', title: '詐欺の見抜き方', theme: 'money', subTheme: '守り方', subSubTheme: '', excerpt: 'うまい話には理由がある' }]);
     if (p === '/texts/kt_a1') return json({ id: 'kt_a1', title: '詐欺の見抜き方', body: 'うまい話には理由がある。全文です。' });
     if (p === '/ai/mix/quota') return json(quota);
@@ -180,4 +181,28 @@ test('プロフィールボタンのメニューから Knowledge Lab の記録�
   assert.match(admin, /href="\/\?lab=admin"[^>]*>Knowledge Lab の運営管理/);
   const lab = fs.readFileSync(path.join(ROOT, 'knowledge-lab.html'), 'utf8');
   assert.match(lab, /<nav class="tabs"[^>]*hidden>/, 'Lab のタブは出さない');
+});
+
+test('分野のカードの右上に、その分野の知識の数を出す。数えられなかったときは出さない', async () => {
+  const w = await open({ width: 1280 });
+  try {
+    await w.f.locator('#mixFields [data-field="field-beauty"] .mix-count').waitFor();
+    assert.equal(await w.f.locator('#mixFields [data-field="field-beauty"] .mix-count').innerText(), '12件');
+    assert.equal(await w.f.locator('#mixFields [data-field="field-business"] .mix-count').innerText(), '0件');
+    assert.equal(await w.f.locator('#mixFields [data-field="field-money"] .mix-count').count(), 0, '数の無い分野は出さない');
+    // 右上にある
+    const card = await w.f.locator('#mixFields [data-field="field-beauty"]').boundingBox();
+    const badge = await w.f.locator('#mixFields [data-field="field-beauty"] .mix-count').boundingBox();
+    assert.ok(badge.x + badge.width > card.x + card.width - 30 && badge.y < card.y + 30, '右上');
+    // Knowledge Text のテーマにも教材の数
+    await w.f.locator('[data-src="texts"]').click();
+    assert.equal(await w.f.locator('[data-theme="money"] .mix-count').innerText(), '1件');
+    assert.deepEqual(w.errors, []);
+  } finally { await w.close(); }
+  const off = await open({ counts: null });
+  try {
+    await off.page.waitForTimeout(300);
+    assert.equal(await off.f.locator('#mixFields .mix-count').count(), 0);
+    assert.equal(await off.f.locator('#mixFields .mix-card').count() > 0, true, 'カードはそのまま出る');
+  } finally { await off.close(); }
 });

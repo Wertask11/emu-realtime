@@ -409,6 +409,7 @@ function createKnowledgeLabRouter(deps) {
   /* 11/18 掛け合わせ（メイン1つ＋最大4つ・1人1日3回）と、材料にできる Knowledge Text の教材 */
   router.get("/ai/mix/quota", ...signed, wrap((req) => ai.mixQuota(req.labActor)));
   router.post("/ai/mix", ...write, wrap((req) => ai.mix(req.labActor, req.body)));
+  router.get("/field-counts", wrap(() => service.fieldCounts()));
   router.get("/texts", wrap(() => ai.texts()));
   router.get("/texts/:id", wrap(async (req) => {
     const t = await ai.textMaterial(m.id(req.params.id));
