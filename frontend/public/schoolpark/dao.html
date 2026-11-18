@@ -25,7 +25,15 @@
 .sp-section-header[data-sp-screen="city"],
 .sp-section-header[data-sp-screen="logs"],
 .sp-section-header[data-sp-screen="experiments"],
-.sp-section-header[data-sp-screen="tasks"] {display:none;}
+.sp-section-header[data-sp-screen="tasks"],
+/* 11/18 オーナー：ギルドの中の画面も、上の見出し（GUILD・ギルド名・EMUER・サービス）を出さない。名前は下の黒いカードに出ている */
+.sp-section-header[data-sp-screen="guild"] {display:none;}
+/* 11/18 オーナー：ギルドの決まりは「詳細」を押したときだけ出す */
+.sp-guild-rules-btn{flex:none;border:1px solid rgba(240,131,0,.45);background:#fff;color:#b85f00;border-radius:999px;padding:6px 14px;font:inherit;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}
+.sp-guild-rules-btn:hover{background:#fff4e6}
+.sp-guild-rules-back{position:fixed;inset:0;z-index:60;background:rgba(20,19,16,.32)}
+.sp-guild-rules-panel{box-sizing:border-box;position:fixed;z-index:61;top:16px;right:16px;bottom:16px;width:min(420px,calc(100vw - 32px));overflow:auto;-webkit-overflow-scrolling:touch;box-shadow:0 18px 50px rgba(20,19,16,.28)}
+.sp-guild-rules-close{border:0;background:transparent;font-size:22px;line-height:1;color:#6E695C;cursor:pointer;padding:4px 6px}
 /* スマホ（11/7）：#000 のカードは「SchoolPark／−物語はこの場所から−（小さめ）／全文を読む」だけ。パソコンは変えない */
 @media (max-width:760px){
   .sp-founder-kicker,.sp-founder-line{display:none !important;}
@@ -505,16 +513,16 @@ if (window.top === window.self) window.location.replace('/');
              ここが SchoolPark の「活動領域」の入口。
              議題はギルドの中にあるので、まずギルドを選ぶ。 -->
         <sc-if value="{{ isLogs }}" hint-placeholder-val="{{ false }}">
-          <div style="display:grid; grid-template-columns:{{ L.gLogs }}; gap:32px; align-items:start">
+          <div style="display:flex; flex-direction:column; gap:32px">
             <div style="display:flex; flex-direction:column; gap:22px">
 
-              <div style="display:flex; align-items:baseline; gap:14px">
-                <div data-tour="guild-list" style="font-size:17px; font-weight:700">まずは、ギルドの活動を見る</div>
+              <div style="display:flex; align-items:center; gap:14px">
+                <div data-tour="guild-list" style="font-size:17px; font-weight:700">入りたいギルドを選ぼう！</div>
                 <div style="flex:1; height:1px; background:rgba(20,19,16,.14)"></div>
                 <div style="font-size:12px; color:#6E695C">{{ guildCount }}</div>
+                <button type="button" class="sp-guild-rules-btn" data-tour="guild-rules" aria-haspopup="dialog" onClick="{{ openGuildRules }}">詳細</button>
               </div>
 
-              <p class="sp-ux-note">関心の近い人が、どんなことを考え、試そうとしているのか。ギルドの議題やクエストから、自分の知識・経験を使いたいテーマを探せます。カードを開いても参加登録はされません。</p>
               <div style="display:grid; grid-template-columns:{{ L.g2 }}; gap:14px">
                 <sc-for list="{{ guilds }}" as="g" hint-placeholder-count="5">
                   <div role="button" tabindex="0" class="sp-ux-guild-card" data-tour="guild-card" onClick="{{ g.open }}" style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-left:4px solid {{ g.accent }}; border-radius:12px; padding:20px; display:flex; flex-direction:column; gap:12px; cursor:pointer" style-hover="background:#F4F1EA">
@@ -544,8 +552,10 @@ if (window.top === window.self) window.location.replace('/');
               </sc-if>
             </div>
 
-            <div style="background:#E7E2D6; border-radius:12px; padding:26px; display:flex; flex-direction:column; gap:18px">
-              <div data-tour="guild-rules" style="font-size:15px; font-weight:700">ギルドの決まり</div>
+            <sc-if value="{{ guildRulesOpen }}">
+            <div class="sp-guild-rules-back" onClick="{{ closeGuildRules }}"></div>
+            <div class="sp-guild-rules-panel" role="dialog" aria-modal="true" aria-label="ギルドの決まり" style="background:#E7E2D6; border-radius:12px; padding:26px; display:flex; flex-direction:column; gap:18px">
+              <div style="display:flex; align-items:center; gap:10px"><div style="flex:1; font-size:15px; font-weight:700">ギルドの決まり</div><button type="button" class="sp-guild-rules-close" aria-label="閉じる" onClick="{{ closeGuildRules }}">×</button></div>
               <div style="background:#F4F1EA; border-radius:8px; padding:14px; display:flex; flex-direction:column; gap:8px">
                 <div style="font-size:13px; line-height:1.85; color:#3B382F"><b>ギルド</b>　同じ目的を持つ人が集まる活動領域</div>
                 <div style="font-size:13px; line-height:1.85; color:#3B382F"><b>議題</b>　みんなで考え、決めること</div>
@@ -566,6 +576,7 @@ if (window.top === window.self) window.location.replace('/');
               </div>
               <div style="font-size:12px; line-height:1.9; color:#6E695C; padding-top:4px; border-top:1px solid rgba(20,19,16,.12)">小さな実験や個人の挑戦は、議題を通さずクエストから直接始められます。</div>
             </div>
+            </sc-if>
           </div>
         </sc-if>
 
@@ -1293,6 +1304,10 @@ class Component extends DCLogic {
       founderLead:((founder && Array.isArray(founder.founderSections)) ? founder.founderSections : []).filter(x => x && x.title === 'SchoolPark論文'),
       founderRest:((founder && Array.isArray(founder.founderSections)) ? founder.founderSections : []).filter(x => !(x && x.title === 'SchoolPark論文')),
       isLogs:s.screen==='logs', isGuild:s.screen==='guild', isLibrary:s.screen==='library',
+      /* ギルドの決まり（11/18）。「詳細」を押したときだけ出す。ほかの画面へ移ったら閉じたことにする */
+      guildRulesOpen:!!s.guildRulesOpen && s.screen==='logs',
+      openGuildRules:() => this.setState({guildRulesOpen:true}),
+      closeGuildRules:() => this.setState({guildRulesOpen:false}),
       isPropose:s.screen==='propose', isTasks:s.screen==='tasks',
       goTasks:this.go('tasks'), goPractice:() => { try { window.parent.showEmuPractice(); } catch (_) {} },
       goPropose:() => { try { window.parent.openSpQuestForm(this); } catch (e) { this.setState({screen:'propose'}); } }, goLibrary:this.go('library'), goExperiments:this.go('experiments'), goLogs:this.go('logs'),
