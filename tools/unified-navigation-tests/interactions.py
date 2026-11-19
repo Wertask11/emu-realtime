@@ -41,13 +41,14 @@ with sync_playwright() as p:
   # Close the existing guide chooser/chat through its established API; do not change progress.
   g.evaluate('window.ReizoTour?.close?.();window.spReizoClose?.()');g.locator('#esnRequests').click()
   g.locator('#emuRequestsPage [data-tour="emu-lab-entry"] button').click();lab=g.frame_locator('#spRoomFrame');lab.locator('html[data-lab-ready="true"]').wait_for(timeout=30000)
-  lab.locator('#searchForm input[name="q"], #searchQ').first.wait_for() if lab.locator('#searchForm input[name="q"], #searchQ').count() else None
-  assert lab.locator('#library').is_visible()
+  # 11/18：知識図書館（#library・検索）は画面から外した。いまの Knowledge Lab は掛け合わせ（#mix）から始まる
+  lab.locator('#mix[data-tour="lab-mix"]').wait_for(state='visible')
+  assert not lab.locator('#library').is_visible()
   g.screenshot(path=str(OUT/'INTERACTION-lab.png'));g.evaluate('closeSpRoom()')
   g.locator('#emuRequestsPage .emu-text-entry').click();text=g.frame_locator('#spRoomFrame');text.locator('#headerTitle').wait_for();text.get_by_text('マネーリテラシー',exact=True).first.click();assert '増やし方' in text.locator('#list').inner_text();g.evaluate('closeSpRoom()')
   RESULTS.append({'account':'shared profile/settings entry and real Passport open','reizo':'existing chooser opens','tutorial_progress':'done retained','lab_text':'both search cards open actual existing implementations'})
   # Existing join → reports → server-created wisdom. Writes stay inside the demo project.
-  g.locator('#esnPractice').click();g.locator('#emuPracticePage').get_by_role('button',name='クエストの内容を見る →').click();f.get_by_text('LOCAL 知識を試すクエスト',exact=False).first.wait_for()
+  g.locator('#esnPractice').click();f.get_by_text('LOCAL 知識を試すクエスト',exact=False).first.wait_for()
   joined=g.evaluate('(id)=>document.getElementById("spDaoFrame").contentWindow.app.state.quests.find(q=>q.id===id).iTook',Q)
   if not joined:g.evaluate('(id)=>spQuestToggle(id,document.getElementById("spDaoFrame").contentWindow.app)',Q)
   g.wait_for_function('(id)=>document.getElementById("spDaoFrame").contentWindow.app.state.quests.find(q=>q.id===id).iTook===true',arg=Q)

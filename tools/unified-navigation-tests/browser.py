@@ -45,17 +45,17 @@ with sync_playwright() as p:
    go('search');g.locator('#emuRequestsPage').wait_for(state='visible');search=g.locator('#emuRequestsPage .emu-knowledge-pair').bounding_box();fits()
    assert g.locator('#emuRequestsPage .emu-knowledge-pair > .eth-card').count()==2
    assert g.locator('#emuRequestsPage').get_by_text('Knowledge Text',exact=False).count()>0
-   go('practice');g.locator('#emuPracticePage').wait_for(state='visible');fits()
-   pair=g.locator('#emuPracticePage .emu-knowledge-pair');assert pair.locator('> .eth-card').count()==2
-   assert abs(pair.bounding_box()['width']-search['width'])<2
-   cols=pair.evaluate('e=>getComputedStyle(e).gridTemplateColumns.split(" ").length');assert cols==(1 if width<=700 else 2),(width,cols)
-   assert g.locator('#emuPracticePage').get_by_role('button',name='ギルドの活動を見る →').is_visible()
-   g.screenshot(path=str(OUT/f'AFTER-{width}-practice.png'))
+   # 11/19 オーナー：知識を試す は2枚のカードを挟まず、すぐクエストの拠点を開く。ギルドへの入口は拠点の中
    before=state()
-   g.locator('#emuPracticePage').get_by_role('button',name='ギルドの活動を見る →').click()
+   go('practice');g.wait_for_function('document.getElementById("spDaoFrame").contentWindow.app?.tourRenderedScreen==="experiments"')
+   f=g.frame_locator('#spDaoFrame');f.get_by_text('LOCAL 知識を試すクエスト',exact=False).first.wait_for();fits()
+   assert f.get_by_role('tab',name='挑戦を探す',exact=False).is_visible()
+   assert f.get_by_role('button',name='ギルドホールへ →').is_visible()
+   g.screenshot(path=str(OUT/f'AFTER-{width}-practice.png'))
+   f.get_by_role('button',name='ギルドホールへ →').click()
    g.wait_for_function('document.getElementById("spDaoFrame").contentWindow.app?.tourRenderedScreen==="logs"')
-   f=g.frame_locator('#spDaoFrame');f.locator('[data-tour~=guild-list]').wait_for();fits()
-   g.evaluate('showEmuPractice()');g.locator('#emuPracticePage').get_by_role('button',name='クエストの内容を見る →').click()
+   f.locator('[data-tour~=guild-list]').wait_for();fits()
+   g.evaluate('showEmuPractice()')
    g.wait_for_function('document.getElementById("spDaoFrame").contentWindow.app?.tourRenderedScreen==="experiments"')
    f.get_by_text('LOCAL 知識を試すクエスト',exact=False).first.wait_for();fits()
    g.screenshot(path=str(OUT/f'AFTER-{width}-quests.png'))
@@ -75,12 +75,11 @@ with sync_playwright() as p:
     # 11/6: closing the side tab must widen the SchoolPark workspace and the search/practice pages too.
     g.evaluate('emuNavToggle()');g.wait_for_timeout(300)
     assert g.evaluate('Math.round(document.getElementById("spDaoPage").getBoundingClientRect().left)')==0,('workspace keeps side gap',width)
-    g.evaluate('showEmuPractice()');g.wait_for_timeout(300)
-    practice_w='document.getElementById("emuPracticePage").getBoundingClientRect().width'
-    closed_w=g.evaluate(practice_w)
+    # 知識を試す（クエストの拠点）も、左のタブを閉じた幅のまま開く
+    g.evaluate('showEmuPractice()');g.wait_for_function('document.getElementById("spDaoFrame").contentWindow.app?.tourRenderedScreen==="experiments"');g.wait_for_timeout(300)
+    assert g.evaluate('Math.round(document.getElementById("spDaoPage").getBoundingClientRect().left)')==0,('practice keeps side gap',width)
     g.evaluate('emuNavToggle()');g.wait_for_timeout(300)
     assert g.evaluate('document.body.classList.contains("emu-nav-closed")')==False
-    assert closed_w>g.evaluate(practice_w)+40,('practice does not widen when the side tab closes',width)
     go('city');g.wait_for_function('document.getElementById("spDaoFrame").contentWindow.app?.tourRenderedScreen==="city"');g.wait_for_timeout(300)
     side=g.evaluate('Math.round(document.getElementById("emuSideNav").getBoundingClientRect().right)')
     assert g.evaluate('Math.round(document.getElementById("spDaoPage").getBoundingClientRect().left)')==side,('workspace overlaps reopened side tab',width)
@@ -91,7 +90,7 @@ with sync_playwright() as p:
    assert g.locator('#emuIchinichiPage,#emuDiscussionPage').count()==0
    assert g.locator('[onclick*=showEmuIchinichi],[onclick*=showEmuDiscussion]').count()==0
    assert not errors,errors
-   RESULTS.append({'width':width,'navigation':'5 real shell entries','read':'existing seeded post','search_cards':2,'practice_columns':cols,'guild_quest':'existing APIs; no joins','wisdom':'existing stored card/detail/citation entry','city_games':4,'viewing_writes':False,'page_errors':errors,'fixture_api_errors':failed})
+   RESULTS.append({'width':width,'navigation':'5 real shell entries','read':'existing seeded post','search_cards':2,'practice':'quest hub opens directly','guild_quest':'existing APIs; no joins','wisdom':'existing stored card/detail/citation entry','city_games':4,'viewing_writes':False,'page_errors':errors,'fixture_api_errors':failed})
    print('PASS',width,flush=True)
   except Exception:
    g.screenshot(path=str(OUT/f'FAIL-{width}.png'));print('DIAGNOSTIC',width,errors,failed,flush=True);raise

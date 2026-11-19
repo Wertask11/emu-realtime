@@ -45,7 +45,9 @@
     document.documentElement.style.setProperty('--emu-workspace-top',Math.max(0,Math.round(top))+'px');
     document.documentElement.style.setProperty('--emu-workspace-left',Math.max(0,Math.round(left))+'px');
   }
-  function practice() {window._emuEnsureAppVisible();activate('practice');window.scrollTo({top:0});}
+  // 11/19 オーナー：「知識を試す」はギルド／クエストの2枚のカードを挟まず、すぐクエストの拠点（experiments）を開く。
+  // ギルドへの入口は拠点の中にある。入れるかどうかの確かめ（spEnsureSchoolParkAccess）は今までどおり existing() が行う。
+  function practice() {return existing('experiments');}
   async function existing(screen) {
     if(!SCREENS.has(screen))return false;
     if(opening && requestedScreen===screen)return opening;

@@ -107,7 +107,7 @@ with sync_playwright() as p:
         d.get_by_text('← ギルド',exact=True).click();d.locator('[data-tour="guild-list"]').wait_for()
         # Existing stages only; an unclassified quest must never become an entry quest.
         d.locator('html').evaluate("()=>{app.setState({screen:'experiments',filter:'すべて',series:'general',entryOnly:false});app.toTop()}")
-        d.get_by_role('button',name='「入門」のクエストに絞る',exact=True).click()
+        d.get_by_role('button',name='入門だけ（未経験OK）',exact=True).click()
         d.locator('[data-tour="quest-card"]').first.wait_for()
         assert d.locator('[data-tour="quest-card"]').count()==1
         assert 'ux-entry' in d.locator('html').evaluate('()=>JSON.stringify(app.state.quests.filter(q=>q.stage==="入門").map(q=>q.id))')
