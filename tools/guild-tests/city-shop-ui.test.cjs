@@ -134,6 +134,10 @@ test('公式ショップ：残高、商品、使い方', async () => {
   try {
     await f.frame.locator('.city-door[data-value="commerce"]').click();
     await f.frame.locator('.city-wallet').waitFor();
+    /* 残高と商品は別々に届く。残高の枠が出た直後に数えると、商品がまだ描かれていないことがあった（11/19：まとめて流すとときどき落ちていた）。
+       商品2つと残高の数字が出るのを待ってから確かめる */
+    await f.frame.locator('.city-section .city-card').nth(1).waitFor();
+    await f.frame.getByText(/42 EMUER/).first().waitFor();
     const t = await f.text();
     assert.match(t, /42 EMUER/);
     assert.match(t, /EMUERをためる[\s\S]*商品と交換する[\s\S]*受け取る/);
