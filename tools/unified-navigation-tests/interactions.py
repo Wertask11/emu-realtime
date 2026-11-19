@@ -45,7 +45,7 @@ with sync_playwright() as p:
   lab.locator('#mix[data-tour="lab-mix"]').wait_for(state='visible')
   assert not lab.locator('#library').is_visible()
   g.screenshot(path=str(OUT/'INTERACTION-lab.png'));g.evaluate('closeSpRoom()')
-  g.locator('#emuRequestsPage .emu-text-entry').click();text=g.frame_locator('#spRoomFrame');text.locator('#headerTitle').wait_for();text.get_by_text('マネーリテラシー',exact=True).first.click();assert '増やし方' in text.locator('#list').inner_text();g.evaluate('closeSpRoom()')
+  g.locator('#emuRequestsPage .emu-text-entry').click();text=g.frame_locator('#spRoomFrame');text.locator('#headerTitle').wait_for(state='attached');text.get_by_text('マネーリテラシー',exact=True).first.click();assert '増やし方' in text.locator('#list').inner_text();g.evaluate('closeSpRoom()')
   RESULTS.append({'account':'shared profile/settings entry and real Passport open','reizo':'existing chooser opens','tutorial_progress':'done retained','lab_text':'both search cards open actual existing implementations'})
   # Existing join → reports → server-created wisdom. Writes stay inside the demo project.
   g.locator('#esnPractice').click();f.get_by_text('LOCAL 知識を試すクエスト',exact=False).first.wait_for()

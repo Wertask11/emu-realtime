@@ -30,7 +30,9 @@ with sync_playwright() as p:
    g.goto(BASE+'/test/native.html');g.wait_for_function('typeof window.__localEmulatorLogin==="function"')
    g.locator('#localEmulatorLogin').click();g.evaluate('window.__localLoginResult');g.wait_for_function('window._chesEntered===true')
    g.locator('#spLoadingOverlay').wait_for(state='hidden',timeout=30000);g.locator('#localEmulatorLogin').evaluate('e=>e.remove()')
-   g.wait_for_function('typeof window.showEmuPractice==="function"');g.locator('#emuHeaderProfile').wait_for(state='visible');g.wait_for_timeout(300)
+   g.wait_for_function('typeof window.showEmuPractice==="function"')
+   # 761px 以上の「知識を読む」では右上のプロフィールは出さない（11/7。左の列にある）。ここでは有ることだけ確かめる
+   g.locator('#emuHeaderProfile').wait_for(state='attached');g.wait_for_timeout(300)
    nav='#emuBottomNav' if width<=700 else '#emuSideNav' if width>1024 else '.eth-tabs'
    assert g.locator(nav+' [data-unified-view]').count()==5
    def go(view):g.locator(nav+' [data-unified-view="'+view+'"]').click()
