@@ -371,6 +371,10 @@ app.use("/api/schoolpark/founder", require("./founder-paper").createFounderPaper
 app.use("/api/schoolpark/city", require("./city").createCityRouter({
   db, identity, entitlement, requireFirebaseUser, rateLimit, ownerAddresses: SP_OWNER_ADDRESSES
 }));
+/* たまり場（11/19）：CONNECT のテーマ別の部屋。書き込みと返信・通報・ブロック。入れる人は City と同じ（backend/tamariba.js） */
+app.use("/api/schoolpark/tamariba", require("./tamariba").createTamaribaRouter({
+  db, identity, entitlement, requireFirebaseUser, rateLimit, ownerAddresses: SP_OWNER_ADDRESSES
+}));
 
 // 未処理のまま保持期限(30日)を過ぎた本人確認書類を毎日破棄する。
 cron.schedule("30 4 * * *", () => {
