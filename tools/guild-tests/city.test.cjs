@@ -138,6 +138,8 @@ for(const width of [375,390,412,768,1440]) test(`City UI ${width}px: current rou
     const screens=['experiments','logs','experiments','library'];
     for(let i=0;i<screens.length;i++) {await f.nav('0'+(i+1));assert.equal(await f.frame.evaluate(()=>app.state.screen),screens[i]);await noOverflow(f);}
     await f.city();
+    /* 最初に出るカードは遊びのカードのことがある。場所のカード（/spots の答え）が描かれるのを待ってから数える（11/19：待たずに数えて、ときどき 0 になっていた） */
+    await f.frame.locator('.city-card:not(.city-play-card)').nth(2).waitFor();
     assert.equal(await f.frame.locator('.city-card:not(.city-play-card)').count(),3);
     assert.equal(await f.frame.locator('.city-play-card').count(),4);
     assert.equal(f.requests.filter(r=>r.path.endsWith('/spots')).length,1);
