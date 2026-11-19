@@ -7,6 +7,8 @@
 (function () {
   'use strict';
   var BASE = '/illustrations/';
+  /* 絵の版。絵を差し替えたら上げる（名前が同じなので、上げないと前の絵がブラウザに残る。11/19） */
+  var VER = '?v=1119';
   var CARDS = [
     ['#emuRequestsPage [data-tour="emu-lab-entry"]', 'card-lab'],
     ['#emuRequestsPage [data-tour~="room1-entry"]', 'card-text'],
@@ -27,7 +29,7 @@
     var box = document.createElement('div');
     box.className = 'spi-slot ' + cls; box.setAttribute('data-spi', name); box.setAttribute('aria-hidden', 'true');
     var img = document.createElement('img'); img.alt = ''; img.decoding = 'async'; img.loading = 'lazy';
-    img.src = BASE + name + '.webp';
+    img.src = BASE + name + '.webp' + VER;
     img.onerror = function () { box.remove(); };
     box.appendChild(img);
     host.insertBefore(box, before || host.firstChild);
@@ -42,7 +44,7 @@
       wrap.appendChild(img);
       pair.parentNode.insertBefore(wrap, pair.nextSibling);
     }
-    var src = BASE + 'band-' + kind + '-' + root.getAttribute('data-sp-time') + '.webp';
+    var src = BASE + 'band-' + kind + '-' + root.getAttribute('data-sp-time') + '.webp' + VER;
     var im = wrap.querySelector('img');
     if (im.getAttribute('src') !== src) im.setAttribute('src', src);
   }

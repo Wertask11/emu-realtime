@@ -34,7 +34,7 @@
 .sp-guild-rules-back{position:fixed;inset:0;z-index:60;background:rgba(20,19,16,.32)}
 .sp-guild-rules-panel{box-sizing:border-box;position:fixed;z-index:61;top:16px;right:16px;bottom:16px;width:min(420px,calc(100vw - 32px));overflow:auto;-webkit-overflow-scrolling:touch;box-shadow:0 18px 50px rgba(20,19,16,.28)}
 /* ───── ギルドホール（11/18）：扉の絵は guild-hall/。位置と文字の場所は Claude Design の見本どおり ───── */
-.gh-hall{position:relative;width:100%;aspect-ratio:2/1;border-radius:12px;overflow:hidden;background:#e8efd9 url(guild-hall/hall-pc.webp) center/100% 100% no-repeat;box-shadow:0 10px 30px rgba(60,40,15,.14)}
+.gh-hall{position:relative;width:100%;aspect-ratio:2/1;border-radius:12px;overflow:hidden;background:#e8efd9 url(guild-hall/hall-pc.webp?v=1119) center/100% 100% no-repeat;box-shadow:0 10px 30px rgba(60,40,15,.14)}
 .gh-swipe{display:none}
 .gh-swipe-hint{display:none}
 .gh-door{position:absolute;display:block;appearance:none;border:0;padding:0;margin:0;background:none;cursor:pointer;container-type:inline-size;perspective:900px;-webkit-tap-highlight-color:transparent;font:inherit;color:inherit}
@@ -89,7 +89,7 @@
   .gh-hall{display:none}
   .gh-swipe{position:relative;display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;padding:0 5% 8px;margin:0 -4px;scrollbar-width:none}
   .gh-swipe::-webkit-scrollbar{display:none}
-  .gh-slide{position:relative;flex:0 0 90%;max-width:420px;aspect-ratio:1080/1920;scroll-snap-align:center;border-radius:16px;overflow:hidden;background:#e8efd9 url(guild-hall/hall-sp.webp) center/100% 100% no-repeat;box-shadow:0 8px 24px rgba(60,40,15,.18)}
+  .gh-slide{position:relative;flex:0 0 90%;max-width:420px;aspect-ratio:1080/1920;scroll-snap-align:center;border-radius:16px;overflow:hidden;background:#e8efd9 url(guild-hall/hall-sp.webp?v=1119) center/100% 100% no-repeat;box-shadow:0 8px 24px rgba(60,40,15,.18)}
   .gh-slide .gh-door{left:12.96%;top:19.48%;width:74.07%;height:67.71%}
   .gh-slide{container-type:inline-size}
   .gh-slide .gh-info{left:15%;right:15%;bottom:81.5%;padding:2.2cqw 3cqw;border-radius:14px 10px 16px 9px}
@@ -616,7 +616,7 @@ if (window.top === window.self) window.location.replace('/');
                     <img class="gh-l gh-leaf gh-leaf-r" src="{{ d.right }}" alt="" loading="lazy" decoding="async" draggable="false">
                     <img class="gh-l gh-frame" src="{{ d.frame }}" alt="" loading="lazy" decoding="async" draggable="false">
                     <span class="gh-bloom"></span>
-                    <img class="gh-sparkle" src="guild-hall/sparkle.webp" alt="" loading="lazy" decoding="async" draggable="false">
+                    <img class="gh-sparkle" src="guild-hall/sparkle.webp?v=1119" alt="" loading="lazy" decoding="async" draggable="false">
                     <span class="gh-text">
                       <span class="gh-name">{{ d.short }}</span>
                     </span>
@@ -639,7 +639,7 @@ if (window.top === window.self) window.location.replace('/');
                     <img class="gh-l gh-leaf gh-leaf-r" src="{{ d.right }}" alt="" loading="lazy" decoding="async" draggable="false">
                     <img class="gh-l gh-frame" src="{{ d.frame }}" alt="" loading="lazy" decoding="async" draggable="false">
                     <span class="gh-bloom"></span>
-                    <img class="gh-sparkle" src="guild-hall/sparkle.webp" alt="" loading="lazy" decoding="async" draggable="false">
+                    <img class="gh-sparkle" src="guild-hall/sparkle.webp?v=1119" alt="" loading="lazy" decoding="async" draggable="false">
                     <span class="gh-text">
                       <span class="gh-name">{{ d.short }}</span>
                     </span>
@@ -1169,6 +1169,7 @@ const LAYOUTS = {
 /* ギルドホールの扉の並び（左から）と、PC の背景（2400px 幅）の上での扉の左端（px） */
 const GH_KEYS = ['learn','work','play','connect','web3'];
 const GH_LEFTS = [160,580,1000,1420,1840];
+const GH_V = '?v=1119';
 const requestedScreen = new URLSearchParams(window.location.search).get('screen');
 const initialScreen = ['logs','experiments','library','city','tasks','yeargoals','propose'].includes(requestedScreen) ? requestedScreen : 'experiments';
 
@@ -1448,7 +1449,8 @@ class Component extends DCLogic {
       /* ギルドホールの扉（11/18）。決まった5つは扉に、それ以外（あとから増えたギルド）は今までのカードで出す */
       guildDoors:(s.guilds || []).filter(g => GH_KEYS.includes(g.id)).map(g => {
         const k = g.id, at = GH_KEYS.indexOf(k);
-        return {...g, glow:'guild-hall/' + k + '-glow.webp', left:'guild-hall/' + k + '-door-left.webp', right:'guild-hall/' + k + '-door-right.webp', frame:'guild-hall/' + k + '-frame.webp',
+        /* ?v= は絵の版。絵を差し替えたら上げる（名前が同じなので、上げないと前の絵がブラウザに残る。11/19） */
+        return {...g, glow:'guild-hall/' + k + '-glow.webp' + GH_V, left:'guild-hall/' + k + '-door-left.webp' + GH_V, right:'guild-hall/' + k + '-door-right.webp' + GH_V, frame:'guild-hall/' + k + '-frame.webp' + GH_V,
           pos:'left:' + (GH_LEFTS[at] / 24) + '%', infoPos:'left:' + ((GH_LEFTS[at] + 200) / 24 - 7.5) + '%', isOpen: s.doorOpen === k ? '1' : '0', aria:(g.short || '') + ' ギルドに入る', tour: at === 0 ? 'guild-card' : '',
           enter:() => this.enterGuild(g)};
       }),
