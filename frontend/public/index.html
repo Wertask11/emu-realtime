@@ -21284,9 +21284,10 @@ window.closeSpWisdomCelebrate = closeSpWisdomCelebrate;
 const SP_WISDOM_GUILD_TAGS = ['LEARN', 'WORK', 'PLAY', 'CONNECT', 'WEB3'];
 const SP_WISDOM_TAGS = SP_WISDOM_GUILD_TAGS.concat(['Emu', 'その他']);
 const SP_WISDOM_TAG_COLORS = {
-  'LEARN': '#0F5C3F', 'WORK': '#141310', 'PLAY': '#C2703D',
-  'CONNECT': '#B0405A', 'WEB3': '#3B382F',
-  'Emu': '#F08300', 'その他': '#6E695C'
+  /* 11/19 オーナー：ギルドそれぞれの色（絵本の色。dao.html の WISDOM_TAGS と同じ） */
+  'LEARN': '#3f7d4a', 'WORK': '#3b58a3', 'PLAY': '#d4652b',
+  'CONNECT': '#c97389', 'WEB3': '#2b3566',
+  'Emu': '#c4532a', 'その他': '#7a6a55'
 };
 
 /* この知恵カードが入る棚を決める。 */
@@ -21540,18 +21541,37 @@ window.spWisdomCite = async function (wisdomId, app) {
       alert('自分の知恵カードは引用できません。'); return;
     }
   } catch (e) {}
-  const ref = fb.doc(window.db, 'sp_wisdom', wisdomId, 'cites', p.addr);
+  /* 11/19 オーナー「引用したら『うまくいきませんでした』が出る」。
+     ・引用の文書の名前は小文字のアドレス（ルールの isMyLowerAddr）。名義が大文字まじりで
+       届くと、ルールに断られていた。画面の「引用した」の判定も小文字で見ているので、そろえる。
+     ・続けて押すと、2回目が「もう有る文書の書き換え」になってルールに断られ、
+       1回目は通っているのに失敗と出ていた。押している間は受け付けない。
+       それでも断られたら、もう一度読んで、望んだ形になっていれば失敗とは言わない。 */
+  const key = String(p.addr || '').toLowerCase();
+  const busy = window._spCiteBusy || (window._spCiteBusy = {});
+  if (busy[wisdomId]) return;
+  busy[wisdomId] = true;
+  const ref = fb.doc(window.db, 'sp_wisdom', wisdomId, 'cites', key);
+  let want = null;   // true = 引用した状態にしたい／false = 取り消したい
   try {
     const cur = await fb.getDoc(ref);
     if (cur.exists()) {
       if (!confirm('引用を取り消しますか？')) return;
+      want = false;
       await fb.deleteDoc(ref);
     } else {
+      want = true;
       await fb.setDoc(ref, { name: p.name, citedAt: Date.now() });
     }
   } catch (e) {
-    alert('うまくいきませんでした。もう一度お試しください。');
-    return;
+    let reached = false;
+    try { const again = await fb.getDoc(ref); reached = want !== null && again.exists() === want; } catch (_) {}
+    if (!reached) {
+      alert('うまくいきませんでした。もう一度お試しください。');
+      return;
+    }
+  } finally {
+    busy[wisdomId] = false;
   }
   await window.spDaoLoadWisdom(app);
   await window.spDaoLoadMembers(app);

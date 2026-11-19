@@ -3,8 +3,9 @@
 11/19 から、オーナーのご両親の絵本『とびらのむこう』の絵柄にそろえた絵（Claude Design 作、冷蔵庫くんが登場）。文字なし。
 ギルドホール（`/schoolpark/guild-hall/`）も同じ絵柄。
 
-- `card-{guild,quest,lab,text}.webp`（各 480×200）・`onepoint-try.webp`（64×64）… `<img>` で出す
-- `band-{search,practice}-{morning,day,night}.webp`（各 1200×200）… `<img>` で出し、時間帯で src を替える
+- 11/19 夜から、カードと帯は絵本のハンドオフの `/ehon/cards/`・`/ehon/bands/` を使う（顔ぶれ違いの -2・-3 を emu-ehon.js がランダムに選ぶ）。
+  このフォルダの `card-*`・`band-*` は前の版（残してあるだけで、画面では使っていない）
+- `onepoint-try.webp`（64×64）… `<img>` で出す（ここのものを使う）
 - `sp-illustrations.css` … 前の SVG 用の時間帯の色の変数（WebP には効かない。ほかで使っていれば残す）
 - `sp-illustrations-page.css` … 置き場所と大きさ
 - `sp-illustrations.js` … 画面が見えたときに差し込む・時間帯（朝 5–10／昼 10–17／夜 17–5）を付ける

@@ -28,6 +28,15 @@
 .sp-section-header[data-sp-screen="tasks"],
 /* 11/18 オーナー：ギルドの中の画面も、上の見出し（GUILD・ギルド名・EMUER・サービス）を出さない。名前は下の黒いカードに出ている */
 .sp-section-header[data-sp-screen="guild"] {display:none;}
+/* 11/19 オーナー：クエスト・クエストの詳細・年内目標などに残っていた上の見出し（QUEST・画面名・EMUER・サービス）も出さない。これで全部の画面で出さない。
+   冷蔵庫くんの案内（screen-heading）は、それぞれの画面の中の札を指す */
+.sp-section-header {display:none;}
+/* 知恵ライブラリの棚の札（11/19）。文字はギルドそれぞれの色、選んだ札はその色の地。
+   絵本の CSS（emu-ehon.css）の札の決まりより強くするため、親の data-tour から書く */
+[data-tour="wisdom-tags"] .sp-wtag{appearance:none;margin:0;padding:8px 16px;border:2px solid var(--wt);border-radius:999px;background:#fffaf0;color:var(--wt);font:inherit;font-size:13px;font-weight:700;letter-spacing:.04em;cursor:pointer;line-height:1.4;white-space:nowrap}
+[data-tour="wisdom-tags"] .sp-wtag:hover{background:#fbf3df}
+[data-tour="wisdom-tags"] .sp-wtag[aria-pressed="true"]{background:var(--wt)!important;color:#fffaf0!important}
+[data-tour="wisdom-tags"] .sp-wtag:focus-visible{outline:3px solid var(--wt);outline-offset:2px}
 /* 11/18 オーナー：ギルドの決まりは「詳細」を押したときだけ出す */
 .sp-guild-rules-btn{flex:none;border:1px solid rgba(240,131,0,.45);background:#fff;color:#b85f00;border-radius:999px;padding:6px 14px;font:inherit;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}
 .sp-guild-rules-btn:hover{background:#fff4e6}
@@ -259,7 +268,7 @@ if (window.top === window.self) window.location.replace('/');
           <article style="max-width:860px; width:100%; min-width:0; margin:0 auto; overflow-wrap:anywhere">
             <button onClick="{{ goExperiments }}" style="font:inherit; padding:10px 16px; cursor:pointer">← クエスト</button>
             <p style="font-family:Inter,sans-serif; color:var(--emu-brand-strong); font-weight:700; letter-spacing:.12em; font-size:11px">YEAR GOALS</p>
-            <h1 style="font-size:28px; line-height:1.5">{{ yearDoc.title }}</h1>
+            <h1 style="font-size:28px; line-height:1.5" data-tour="screen-heading">{{ yearDoc.title }}</h1>
             <p data-tour="year-goals" style="line-height:1.9">{{ yearDoc.summary }}</p>
             <sc-if value="{{ yearDoc.hasUpdated }}">
               <p style="font-size:12px; color:#6E695C">最終更新：{{ yearDoc.updatedLabel }}</p>
@@ -376,7 +385,7 @@ if (window.top === window.self) window.location.replace('/');
         <sc-if value="{{ isDetail }}" hint-placeholder-val="{{ false }}">
           <div class="sp-quest-detail-grid" style="display:grid; grid-template-columns:{{ L.gDetail }}; gap:32px; align-items:start; min-width:0">
             <div style="display:flex; flex-direction:column; gap:28px; min-width:0">
-              <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:{{ L.cardPad }}; display:flex; flex-direction:column; gap:22px">
+              <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:{{ L.cardPad }}; display:flex; flex-direction:column; gap:22px" data-tour="screen-heading">
                 <div style="display:flex; align-items:center; gap:12px">
                   <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.16em; padding:5px 10px; border-radius:4px; background:{{ cur.statusBg }}; color:{{ cur.statusFg }}">{{ cur.status }}</div>
                   <div data-tour="home-quests" onClick="{{ goExperiments }}" style="font-size:12px; color:#6E695C; cursor:pointer">← {{ word }}一覧</div>
@@ -857,7 +866,7 @@ if (window.top === window.self) window.location.replace('/');
             </div>
             <div data-tour="wisdom-tags" style="display:flex; gap:8px; flex-wrap:wrap">
               <sc-for list="{{ tags }}" as="t" hint-placeholder-count="5">
-                <div data-tour="nav-{{ t.n }}" onClick="{{ t.go }}" style="padding:8px 14px; border:1px solid {{ t.border }}; border-radius:18px; font-size:12px; cursor:pointer; background:{{ t.bg }}; color:{{ t.fg }}" style-hover="border-color:var(--emu-brand-strong)">{{ t.label }}</div>
+                <button type="button" class="sp-wtag" aria-pressed="{{ t.on }}" onClick="{{ t.go }}" style="--wt:{{ t.c }}">{{ t.label }}</button>
               </sc-for>
             </div>
             <sc-if value="{{ noWisdom }}">
@@ -1173,6 +1182,11 @@ const LAYOUTS = {
 const GH_KEYS = ['learn','work','play','connect','web3'];
 const GH_LEFTS = [160,580,1000,1420,1840];
 const GH_V = '?v=1119';
+/* 選んだ札・ボタンの暗い地。#141310 そのものにすると、絵本の CSS が「黒い見出しのカード」と見て
+   絵を敷いて縦に伸ばしてしまう（11/19 知恵ライブラリの WORK）。見た目はほぼ同じ別の色にする */
+const SEL_DARK = '#1b1915';
+/* 知恵ライブラリの棚。色は絵本のギルドの色（emu-ehon.css の --ehon-learn など）と同じ */
+const WISDOM_TAGS = [{t:'すべて',c:'#3a2a20'},{t:'LEARN',c:'#3f7d4a'},{t:'WORK',c:'#3b58a3'},{t:'PLAY',c:'#d4652b'},{t:'CONNECT',c:'#c97389'},{t:'WEB3',c:'#2b3566'},{t:'Emu',c:'#c4532a'},{t:'その他',c:'#7a6a55'}];
 const requestedScreen = new URLSearchParams(window.location.search).get('screen');
 const initialScreen = ['logs','experiments','library','city','tasks','yeargoals','propose'].includes(requestedScreen) ? requestedScreen : 'experiments';
 
@@ -1247,7 +1261,7 @@ class Component extends DCLogic {
       statusBg:sc[0], statusFg:sc[1],
       previewLabel: done ? '完走した記録を見る →' : on ? '参加状況・内容を見る →' : '内容を見る（参加しません） →',
       btnLabel: done ? doneLabel : on ? '✓ 受けている' : 'このクエストを受ける',
-      btnBg: done ? '#141310' : on ? '#f08300' : 'transparent', btnFg: done ? '#ffb366' : on ? '#F4F1EA' : '#b85f00',
+      btnBg: done ? SEL_DARK : on ? '#f08300' : 'transparent', btnFg: done ? '#ffb366' : on ? '#F4F1EA' : '#b85f00',
       btnBg2: done ? '#F4F1EA' : on ? '#ffd9b0' : 'transparent', btnFg2: done ? '#b85f00' : on ? '#141310' : '#ffb366',
       guildShow: e.hasGuild ? 'block' : 'none',
       canClose: !e.isFounder && !!e.isMine && e.status !== 'CLOSED',
@@ -1314,7 +1328,7 @@ class Component extends DCLogic {
     const seriesExps = exps.filter(e => (e.series || 'general') === curSeries);
     const filters = ['すべて','募集中','進行中','完了'].map(f => ({
       label:f, go:()=>this.setQuestFilter({filter:f}),
-      bg: s.filter===f ? '#141310' : 'transparent', fg: s.filter===f ? '#F4F1EA' : '#3B382F'}));
+      bg: s.filter===f ? SEL_DARK : 'transparent', fg: s.filter===f ? '#F4F1EA' : '#3B382F'}));
     const fmap = {'募集中':'OPEN','進行中':'RUNNING','完了':'CLOSED'};
     const statusExps = s.filter==='すべて' ? seriesExps : seriesExps.filter(e => e.status === fmap[s.filter]);
     const shownExps = s.entryOnly ? statusExps.filter(e => e.stage === '入門') : statusExps;
@@ -1498,7 +1512,7 @@ class Component extends DCLogic {
         .concat(exps.filter(e => e.status !== 'CLOSED').map(e => ({id:e.id, title:e.fullTitle || e.title})))
         .map(q => ({ label: q.title,
           go: () => { this.draft.questId = q.id; this.draft.questTitle = q.id ? q.title : ''; this.setState({}); },
-          bg: this.draft.questId === q.id ? '#141310' : 'transparent',
+          bg: this.draft.questId === q.id ? SEL_DARK : 'transparent',
           fg: this.draft.questId === q.id ? '#F4F1EA' : '#3B382F',
           border: this.draft.questId === q.id ? '#141310' : 'rgba(20,19,16,.16)' })),
       addTask: async () => {
@@ -1514,11 +1528,10 @@ class Component extends DCLogic {
       curLogs: cur.logs || [],
       logs, wisdom: ((s.wtag && s.wtag !== 'すべて') ? (s.wisdom || []).filter(w => w.tag === s.wtag) : (s.wisdom || [])).map(w => this.foldWisdom(w, s)),
       /* 棚はギルドと揃える。色は guild-store.js の accent と同じ。 */
-      tags: [{t:'すべて',c:'#3B382F'},{t:'LEARN',c:'#0F5C3F'},{t:'WORK',c:'#141310'},{t:'PLAY',c:'#C2703D'},{t:'CONNECT',c:'#B0405A'},{t:'WEB3',c:'#3B382F'},{t:'Emu',c:'#F08300'},{t:'その他',c:'#6E695C'}].map(x => ({
-        label:x.t, go:()=>this.setState({wtag:x.t}),
-        bg: s.wtag===x.t ? x.c : 'transparent',
-        fg: s.wtag===x.t ? '#F4F1EA' : x.c,
-        border: s.wtag===x.t ? x.c : 'rgba(20,19,16,.16)'})),
+      /* 棚はギルドと揃える。11/19 オーナー：文字はギルドそれぞれの色（絵本の色。emu-ehon.css の --ehon-learn など）。
+         選んだ札は、その色の地にクリームの字。色は CSS（.sp-wtag）で付ける */
+      tags: WISDOM_TAGS.map(x => ({
+        label:x.t, c:x.c, on: s.wtag===x.t ? 'true' : 'false', go:()=>this.setState({wtag:x.t})})),
       steps: STEPS.map((st,i) => ({num:'0'+(i+1), label:st.label, hint:st.hint, go:()=>this.setState({step:i}),
         bg: s.step===i ? '#E7E2D6' : 'transparent',
         fg: s.step===i ? '#141310' : '#6E695C',

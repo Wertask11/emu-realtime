@@ -78,7 +78,14 @@ test('unified navigation preserves existing auth, contracts, Quest business logi
  // previous user's Passport is never shown (tools/unified-navigation-tests/navigation.test.cjs covers it).
  assert.ok(grab(current,'spPassportLoad').includes('window.auth?.currentUser?.uid'),'spPassportLoad must stay tied to the signed-in UID');
  // backend/dialogue.js changed on purpose on 11/3 (#267, booked dialogue security); backend/dialogue*.test.js cover it.
- for(const fn of ['spEnsureSchoolParkAccess','emuAuthHeaders','accountGo','spQuestToggle','spQuestLog','spQuestWisdom','spWisdomSubmit','spWisdomCite','spOpenPlay']) assert.equal(grab(current,fn),grab(before,fn),fn);
+ // spWisdomCite changed on purpose on 11/19 (owner: 「引用したら『うまくいきませんでした』が出る」).
+ // The cite is keyed by the lower-case address (the rules' isMyLowerAddr) and a second press while the first
+ // is still saving is ignored. Who may cite is still decided by firestore.rules (compared unchanged below).
+ { const cite=grab(current,'spWisdomCite');
+   assert.ok(cite.includes("alert('自分の知恵カードは引用できません。')"),'spWisdomCite must still refuse your own wisdom card');
+   assert.ok(cite.includes("'cites', key)") && cite.includes("String(p.addr || '').toLowerCase()"),'spWisdomCite must key the cite by the lower-case Passport address');
+   assert.ok(cite.includes('busy[wisdomId]'),'spWisdomCite must ignore a second press while saving'); }
+ for(const fn of ['spEnsureSchoolParkAccess','emuAuthHeaders','accountGo','spQuestToggle','spQuestLog','spQuestWisdom','spWisdomSubmit','spOpenPlay']) assert.equal(grab(current,fn),grab(before,fn),fn);
  for(const file of ['firestore.rules','backend/identity.js','backend/entitlement.js','backend/membership-policy.js','backend/quest-completion.js','frontend/public/knowledge.html','frontend/public/Emu_room2/echo-field.html','frontend/public/ringo-game.html','frontend/public/daily-gods/index.html','frontend/public/daily-gods/game.js','frontend/public/schoolpark/south-elevator.html']) assert.equal(withoutErrorReporter(undoApproved(file,fs.readFileSync(path.join(root,file),'utf8'))),readBefore(file),file);
  const retired=fs.readFileSync(path.join(root,'frontend/public/schoolpark/dao.html'),'utf8');
  for(const view of ['isHome','isPark','isPlaza','isMembers','isTreasury']) assert.ok(!retired.includes('value="{{ '+view+' }}"'),view);

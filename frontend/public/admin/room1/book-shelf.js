@@ -19,7 +19,9 @@
       + '<div class="bfx-theme__head"><span class="bfx-theme__tag">' + esc(LABEL[t]) + '</span><h2>' + esc(heading) + '</h2></div>'
       + '<div class="bfx-case"><div class="bfx-row">'
       + books.map(function (b) {
-        return '<button type="button" class="bfx-book" data-bfx-manual data-theme="' + b.theme + '" data-title="' + esc(b.title) + '"'
+        /* 11/19 オーナー「文字があふれてる」：表紙の白い札は小さい。長い題は字を小さくし、入らない分は「…」で切る（全文は読み上げ名と title に残る） */
+        var n = String(b.title || '').length, len = n > 26 ? 'l' : n > 12 ? 'm' : 's';
+        return '<button type="button" class="bfx-book" data-bfx-manual data-len="' + len + '" data-theme="' + b.theme + '" data-title="' + esc(b.title) + '"'
           + (b.label ? ' data-label="' + esc(b.label) + '"' : '') + (b.tip ? ' title="' + esc(b.tip) + '"' : '') + b.attrs + '></button>';
       }).join("")
       + '</div></div></div></div>';
