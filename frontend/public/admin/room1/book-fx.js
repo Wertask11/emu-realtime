@@ -1,4 +1,5 @@
-/* Claude Design から受け取った本の演出（11/18）。Emu で変えたのは data-bfx-manual の1か所だけ。
+/* 11/19 絵本の絵柄に描き直し：飛び出すものを絵文字から絵（/ehon/text/pop-*.webp）に変えた。API・クラス名・合図は同じ。
+   Claude Design から受け取った本の演出（11/18）。Emu で変えたのは data-bfx-manual の1か所だけ。
    いまのページへのつなぎは book-shelf.js。
    book-fx.js — Knowledge Text : bookshelf dressing + book-opening effect (no deps)
    Markup:  <button class="bfx-book" data-theme="money|net|life|blue" data-title="タイトル" data-target="#content-id"></button>
@@ -7,11 +8,13 @@
 (function () {
   'use strict';
   var DURATION = 2600, REVEAL_AT = 2250;
+  /* 絵の置き場所。ページ側で window.BOOKFX_ASSETS = '/ehon/text/' のように変えられる */
+  function asset(name) { return (window.BOOKFX_ASSETS || '/ehon/text/') + name; }
   var THEMES = {
-    money: { label: 'MONEY LITERACY', fx: ['💰', '🪙', '📈', '🏦', '💴', '🐷'], conf: ['#ef7d00', '#ffb23f', '#ffd98a', '#e8c46a'] },
-    net:   { label: 'NET LITERACY',   fx: ['📱', '💬', '🔒', '🌐', '🛡️', '📷'], conf: ['#3b82d6', '#8cc2ff', '#dbeaff', '#e8c46a'] },
-    life:  { label: 'LIFE LITERACY',  fx: ['🌱', '💗', '🧘', '🍳', '🤝', '☀️'], conf: ['#3f9d5f', '#9bd77a', '#f7c6d4', '#ffe08a'] },
-    blue:  { label: 'BLUE FILE',      fx: ['📘', '🏆', '🎯', '🧭', '🚀', '🔥'], conf: ['#2b4a8f', '#e8c46a', '#f4dc96', '#9fb6e6'] }
+    money: { label: 'MONEY LITERACY', fx: ['coin', 'pig', 'house', 'wallet', 'graph', 'gift'], conf: ['#c4532a', '#f2c35a', '#fbe1a6', '#e2ac45'] },
+    net:   { label: 'NET LITERACY',   fx: ['phone', 'key', 'letter', 'wave', 'cloud', 'globe'], conf: ['#5fa8cf', '#a6d6e6', '#fbf3df', '#f2c35a'] },
+    life:  { label: 'LIFE LITERACY',  fx: ['sprout', 'heart', 'pot', 'bowl', 'sun', 'umbrella'], conf: ['#5e9a58', '#c8de8b', '#f2a9b7', '#f2c35a'] },
+    blue:  { label: 'BLUE FILE',      fx: ['trophy', 'flag', 'rocket', 'medal', 'bulb', 'map'], conf: ['#3b58a3', '#f2c35a', '#fbe1a6', '#a6d6e6'] }
   };
 
   function hash(s) { var h = 2166136261; for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
@@ -71,7 +74,8 @@
       var st = '--x:calc(var(--bw) * ' + f(Math.cos(ang) * dist * 1.15) + ');--y:calc(var(--bw) * ' + f(Math.sin(ang) * dist) + ');' +
         '--s:' + f(s) + ';--r:' + Math.round(emoji ? (r() - 0.5) * 50 : (r() - 0.5) * 720) + 'deg;--d:' + f(d) + 's;--dur:' + f(dur) + 's';
       if (k[0] === 'c') st += ';background:' + k[1];
-      parts += '<i class="bfx-p bfx-p--' + k[0] + '" style="' + st + '">' + (emoji ? k[1] : '') + '</i>';
+      if (emoji) st += ';background-image:url(' + asset('pop-' + o.theme + '-' + k[1] + '.webp') + ')';
+      parts += '<i class="bfx-p bfx-p--' + k[0] + '" style="' + st + '"></i>';
     });
     var el = document.createElement('div');
     el.className = 'bfx-fx';

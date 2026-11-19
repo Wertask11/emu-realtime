@@ -30957,5 +30957,31 @@ window.emuInAppRefresh = async function (source) {
 };
 </script>
 <script src="/emu-pull-refresh.js" defer></script>
+<!-- 11/19 オーナー：画面全体を絵本『とびらのむこう』の見た目にそろえる（Claude Design。いまの CSS のあとに読む） -->
+<link rel="stylesheet" href="/emu-theme/emu-ehon.css">
+<script src="/emu-theme/emu-ehon.js" defer></script>
+<script>
+/* 知識を読む（knowledge.html・iframe）にも同じ絵本の見た目を付ける。
+   knowledge.html はテストで中身を固定しているので、ファイルは変えずに、開いたあと外から付ける */
+(function () {
+  function dress(fr) {
+    try {
+      var d = fr.contentDocument;
+      if (!d || !d.head || d.getElementById('emuEhonCss')) return;
+      var l = d.createElement('link'); l.id = 'emuEhonCss'; l.rel = 'stylesheet'; l.href = '/emu-theme/emu-ehon.css';
+      var s = d.createElement('script'); s.src = '/emu-theme/emu-ehon.js';
+      d.head.appendChild(l); d.head.appendChild(s);
+    } catch (_) { /* 別のドメインのときは何もしない */ }
+  }
+  function hook() {
+    var fr = document.getElementById('emuKnowledgeFrame');
+    if (!fr || fr.__ehon) return;
+    fr.__ehon = true;
+    fr.addEventListener('load', function () { dress(fr); });
+    dress(fr);
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', hook); else hook();
+})();
+</script>
 </body>
 </html>
