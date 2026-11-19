@@ -37,6 +37,23 @@
 [data-tour="wisdom-tags"] .sp-wtag:hover{background:#fbf3df}
 [data-tour="wisdom-tags"] .sp-wtag[aria-pressed="true"]{background:var(--wt)!important;color:#fffaf0!important}
 [data-tour="wisdom-tags"] .sp-wtag:focus-visible{outline:3px solid var(--wt);outline-offset:2px}
+/* ───── LEARN（11/19）：かんたんな形。見出しに「参加する」と「詳細」、その下に 学ぶ・やってみる・残す の3つ ───── */
+.sp-gs-hero-acts{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding-top:4px}
+.sp-gs-join{appearance:none;border:2px solid #b85f00;background:#fff8ee;color:#b85f00;border-radius:999px;padding:10px 22px;font:inherit;font-size:15px;font-weight:700;cursor:pointer}
+.sp-gs-join[aria-pressed="true"]{background:#b85f00;color:#fff}
+.sp-gs-count{font-size:13px;color:#6E695C}
+.sp-gs-more,.sp-gs-sub{appearance:none;border:1px solid rgba(20,19,16,.3);background:#fff;color:#3B382F;border-radius:999px;padding:8px 16px;font:inherit;font-size:13px;font-weight:700;cursor:pointer}
+.sp-gs-sub{align-self:flex-start}
+.sp-gs-steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.sp-gs-step{background:#FBF9F3;border:1px solid rgba(20,19,16,.12);border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.sp-gs-step-num{font-size:12px;font-weight:700;letter-spacing:.12em;color:#b85f00}
+.sp-gs-step-title{font-size:20px;font-weight:700;line-height:1.4}
+.sp-gs-step p{margin:0;font-size:14px;line-height:1.8;color:#3B382F;flex:1}
+.sp-gs-step-links{display:flex;flex-wrap:wrap;gap:8px;padding-top:4px}
+.sp-gs-link{appearance:none;border:1px solid #b85f00;background:#fff;color:#b85f00;border-radius:999px;padding:8px 14px;font:inherit;font-size:13px;font-weight:700;cursor:pointer}
+.sp-gs-link:hover{background:#fff4e6}
+.sp-gs-closed summary{cursor:pointer;font-size:13px;color:#6E695C;padding:6px 2px}
+@media (max-width:760px){.sp-gs-steps{grid-template-columns:minmax(0,1fr)}.sp-gs-step-title{font-size:18px}}
 /* 11/18 オーナー：ギルドの決まりは「詳細」を押したときだけ出す */
 .sp-guild-rules-btn{flex:none;border:1px solid rgba(240,131,0,.45);background:#fff;color:#b85f00;border-radius:999px;padding:6px 14px;font:inherit;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}
 .sp-guild-rules-btn:hover{background:#fff4e6}
@@ -731,6 +748,15 @@ if (window.top === window.self) window.location.replace('/');
                 <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.22em; color:#9A9484">{{ curGuild.code }}</div>
                 <div style="font-family:Inter,sans-serif; font-size:16px; font-weight:700; letter-spacing:.1em; color:var(--emu-brand-soft)" data-tour="guild-detail">{{ curGuild.short }}</div>
               </div>
+              <sc-if value="{{ guildSimple }}">
+                <div style="font-family:'Zen Old Mincho',serif; font-size:{{ L.heroSize }}; font-weight:900; line-height:1.5; text-wrap:pretty">{{ gs.tagline }}</div>
+                <div class="sp-gs-hero-acts">
+                  <button type="button" class="sp-gs-join" aria-pressed="{{ gs.joined }}" onClick="{{ curGuild.join }}">{{ gs.joinLabel }}</button>
+                  <span class="sp-gs-count">参加している人 {{ curGuild.joinCount }}</span>
+                  <button type="button" class="sp-gs-more" aria-haspopup="dialog" onClick="{{ openGuildDetail }}">詳細</button>
+                </div>
+              </sc-if>
+              <sc-if value="{{ guildClassic }}">
               <div style="font-family:'Zen Old Mincho',serif; font-size:{{ L.heroSize }}; font-weight:900; line-height:1.5; text-wrap:pretty">{{ curGuild.concept }}</div>
               <div style="font-size:14px; line-height:1.95; color:rgba(244,241,234,.72)">{{ curGuild.body }}</div>
               <sc-if value="{{ curGuild.hasThemes }}">
@@ -740,8 +766,28 @@ if (window.top === window.self) window.location.replace('/');
                   </sc-for>
                 </div>
               </sc-if>
+              </sc-if>
             </div>
 
+            <!-- 11/19 オーナー：LEARN は「学ぶ → やってみる → 残す」の3つだけにする（説明の長文は「詳細」の中へ） -->
+            <sc-if value="{{ guildSimple }}">
+              <section class="sp-gs-steps" data-tour="guild-before-join" aria-label="このギルドでできること">
+                <sc-for list="{{ gs.steps }}" as="st" hint-placeholder-count="3">
+                  <div class="sp-gs-step">
+                    <div class="sp-gs-step-num">{{ st.num }}</div>
+                    <div class="sp-gs-step-title">{{ st.title }}</div>
+                    <p>{{ st.text }}</p>
+                    <div class="sp-gs-step-links">
+                      <sc-for list="{{ st.links }}" as="ln" hint-placeholder-count="2">
+                        <button type="button" class="sp-gs-link" onClick="{{ ln.go }}">{{ ln.label }}</button>
+                      </sc-for>
+                    </div>
+                  </div>
+                </sc-for>
+              </section>
+            </sc-if>
+
+            <sc-if value="{{ guildClassic }}">
             <!-- participation-value:start -->
             <section class="sp-ux-value" data-ux-value="guild" aria-label="このギルドでできること">
               <h2>「{{ curGuild.short }}」で、関心を次の行動へ</h2>
@@ -765,23 +811,56 @@ if (window.top === window.self) window.location.replace('/');
                 </div>
               </div>
             </sc-if>
+            </sc-if>
 
             <sc-if value="{{ curGuild.loading }}">
               <div style="font-size:13px; line-height:1.9; color:#6E695C">読み込んでいます…</div>
             </sc-if>
 
+            <!-- LEARN（かんたんな形）：いま受けられるクエスト。終わったものはたたむ -->
+            <sc-if value="{{ guildSimple }}">
+            <div id="spGuildQuests" class="sp-gs-quests" style="display:flex; flex-direction:column; gap:12px">
+              <div style="display:flex; align-items:baseline; gap:14px">
+                <div style="font-size:17px; font-weight:700">{{ curGuild.short }} のクエスト</div>
+                <div style="flex:1; height:1px; background:rgba(20,19,16,.14)"></div>
+              </div>
+              <sc-if value="{{ gs.noOpen }}">
+                <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:20px; font-size:14px; line-height:1.9; color:#6E695C">いま受けられるクエストはありません。新しいクエストが出たら、ここに並びます。</div>
+              </sc-if>
+              <sc-for list="{{ gs.openQuests }}" as="q" hint-placeholder-count="2">
+                <div onClick="{{ q.open }}" style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:18px 20px; display:flex; align-items:center; gap:14px; cursor:pointer; flex-wrap:wrap" style-hover="background:#F4F1EA">
+                  <div style="font-family:Inter,sans-serif; font-size:10px; letter-spacing:.16em; padding:5px 10px; border-radius:4px; background:{{ q.statusBg }}; color:{{ q.statusFg }}">{{ q.status }}</div>
+                  <div style="flex:1; min-width:140px; font-size:15px; font-weight:700; line-height:1.6">{{ q.title }}</div>
+                  <div style="font-size:13px; font-weight:700; color:var(--emu-brand-strong); white-space:nowrap">詳細 →</div>
+                </div>
+              </sc-for>
+              <sc-if value="{{ gs.hasClosed }}">
+                <details class="sp-gs-closed">
+                  <summary>終わったクエスト（{{ gs.closedCount }}件）</summary>
+                  <sc-for list="{{ gs.closedQuests }}" as="q" hint-placeholder-count="1">
+                    <div onClick="{{ q.open }}" style="padding:12px 4px; display:flex; gap:12px; align-items:center; cursor:pointer; border-top:1px solid rgba(20,19,16,.08)">
+                      <div style="flex:1; font-size:14px; line-height:1.6">{{ q.title }}</div>
+                      <div style="font-size:12px; color:var(--emu-brand-strong); white-space:nowrap">詳細 →</div>
+                    </div>
+                  </sc-for>
+                </details>
+              </sc-if>
+            </div>
+            </sc-if>
+
+            <sc-if value="{{ gShowVotes }}">
             <div style="display:flex; flex-direction:column; gap:16px">
               <div style="display:flex; align-items:baseline; gap:14px">
-                <div style="font-size:17px; font-weight:700">現在の議題</div>
+                <div style="font-size:17px; font-weight:700">{{ gVotesTitle }}</div>
                 <div style="flex:1; height:1px; background:rgba(20,19,16,.14)"></div>
                 <sc-if value="{{ curGuild.canAct }}">
                   <div onClick="{{ curGuild.propose }}" style="font-size:12px; font-weight:700; color:var(--emu-brand-strong); cursor:pointer; white-space:nowrap">＋ 議題を出す</div>
                 </sc-if>
               </div>
-              <sc-if value="{{ curGuild.noVotes }}">
+              <sc-if value="{{ gNoVotes }}">
                 <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:22px; font-size:13px; line-height:1.9; color:#6E695C">まだ議題がありません。「＋ 議題を出す」から、このギルドで決めたいことを出せます。</div>
               </sc-if>
-              <sc-for list="{{ curGuild.votes }}" as="v" hint-placeholder-count="2">
+              <sc-for list="{{ gVotes }}" as="v" hint-placeholder-count="2">
                 <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:22px; display:flex; flex-direction:column; gap:14px">
                   <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap">
                     <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap">
@@ -828,7 +907,9 @@ if (window.top === window.self) window.location.replace('/');
               </sc-for>
             </div>
 
-            <sc-if value="{{ curGuild.canAct }}">
+            </sc-if>
+
+            <sc-if value="{{ gClassicQuests }}">
             <div style="display:flex; flex-direction:column; gap:16px">
               <div style="display:flex; align-items:baseline; gap:14px">
                 <div style="font-size:17px; font-weight:700">このギルドから生まれたクエスト</div>
@@ -848,6 +929,35 @@ if (window.top === window.self) window.location.replace('/');
             </div>
             </sc-if>
 
+            <!-- LEARN（かんたんな形）の「詳細」。前に画面に並んでいた説明・テーマ・応援・議題を出す はここへ -->
+            <sc-if value="{{ guildDetailOpen }}">
+            <div class="sp-guild-rules-back" onClick="{{ closeGuildDetail }}"></div>
+            <div class="sp-guild-rules-panel sp-gs-detail" role="dialog" aria-modal="true" aria-label="{{ curGuild.short }} の詳細" style="background:#E7E2D6; border-radius:12px; padding:26px; display:flex; flex-direction:column; gap:16px">
+              <div style="display:flex; align-items:center; gap:10px"><div style="flex:1; font-size:16px; font-weight:700">{{ curGuild.short }} について</div><button type="button" class="sp-guild-rules-close" aria-label="閉じる" onClick="{{ closeGuildDetail }}">×</button></div>
+              <div style="font-size:15px; font-weight:700; line-height:1.7">{{ curGuild.concept }}</div>
+              <div style="font-size:14px; line-height:1.95; color:#3B382F">{{ curGuild.body }}</div>
+              <sc-if value="{{ curGuild.hasThemes }}">
+                <div style="display:flex; flex-wrap:wrap; gap:6px">
+                  <sc-for list="{{ curGuild.themes }}" as="t" hint-placeholder-count="4">
+                    <span style="padding:4px 10px; border:1px solid rgba(20,19,16,.2); border-radius:14px; font-size:12px; color:#3B382F">{{ t }}</span>
+                  </sc-for>
+                </div>
+              </sc-if>
+              <div style="background:#F4F1EA; border-radius:8px; padding:14px; font-size:13px; line-height:1.9; color:#3B382F">
+                <b>「参加する」</b>は、この分野で活動したいという意思の登録です。押してもクエストを受けたことにはなりません。もう一度押すと取り消せます。登録した名前は公開の記録になります。
+              </div>
+              <sc-if value="{{ curGuild.canAct }}">
+                <div style="display:flex; flex-direction:column; gap:8px">
+                  <div style="font-size:13px; line-height:1.8; color:#3B382F">活動まではできないけれど、方向性を応援したいときは</div>
+                  <button type="button" class="sp-gs-sub" onClick="{{ curGuild.support }}">{{ curGuild.supportLabel }}　{{ curGuild.supportCount }}</button>
+                </div>
+                <div style="display:flex; flex-direction:column; gap:8px; padding-top:8px; border-top:1px solid rgba(20,19,16,.12)">
+                  <div style="font-size:13px; line-height:1.8; color:#3B382F">みんなで決めたいことがあるときは、議題を出せます（運営・有料の方・信用が足りている方）。</div>
+                  <button type="button" class="sp-gs-sub" onClick="{{ curGuild.propose }}">＋ 議題を出す</button>
+                </div>
+              </sc-if>
+            </div>
+            </sc-if>
           </div>
         </sc-if>
 
@@ -1185,6 +1295,23 @@ const GH_V = '?v=1119';
 /* 選んだ札・ボタンの暗い地。#141310 そのものにすると、絵本の CSS が「黒い見出しのカード」と見て
    絵を敷いて縦に伸ばしてしまう（11/19 知恵ライブラリの WORK）。見た目はほぼ同じ別の色にする */
 const SEL_DARK = '#1b1915';
+/* ギルドの中の「かんたんな形」（11/19 オーナー）。ここに書いたギルドだけ、
+   見出し（一言・参加する・詳細）→ 学ぶ・やってみる・残す の3つ → クエスト → 投票中の議題（あるときだけ）にする。
+   ここに無いギルドは今までの形のまま。形が決まったら、ほかのギルドもここに足す。
+   links の2つめは行き先：text=Knowledge Text／lab=Knowledge Lab／quests=下のクエスト／wisdom=このギルドの知恵カード／passport=パスポート */
+const GUILD_SIMPLE = {
+  learn: {
+    tagline: '学んだことを、やってみて、知恵にする。',
+    steps: [
+      { num: '01', title: '学ぶ', text: 'Knowledge Text の教材と、Knowledge Lab のみんなの経験から、知識を集める。',
+        links: [['Knowledge Text →', 'text'], ['Knowledge Lab →', 'lab']] },
+      { num: '02', title: 'やってみる', text: '学んだことを、LEARN のクエストで実際に試す。探究学習や仕事のシミュレーションもここ。',
+        links: [['クエストを見る ↓', 'quests']] },
+      { num: '03', title: '残す', text: 'やってみて分かったことを知恵カードに。完走した記録はパスポートに残る。',
+        links: [['LEARN の知恵 →', 'wisdom'], ['パスポート →', 'passport']] }
+    ]
+  }
+};
 /* 知恵ライブラリの棚。色は絵本のギルドの色（emu-ehon.css の --ehon-learn など）と同じ */
 const WISDOM_TAGS = [{t:'すべて',c:'#3a2a20'},{t:'LEARN',c:'#3f7d4a'},{t:'WORK',c:'#3b58a3'},{t:'PLAY',c:'#d4652b'},{t:'CONNECT',c:'#c97389'},{t:'WEB3',c:'#2b3566'},{t:'Emu',c:'#c4532a'},{t:'その他',c:'#7a6a55'}];
 const requestedScreen = new URLSearchParams(window.location.search).get('screen');
@@ -1244,6 +1371,48 @@ class Component extends DCLogic {
       moreShow: long ? 'block' : 'none',
       moreLabel: (s.wOpen || {})[w.id] ? '閉じる' : '詳細を見る' + (nReports ? '（報告' + nReports + '件）' : ''),
       toggleMore: () => this.setState(st => ({ wOpen: { ...(st.wOpen || {}), [w.id]: !(st.wOpen || {})[w.id] } })) };
+  }
+
+  /* ギルドの中の「かんたんな形」に使う値（GUILD_SIMPLE を見る） */
+  guildSimpleVals(s){
+    const cg = s.curGuild || {}, def = GUILD_SIMPLE[cg.id];
+    const isOpen = q => q.status === 'OPEN' || q.status === 'RUNNING';
+    const quests = cg.quests || [], votes = cg.votes || [];
+    /* 議題は、投票中のものと、運営が採択・Quest化できるものだけ出す。0件なら欄ごと出さない */
+    const active = votes.filter(v => v.stateLabel === 'OPEN' || v.stateLabel === 'VOTED' || v.canAdopt || v.canQuest);
+    const openQ = quests.filter(isOpen), closedQ = quests.filter(q => !isOpen(q));
+    return {
+      guildSimple: !!def, guildClassic: !def,
+      gShowVotes: def ? active.length > 0 : true,
+      gVotes: def ? active : votes,
+      gNoVotes: !def && !!cg.noVotes,
+      gVotesTitle: def ? 'みんなで決めている議題' : '現在の議題',
+      gClassicQuests: !def && !!cg.canAct,
+      guildDetailOpen: !!s.guildDetailOpen && s.screen === 'guild',
+      openGuildDetail: () => this.setState({guildDetailOpen:true}),
+      closeGuildDetail: () => this.setState({guildDetailOpen:false}),
+      gs: !def ? {} : {
+        tagline: def.tagline,
+        joined: cg.meJoined ? 'true' : 'false',
+        joinLabel: cg.meJoined ? '✓ 参加している' : '参加する',
+        steps: def.steps.map(st => ({ num: st.num, title: st.title, text: st.text,
+          links: st.links.map(l => ({ label: l[0], go: this.guildGo(l[1], cg) })) })),
+        openQuests: openQ, noOpen: openQ.length === 0,
+        closedQuests: closedQ, hasClosed: closedQ.length > 0, closedCount: closedQ.length
+      }
+    };
+  }
+  guildGo(kind, cg){
+    return () => {
+      const P = window.parent;
+      try {
+        if (kind === 'text') P.openSpRoom('/admin/room1/index.html', 'Knowledge Text');
+        else if (kind === 'lab') P.openEmuKnowledgeLab();
+        else if (kind === 'passport') P.openSpPassport();
+        else if (kind === 'wisdom') { this.setState({screen:'library', wtag: cg.short || 'すべて', guildDetailOpen:false}); this.toTop(); }
+        else if (kind === 'quests') { const el = document.getElementById('spGuildQuests'); if (el) el.scrollIntoView({behavior:'smooth', block:'start'}); }
+      } catch (e) {}
+    };
   }
 
   commit(id){ return (ev) => { if(ev) ev.stopPropagation(); try { window.parent.spQuestToggle(id, this); } catch (e) {} }; }
@@ -1435,7 +1604,7 @@ class Component extends DCLogic {
       /* ギルド。中身は枠の外（親）が記録から作って渡す */
       guilds:s.guilds || [], guildCount:s.guildCount || '',
       guildUnsorted:s.guildUnsorted || {label:'', open:function(){}},
-      hasUnsorted:!!s.hasUnsorted, curGuild:s.curGuild || {},
+      hasUnsorted:!!s.hasUnsorted, curGuild:s.curGuild || {}, ...this.guildSimpleVals(s),
       entryOnly:!!s.entryOnly, toggleEntryOnly:()=>this.setQuestFilter({entryOnly:!s.entryOnly}), noShownQuests:shownExps.length===0, resetQuestFilters:()=>this.setQuestFilter({entryOnly:false,filter:'すべて'}),
       noQuests:exps.length === 0,
       noWisdom:s.noWisdom,
