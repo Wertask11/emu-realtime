@@ -14421,6 +14421,8 @@ async function _spCrowdLeave() {
   }
 }
 function _spUpdateCrowd(n) {
+  /* 11/19：CONNECT の画面（dao.html）で「いま◯人が SchoolPark にいます」に使う */
+  window._spCrowdN = n;
   let icon, label;
   if      (n >= 20) { icon = '🔴'; label = '混雑'; }
   else if (n >= 10) { icon = '🟠'; label = 'やや混雑'; }
@@ -27361,6 +27363,24 @@ setTimeout(() => {
 // URLパラメータで問い合わせパネルを自動オープン
 // 例: ?contact=investor → パネルを開き「投資家・提携」を選択してフォームまで進める
 // ══════════════════════════
+/* 11/19：画面から、お問い合わせを種類を選んだ状態で開き、本文に書き出しを入れておく（WEB3 の「手を挙げる」で使う）。
+   途中まで書いている人の邪魔をしないよう、最初の段にいるときだけ進める。本文に何か書いてあれば上書きしない。 */
+window.emuOpenContact = function (type, message) {
+  try {
+    if (!FORMS[type]) type = 'general';
+    const panel = document.getElementById('emu-contact-panel');
+    if (panel && !panel.classList.contains('open')) toggleContactPanel();
+    if (typeof switchContactTab === 'function') switchContactTab('contact');
+    if (currentStep !== 1) return;
+    const btn = document.querySelector('.w-cat-btn[data-type="' + type + '"]');
+    if (!btn) return;
+    selectCategory(btn);
+    nextStep();
+    const box = document.getElementById('wf-message');
+    if (box && !box.value && message) box.value = String(message);
+  } catch (e) {}
+};
+
 (function autoOpenContactFromUrl() {
   const type = new URLSearchParams(location.search).get('contact');
   if (!type || !FORMS[type]) return;
