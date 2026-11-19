@@ -54,6 +54,49 @@
 .sp-gs-link:hover{background:#fff4e6}
 .sp-gs-closed summary{cursor:pointer;font-size:13px;color:#6E695C;padding:6px 2px}
 @media (max-width:760px){.sp-gs-steps{grid-template-columns:minmax(0,1fr)}.sp-gs-step-title{font-size:18px}}
+/* ───── WORK（11/19）：まずはこれから・絞り込み・本物の案件・練習案件（職種 × 段階の表） ───── */
+.sp-wk-first{background:#FBF9F3;border:1px solid rgba(20,19,16,.12);border-radius:12px;padding:22px 24px;display:flex;flex-direction:column;gap:8px}
+.sp-wk-first-kicker{font-size:12px;font-weight:700;letter-spacing:.12em;color:#b85f00}
+.sp-wk-first-title{font-size:22px;font-weight:700;line-height:1.45}
+.sp-wk-first-meta{font-size:13px;color:#6E695C}
+.sp-wk-first-tags{display:flex;flex-wrap:wrap;gap:6px;padding:4px 0}
+.sp-wk-first-tags span{font-size:12px;padding:4px 10px;border-radius:999px;background:#fff4e6;color:#8a4a00}
+.sp-wk-go{align-self:flex-start;appearance:none;border:0;background:#b85f00;color:#fff;border-radius:999px;padding:12px 22px;font:inherit;font-size:15px;font-weight:700;cursor:pointer}
+.sp-wk-filters{display:flex;flex-direction:column;gap:8px}
+.sp-wk-frow{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.sp-wk-frow>span{flex:0 0 40px;font-size:12px;color:#6E695C}
+.sp-wk-chip{appearance:none;border:1px solid rgba(20,19,16,.2);background:#fff;color:#3B382F;border-radius:999px;padding:6px 12px;font:inherit;font-size:13px;cursor:pointer;white-space:nowrap}
+.sp-wk-chip[aria-pressed="true"]{background:#3b58a3;border-color:#3b58a3;color:#fff}
+.sp-wk-sec{display:flex;flex-direction:column;gap:12px}
+.sp-wk-sec-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.sp-wk-sec-title{font-size:17px;font-weight:700}
+.sp-wk-sec-sub{font-size:12px;color:#6E695C}
+.sp-wk-empty{background:#FBF9F3;border:1px dashed rgba(20,19,16,.2);border-radius:12px;padding:16px 18px;font-size:14px;line-height:1.8;color:#6E695C}
+.sp-wk-row{display:flex;align-items:center;gap:14px;flex-wrap:wrap;background:#FBF9F3;border:1px solid rgba(20,19,16,.12);border-radius:12px;padding:16px 18px;cursor:pointer}
+.sp-wk-row-main{flex:1;min-width:180px}.sp-wk-row-title{font-size:15px;font-weight:700;line-height:1.6}.sp-wk-row-meta{font-size:12px;color:#6E695C}
+.sp-wk-row-side{display:flex;gap:10px;align-items:center;font-size:12px;color:#3B382F;flex-wrap:wrap}
+.sp-wk-table{display:grid;grid-template-columns:minmax(120px,.8fr) repeat(var(--cols),minmax(0,1fr));gap:8px;align-items:stretch}
+.sp-wk-th{font-size:12px;font-weight:700;color:#6E695C;padding:0 4px}
+.sp-wk-job{display:flex;flex-direction:column;justify-content:center;gap:2px;padding:8px 4px}
+.sp-wk-job b{font-size:14px}.sp-wk-job small{font-size:11px;color:#6E695C}
+.sp-wk-cell{background:#fff;border:1px solid rgba(20,19,16,.14);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:4px;cursor:pointer;min-width:0}
+.sp-wk-cell:hover{border-color:#3b58a3}
+.sp-wk-cell[data-empty="true"]{visibility:hidden;pointer-events:none}
+.sp-wk-cell[data-mark="closed"]{opacity:.55}
+.sp-wk-cell-stage{display:none;font-size:11px;font-weight:700;color:#3b58a3}
+.sp-wk-cell-title{font-size:14px;font-weight:700;line-height:1.5;overflow-wrap:anywhere}
+.sp-wk-cell-meta{font-size:12px;color:#6E695C}
+.sp-wk-mark{font-size:11px;font-weight:700;color:#3f7d4a}.sp-wk-mark:empty{display:none}
+.sp-wk-mark[data-mark="closed"]{color:#8A8474}
+.sp-gs-steps-flow .sp-gs-step-title{font-size:18px}
+@media (max-width:760px){
+  .sp-wk-table{grid-template-columns:minmax(0,1fr)}
+  .sp-wk-th{display:none}
+  .sp-wk-job{padding:12px 2px 0;border-top:1px dashed rgba(20,19,16,.2)}
+  .sp-wk-cell[data-empty="true"]{display:none}
+  .sp-wk-cell-stage{display:block}
+  .sp-wk-first-title{font-size:19px}
+}
 /* 11/18 オーナー：ギルドの決まりは「詳細」を押したときだけ出す */
 .sp-guild-rules-btn{flex:none;border:1px solid rgba(240,131,0,.45);background:#fff;color:#b85f00;border-radius:999px;padding:6px 14px;font:inherit;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}
 .sp-guild-rules-btn:hover{background:#fff4e6}
@@ -770,7 +813,7 @@ if (window.top === window.self) window.location.replace('/');
             </div>
 
             <!-- 11/19 オーナー：LEARN は「学ぶ → やってみる → 残す」の3つだけにする（説明の長文は「詳細」の中へ） -->
-            <sc-if value="{{ guildSimple }}">
+            <sc-if value="{{ gs.stepsTop }}">
               <section class="sp-gs-steps" data-tour="guild-before-join" aria-label="このギルドでできること">
                 <sc-for list="{{ gs.steps }}" as="st" hint-placeholder-count="3">
                   <div class="sp-gs-step">
@@ -817,8 +860,75 @@ if (window.top === window.self) window.location.replace('/');
               <div style="font-size:13px; line-height:1.9; color:#6E695C">読み込んでいます…</div>
             </sc-if>
 
+
+            <!-- WORK（11/19 オーナー）：まずはこれから → 絞り込み → 本物の案件 → 練習案件（職種 × 段階の表）→ 流れ -->
+            <sc-if value="{{ gs.isWork }}">
+              <sc-if value="{{ gs.hasFirst }}">
+                <section class="sp-wk-first" data-tour="guild-before-join" aria-label="まずはこれから">
+                  <div class="sp-wk-first-kicker">まずはこれから</div>
+                  <div class="sp-wk-first-title">{{ gs.first.stage }}｜{{ gs.first.short }}</div>
+                  <div class="sp-wk-first-meta">{{ gs.first.job }}{{ gs.first.partnerSep }}{{ gs.first.partner }}</div>
+                  <div class="sp-wk-first-tags"><span>{{ gs.first.days }}</span><span>{{ gs.first.budget }}</span><span>ひとりで始められる</span><span>締切 {{ gs.first.due }}</span></div>
+                  <button type="button" class="sp-wk-go" onClick="{{ gs.first.open }}">内容を見て挑戦する →</button>
+                </section>
+              </sc-if>
+
+              <section class="sp-wk-filters" aria-label="案件を絞り込む">
+                <div class="sp-wk-frow"><span>種類</span>
+                  <sc-for list="{{ gs.fKind }}" as="f" hint-placeholder-count="3"><button type="button" class="sp-wk-chip" aria-pressed="{{ f.on }}" onClick="{{ f.go }}">{{ f.label }}</button></sc-for>
+                </div>
+                <div class="sp-wk-frow"><span>段階</span>
+                  <sc-for list="{{ gs.fStage }}" as="f" hint-placeholder-count="4"><button type="button" class="sp-wk-chip" aria-pressed="{{ f.on }}" onClick="{{ f.go }}">{{ f.label }}</button></sc-for>
+                </div>
+                <div class="sp-wk-frow"><span>職種</span>
+                  <sc-for list="{{ gs.fJob }}" as="f" hint-placeholder-count="5"><button type="button" class="sp-wk-chip" aria-pressed="{{ f.on }}" onClick="{{ f.go }}">{{ f.label }}</button></sc-for>
+                </div>
+                <div class="sp-wk-frow"><span>状態</span>
+                  <sc-for list="{{ gs.fState }}" as="f" hint-placeholder-count="3"><button type="button" class="sp-wk-chip" aria-pressed="{{ f.on }}" onClick="{{ f.go }}">{{ f.label }}</button></sc-for>
+                </div>
+              </section>
+
+              <div id="spGuildQuests"></div>
+              <sc-if value="{{ gs.showReal }}">
+                <section class="sp-wk-sec" aria-label="本物の案件">
+                  <div class="sp-wk-sec-head"><div class="sp-wk-sec-title">本物の案件</div><div class="sp-wk-sec-sub">企業・お店・コンテストからの案件</div></div>
+                  <sc-if value="{{ gs.noReal }}"><div class="sp-wk-empty">{{ gs.noRealText }}</div></sc-if>
+                  <sc-for list="{{ gs.real }}" as="q" hint-placeholder-count="1">
+                    <div class="sp-wk-row" role="button" tabindex="0" onClick="{{ q.open }}">
+                      <div class="sp-wk-row-main"><div class="sp-wk-row-title">{{ q.short }}</div><div class="sp-wk-row-meta">{{ q.job }}{{ q.partnerSep }}{{ q.partner }}</div></div>
+                      <div class="sp-wk-row-side"><span>{{ q.budget }}</span><span>締切 {{ q.due }}</span><span class="sp-wk-mark" data-mark="{{ q.mark }}">{{ q.markLabel }}</span></div>
+                    </div>
+                  </sc-for>
+                </section>
+              </sc-if>
+
+              <sc-if value="{{ gs.showPractice }}">
+                <section class="sp-wk-sec" aria-label="練習案件">
+                  <div class="sp-wk-sec-head"><div class="sp-wk-sec-title">練習案件（{{ gs.practicePlace }}）</div><div class="sp-wk-sec-sub">架空の町のお店から。報酬は EMUER。未経験は「入門」から</div></div>
+                  <sc-if value="{{ gs.noPractice }}"><div class="sp-wk-empty">この条件に合う練習案件はありません。絞り込みを変えてみてください。</div></sc-if>
+                  <sc-if value="{{ gs.hasPractice }}">
+                    <div class="sp-wk-table" style="--cols:{{ gs.colCount }}">
+                      <div class="sp-wk-th sp-wk-th-job">職種</div>
+                      <sc-for list="{{ gs.cols }}" as="c" hint-placeholder-count="3"><div class="sp-wk-th">{{ c }}</div></sc-for>
+                      <sc-for list="{{ gs.rows }}" as="r" hint-placeholder-count="5">
+                        <div class="sp-wk-job"><b>{{ r.job }}</b><small>{{ r.partner }}</small></div>
+                        <sc-for list="{{ r.cells }}" as="q" hint-placeholder-count="3">
+                          <div class="sp-wk-cell" data-empty="{{ q.empty }}" data-mark="{{ q.mark }}" role="button" tabindex="0" onClick="{{ q.open }}">
+                            <div class="sp-wk-cell-stage">{{ q.stage }}</div>
+                            <div class="sp-wk-cell-title">{{ q.short }}</div>
+                            <div class="sp-wk-cell-meta">{{ q.days }} ・ {{ q.budget }}</div>
+                            <div class="sp-wk-mark" data-mark="{{ q.mark }}">{{ q.markLabel }}</div>
+                          </div>
+                        </sc-for>
+                      </sc-for>
+                    </div>
+                  </sc-if>
+                </section>
+              </sc-if>
+            </sc-if>
+
             <!-- LEARN（かんたんな形）：いま受けられるクエスト。終わったものはたたむ -->
-            <sc-if value="{{ guildSimple }}">
+            <sc-if value="{{ gs.plainQuests }}">
             <div id="spGuildQuests" class="sp-gs-quests" style="display:flex; flex-direction:column; gap:12px">
               <div style="display:flex; align-items:baseline; gap:14px">
                 <div style="font-size:17px; font-weight:700">{{ curGuild.short }} のクエスト</div>
@@ -846,6 +956,23 @@ if (window.top === window.self) window.location.replace('/');
                 </details>
               </sc-if>
             </div>
+            </sc-if>
+
+            <sc-if value="{{ gs.stepsBottom }}">
+              <section class="sp-gs-steps sp-gs-steps-flow" aria-label="挑戦の流れ">
+                <sc-for list="{{ gs.steps }}" as="st" hint-placeholder-count="3">
+                  <div class="sp-gs-step">
+                    <div class="sp-gs-step-num">{{ st.num }}</div>
+                    <div class="sp-gs-step-title">{{ st.title }}</div>
+                    <p>{{ st.text }}</p>
+                    <div class="sp-gs-step-links">
+                      <sc-for list="{{ st.links }}" as="ln" hint-placeholder-count="1">
+                        <button type="button" class="sp-gs-link" onClick="{{ ln.go }}">{{ ln.label }}</button>
+                      </sc-for>
+                    </div>
+                  </div>
+                </sc-for>
+              </section>
             </sc-if>
 
             <sc-if value="{{ gShowVotes }}">
@@ -1310,8 +1437,27 @@ const GUILD_SIMPLE = {
       { num: '03', title: '残す', text: 'やってみて分かったことを知恵カードに。完走した記録はパスポートに残る。',
         links: [['LEARN の知恵 →', 'wisdom'], ['パスポート →', 'passport']] }
     ]
+  },
+  /* WORK（11/19 オーナー）：企業の実プロジェクトやコンテスト型の案件を引き受ける。つくったものが実績になり、次の仕事につながる。
+     もっと簡単に挑戦できるように：まずはこれから（入門の1本）→ 絞り込み → 本物の案件 → 練習案件（職種 × 段階の表）→ 流れ。
+     practiceNumbers の番号のクエストは「練習案件」（いまは #002 の緑ヶ丘の15本）。それ以外の WORK のクエストは「本物の案件」に並ぶ。
+     本物の案件はオーナーが集めてくる。運営がクエストとして出せば（#002 以外の番号で）ここに出る。 */
+  work: {
+    layout: 'work',
+    tagline: 'つくったものが、実績になる。',
+    practiceNumbers: [2],
+    practicePlace: '緑ヶ丘',
+    steps: [
+      { num: '01', title: '選ぶ', text: '職種と段階から、やってみたい仕事を選ぶ。未経験なら「入門」から。',
+        links: [] },
+      { num: '02', title: 'つくって出す', text: 'クエストを受けて、つくったものを報告に出す。ひとりで始められる。',
+        links: [] },
+      { num: '03', title: '実績になる', text: '運営が認めると完走。完走証明ページとパスポートに残り、次の仕事につながる。',
+        links: [['パスポート →', 'passport']] }
+    ]
   }
 };
+const WORK_STAGES = ['入門', '標準', '実践'];
 /* 知恵ライブラリの棚。色は絵本のギルドの色（emu-ehon.css の --ehon-learn など）と同じ */
 const WISDOM_TAGS = [{t:'すべて',c:'#3a2a20'},{t:'LEARN',c:'#3f7d4a'},{t:'WORK',c:'#3b58a3'},{t:'PLAY',c:'#d4652b'},{t:'CONNECT',c:'#c97389'},{t:'WEB3',c:'#2b3566'},{t:'Emu',c:'#c4532a'},{t:'その他',c:'#7a6a55'}];
 const requestedScreen = new URLSearchParams(window.location.search).get('screen');
@@ -1391,7 +1537,9 @@ class Component extends DCLogic {
       guildDetailOpen: !!s.guildDetailOpen && s.screen === 'guild',
       openGuildDetail: () => this.setState({guildDetailOpen:true}),
       closeGuildDetail: () => this.setState({guildDetailOpen:false}),
-      gs: !def ? {} : {
+      gs: !def ? {} : Object.assign({
+        isWork: def.layout === 'work', plainQuests: def.layout !== 'work',
+        stepsTop: def.layout !== 'work', stepsBottom: def.layout === 'work',
         tagline: def.tagline,
         joined: cg.meJoined ? 'true' : 'false',
         joinLabel: cg.meJoined ? '✓ 参加している' : '参加する',
@@ -1399,7 +1547,61 @@ class Component extends DCLogic {
           links: st.links.map(l => ({ label: l[0], go: this.guildGo(l[1], cg) })) })),
         openQuests: openQ, noOpen: openQ.length === 0,
         closedQuests: closedQ, hasClosed: closedQ.length > 0, closedCount: closedQ.length
-      }
+      }, def.layout === 'work' ? this.workVals(s, cg, def) : {})
+    };
+  }
+  /* WORK の表・まずはこれから・絞り込み。クエストの中身（段階・職種・EMUER・自分が受けたか）は s.quests から読む */
+  workVals(s, cg, def){
+    const wf = Object.assign({ kind:'all', stage:'all', job:'all', state:'all' }, s.wf || {});
+    const setWf = (k, v) => () => this.setState(st => ({ wf: Object.assign({ kind:'all', stage:'all', job:'all', state:'all' }, st.wf || {}, { [k]: v }) }));
+    const open = id => this.openExp(id);
+    const items = (s.quests || []).filter(q => q.guildId === cg.id && !q.isFounder).map(q => {
+      const lines = String(q.intro || '').split(/\n/);
+      const head = lines[0] || '', bar = head.indexOf('｜'), slash = head.indexOf('／');
+      const job = (bar > 0 ? head.slice(0, bar) : '').trim();
+      const partner = (slash > 0 ? head.slice(slash + 1) : '').replace(/（.*$/, '').trim();
+      const days = ((lines[1] || '').match(/^\s*(\d+日)/) || [])[1] || '';
+      const br = String(q.title || '').match(/^#\d{3}-(\d+)/);
+      const live = (q.status === 'OPEN' || q.status === 'RUNNING');
+      const mark = q.iTook && q.iDone ? 'done' : q.iTook ? 'took' : live ? '' : 'closed';
+      return { id: q.id, num: Number(q.questNumber) || 0, branch: br ? Number(br[1]) : 0, stage: q.stage || '',
+        short: String(q.title || '').replace(/^#\S+(\s(入門|標準|実践))?\s*/, ''), job: job || 'そのほか', partner,
+        partnerSep: partner ? '／' : '', days: days || '日数は詳細で', budget: q.budget || '', due: q.due || '', live, mark,
+        markLabel: { done: '✓ 完走', took: '✓ 受けている', closed: '受付終了', '': '' }[mark], empty: 'false', open: open(q.id) };
+    });
+    const isPractice = it => (def.practiceNumbers || []).indexOf(it.num) >= 0;
+    const pass = it => (wf.stage === 'all' || it.stage === wf.stage)
+      && (wf.job === 'all' || it.job === wf.job)
+      && (wf.state === 'all' || (wf.state === 'open' && it.live) || (wf.state === 'mine' && (it.mark === 'took' || it.mark === 'done')));
+    const practice = items.filter(isPractice), real = items.filter(it => !isPractice(it));
+    const jobs = [];
+    practice.concat(real).forEach(it => { if (jobs.indexOf(it.job) < 0) jobs.push(it.job); });
+    /* まずはこれから：まだ受けていない、受付中の入門。無ければ標準・実践の順。絞り込みとは別 */
+    const firstPick = WORK_STAGES.map(st => practice.concat(real).filter(it => it.stage === st && it.live && !it.mark)
+      .sort((a, b) => a.num - b.num || a.branch - b.branch)[0]).find(Boolean) || null;
+    const pShown = wf.kind === 'real' ? [] : practice.filter(pass);
+    const rShown = wf.kind === 'practice' ? [] : real.filter(pass);
+    const cols = WORK_STAGES.filter(st => wf.stage === 'all' || st === wf.stage);
+    const rows = [];
+    pShown.forEach(it => { let r = rows.find(x => x.job === it.job); if (!r) { r = { job: it.job, partner: it.partner, branch: it.branch, list: [] }; rows.push(r); } r.list.push(it); });
+    rows.sort((a, b) => a.branch - b.branch);
+    const blank = st => ({ id: '', stage: st, short: '', days: '', budget: '', mark: '', markLabel: '', empty: 'true', open: () => {} });
+    const chip = (k, v, label) => ({ label, on: wf[k] === v ? 'true' : 'false', go: setWf(k, v) });
+    /* クエストの中身がまだ読めていないときは、LEARN と同じ並べ方（題名だけ）にしておく */
+    if (!items.length) return { plainQuests: true, hasFirst: false, first: {}, showReal: false, showPractice: false,
+      fKind: [], fStage: [], fJob: [], fState: [], real: [], rows: [], cols: [], colCount: 0 };
+    return {
+      hasFirst: !!firstPick, first: firstPick || {},
+      practicePlace: def.practicePlace || '',
+      fKind: [chip('kind', 'all', 'すべて'), chip('kind', 'practice', '練習'), chip('kind', 'real', '本物の案件')],
+      fStage: [chip('stage', 'all', 'すべて'), chip('stage', '入門', '入門（未経験OK）'), chip('stage', '標準', '標準'), chip('stage', '実践', '実践')],
+      fJob: [chip('job', 'all', 'すべて')].concat(jobs.map(j => chip('job', j, j))),
+      fState: [chip('state', 'all', 'すべて'), chip('state', 'open', '受付中'), chip('state', 'mine', '受けている')],
+      showReal: wf.kind !== 'practice', real: rShown, noReal: rShown.length === 0,
+      noRealText: real.length ? 'この条件に合う本物の案件はありません。' : 'いま募集中の本物の案件はありません。準備中です。',
+      showPractice: wf.kind !== 'real', hasPractice: rows.length > 0, noPractice: practice.length > 0 && rows.length === 0,
+      cols, colCount: cols.length,
+      rows: rows.map(r => ({ job: r.job, partner: r.partner, cells: cols.map(st => r.list.find(it => it.stage === st) || blank(st)) }))
     };
   }
   guildGo(kind, cg){
