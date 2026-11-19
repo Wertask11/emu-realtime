@@ -449,7 +449,7 @@
   register("emu-requests","02 知識を探す",v2["emu-search"].steps.map(specificationStep),null,null);
   register('sp-guild','ギルドの詳細',[
     step('guild-detail','ギルドの詳細','まずは活動を読むだけでも大丈夫。「参加したい」は意思の登録で、クエストの受注とは別の操作です。'),
-    step('guild-before-join','決めごとの見方','ルールと議題を読んでから判断できます。投票や参加はこの案内の条件ではありません。')
+    step('guild-before-join','このギルドでできること','ここで、できることと参加の意味を確かめられます。参加はあとから取り消せます。投票や参加はこの案内の条件ではありません。')
   ],'guild');
   register('sp-quest-detail','クエストの詳細',[
     step('screen-heading','内容を読む','概要と現場の資料を確認する画面です。'),
