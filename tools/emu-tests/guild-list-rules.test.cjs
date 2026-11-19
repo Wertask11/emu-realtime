@@ -131,6 +131,14 @@ test('PC：ギルドはホールの扉。数・参加したいの印が扉に重
 
     await doors.nth(2).click();
     assert.equal(await doors.nth(2).getAttribute('data-open'), '1', '押した扉が開く');
+    // 扉は少しずつ開く（11/19：画面の描き直しで、いきなり開いた形になっていた）
+    const angle = () => doors.nth(2).locator('.gh-leaf-l').evaluate((el) => {
+      const m = new DOMMatrixReadOnly(getComputedStyle(el).transform); return Math.round(Math.acos(Math.max(-1, Math.min(1, m.m11))) * 180 / Math.PI);
+    });
+    const a1 = await angle();
+    await w.page.waitForTimeout(500);
+    const a2 = await angle();
+    assert.ok(a1 < 60 && a2 > a1, '途中の角度を通って開く（' + a1 + '→' + a2 + '）');
     assert.equal(await w.f.locator('.gh-hall').getAttribute('data-entering'), '1');
     assert.deepEqual(await w.page.evaluate(() => window.entered), [], '開いている間はまだ入らない');
     await w.page.waitForFunction(() => window.entered.length === 1, null, { timeout: 4000 });

@@ -8,7 +8,7 @@
 <link rel="stylesheet" href="/service-header.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=Zen+Old+Mincho:wght@700;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=Zen+Old+Mincho:wght@700;900&family=Inter:wght@400;500;600;700&family=Kiwi+Maru:wght@500&family=Klee+One:wght@600&display=swap" rel="stylesheet">
 <style>
   body { margin:0; background:#faf8f5; }
   a { color:var(--emu-brand-strong); text-decoration:none; }
@@ -34,7 +34,7 @@
 .sp-guild-rules-back{position:fixed;inset:0;z-index:60;background:rgba(20,19,16,.32)}
 .sp-guild-rules-panel{box-sizing:border-box;position:fixed;z-index:61;top:16px;right:16px;bottom:16px;width:min(420px,calc(100vw - 32px));overflow:auto;-webkit-overflow-scrolling:touch;box-shadow:0 18px 50px rgba(20,19,16,.28)}
 /* ───── ギルドホール（11/18）：扉の絵は guild-hall/。位置と文字の場所は Claude Design の見本どおり ───── */
-.gh-hall{position:relative;width:100%;aspect-ratio:2/1;border-radius:12px;overflow:hidden;background:#d8c4a2 url(guild-hall/hall-pc.webp) center/100% 100% no-repeat;box-shadow:0 10px 30px rgba(60,40,15,.18)}
+.gh-hall{position:relative;width:100%;aspect-ratio:2/1;border-radius:12px;overflow:hidden;background:#e8efd9 url(guild-hall/hall-pc.webp) center/100% 100% no-repeat;box-shadow:0 10px 30px rgba(60,40,15,.14)}
 .gh-swipe{display:none}
 .gh-swipe-hint{display:none}
 .gh-door{position:absolute;display:block;appearance:none;border:0;padding:0;margin:0;background:none;cursor:pointer;container-type:inline-size;perspective:900px;-webkit-tap-highlight-color:transparent;font:inherit;color:inherit}
@@ -42,43 +42,41 @@
 .gh-door:focus-visible{outline:3px solid #f08300;outline-offset:4px;border-radius:12px}
 .gh-l{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;user-select:none}
 .gh-leaf{transition:transform 1.1s cubic-bezier(.6,0,.2,1);backface-visibility:hidden}
-.gh-leaf-l{transform-origin:22.5% 50%}
-.gh-leaf-r{transform-origin:77.5% 50%}
-.gh-door[data-open="1"] .gh-leaf-l{transform:rotateY(78deg)}
-.gh-door[data-open="1"] .gh-leaf-r{transform:rotateY(-78deg)}
+.gh-leaf-l{transform-origin:23.75% 50%}
+.gh-leaf-r{transform-origin:76.25% 50%}
+/* 押すと画面が描き直されて扉が新しく作られるので、transition では動かない（いきなり開いた形になる）。animation で開く（11/19） */
+.gh-door[data-open="1"] .gh-leaf-l{animation:ghOpenL 1.1s cubic-bezier(.6,0,.2,1) forwards}
+.gh-door[data-open="1"] .gh-leaf-r{animation:ghOpenR 1.1s cubic-bezier(.6,0,.2,1) forwards}
+@keyframes ghOpenL{from{transform:rotateY(0)}to{transform:rotateY(78deg)}}
+@keyframes ghOpenR{from{transform:rotateY(0)}to{transform:rotateY(-78deg)}}
+@keyframes ghFadeIn{from{opacity:0}to{opacity:1}}
+@keyframes ghFadeOut{from{opacity:1}to{opacity:0}}
+@keyframes ghSparkle{from{opacity:0;transform:none}to{opacity:1;transform:translateY(-6%) scale(1.08)}}
 .gh-bloom{position:absolute;left:-20%;right:-20%;top:20%;height:70%;pointer-events:none;background:radial-gradient(closest-side,rgba(255,240,200,.85),rgba(255,210,140,0));mix-blend-mode:screen;opacity:0;transition:opacity .9s .3s}
 .gh-sparkle{position:absolute;left:-15%;width:130%;top:25%;pointer-events:none;mix-blend-mode:screen;opacity:0;transition:opacity .8s .5s, transform 1.4s .4s ease-out}
-.gh-door[data-open="1"] .gh-bloom{opacity:1}
-.gh-door[data-open="1"] .gh-sparkle{opacity:1;transform:translateY(-6%) scale(1.08)}
-.gh-text{position:absolute;inset:0;pointer-events:none;color:#fff;text-align:center;transition:opacity .4s;text-shadow:0 1px 3px rgba(0,0,0,.55)}
-.gh-door[data-open="1"] .gh-text{opacity:0}
+.gh-door[data-open="1"] .gh-bloom{animation:ghFadeIn .9s .3s ease both}
+.gh-door[data-open="1"] .gh-sparkle{animation:ghSparkle 1s .4s ease-out both}
+.gh-text{position:absolute;inset:0;pointer-events:none;color:#fbf3df;text-align:center;transition:opacity .4s}
+.gh-door[data-open="1"] .gh-text{animation:ghFadeOut .4s ease both}
 .gh-text > span{position:absolute;box-sizing:border-box}
-.gh-name{left:0;right:0;top:32%;height:8%;display:flex;align-items:center;justify-content:center;font-family:'Zen Old Mincho',serif;font-weight:900;font-size:max(13px,8.6cqw);letter-spacing:.04em;color:#f7e3a6}
+.gh-name{left:0;right:0;top:32%;height:8%;display:flex;align-items:center;justify-content:center;font-family:'Kiwi Maru',serif;font-weight:500;font-size:max(13px,8.4cqw);letter-spacing:.06em;color:#fbf3df;text-shadow:0 1px 2px rgba(58,42,32,.45)}
 .gh-hall{container-type:inline-size;isolation:isolate}
-/* 横断幕：旗のあいだ（PC だけ） */
-.gh-banner{position:absolute;left:28.5%;right:28.5%;top:2.5%;height:10.5%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.25cqw;pointer-events:none;
-  background:linear-gradient(180deg,#5a3a1c,#3a2410);border:.18cqw solid #d9b25c;border-radius:.6cqw;box-shadow:inset 0 0 0 .35cqw #3a2410,inset 0 0 0 .5cqw rgba(217,178,92,.55),0 .8cqw 1.6cqw rgba(40,25,10,.35)}
-.gh-banner::before,.gh-banner::after{content:"";position:absolute;top:22%;width:6%;height:70%;background:linear-gradient(180deg,#4a2f16,#2e1c0b);border:.15cqw solid #c89b45;z-index:-1}
-.gh-banner::before{left:-4.5%;clip-path:polygon(0 0,100% 0,100% 100%,0 100%,30% 50%)}
-.gh-banner::after{right:-4.5%;clip-path:polygon(0 0,100% 0,70% 50%,100% 100%,0 100%)}
-.gh-banner-kicker{font-family:Inter,sans-serif;font-size:max(9px,.75cqw);letter-spacing:.35em;color:#e9c97a;font-weight:600}
-.gh-banner-title{font-family:'Zen Old Mincho',serif;font-weight:900;font-size:max(18px,2.6cqw);line-height:1.1;letter-spacing:.06em;
-  background:linear-gradient(180deg,#fff3c8 0%,#f2cf74 45%,#c9952e 100%);-webkit-background-clip:text;background-clip:text;color:transparent;filter:drop-shadow(0 .12cqw 0 rgba(0,0,0,.45))}
-.gh-banner-sub{font-size:max(10px,.85cqw);letter-spacing:.3em;color:#f3e2b5;font-weight:700}
+/* 横断幕（PC だけ）：看板の絵は背景（hall-pc）に描いてある。ここは文字だけ（11/19 絵本の絵柄） */
+.gh-banner{position:absolute;left:28.5%;right:28.5%;top:2.5%;height:10.5%;display:flex;align-items:center;justify-content:center;pointer-events:none}
+.gh-banner-title{font-family:'Kiwi Maru',serif;font-weight:500;font-size:max(20px,3.4cqw);line-height:1;letter-spacing:.06em;color:#3b58a3;text-shadow:.16cqw .16cqw 0 #f2c35a}
 /* 扉の上の札（ひとこと）と、扉の前の札（参加したいの印・数）。扉には名前だけ */
 .gh-info,.gh-floor{position:absolute;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;cursor:pointer;
-  border-radius:.7cqw;background:rgba(251,245,230,.95);border:1px solid rgba(201,149,46,.7);box-shadow:0 .4cqw 1cqw rgba(60,40,15,.18);color:#2a2116}
+  border-radius:.7cqw;background:#f8eed6;border:1.5px solid #3a2a20;box-shadow:0 .3cqw .8cqw rgba(58,42,32,.14);color:#3a2a20;font-family:'Klee One',sans-serif;font-weight:600}
 .gh-info{padding:.55cqw .8cqw}
-.gh-info::after{content:"";position:absolute;left:50%;bottom:-.55cqw;width:1cqw;height:1cqw;background:inherit;border-right:1px solid rgba(201,149,46,.7);border-bottom:1px solid rgba(201,149,46,.7);transform:translateX(-50%) rotate(45deg)}
-.gh-floor{gap:.35cqw;padding:.45cqw .6cqw;background:rgba(58,36,16,.88);border-color:rgba(217,178,92,.85);color:#f3e6c8}
+.gh-info::after{content:"";position:absolute;left:50%;bottom:-.6cqw;width:1cqw;height:1cqw;background:inherit;border-right:1.5px solid #3a2a20;border-bottom:1.5px solid #3a2a20;transform:translateX(-50%) rotate(45deg)}
+.gh-floor{gap:.35cqw;padding:.45cqw .6cqw}
 .gh-hall .gh-info{bottom:70.4%;width:15%;max-height:16%}
 .gh-hall .gh-floor{top:86.2%;width:15%}
-.gh-line{font-size:max(11px,.95cqw);line-height:1.45;font-weight:700;text-wrap:balance;word-break:auto-phrase}
+.gh-line{font-size:max(11px,.98cqw);line-height:1.5;text-wrap:balance;word-break:auto-phrase}
 .gh-stats{display:grid;grid-template-columns:auto auto;gap:.1cqw .9cqw;font-size:max(10px,.78cqw);font-weight:600;line-height:1.5;white-space:nowrap}
-.gh-stats b{font-family:Inter,sans-serif;color:#ffd27a;font-size:1.1em}
-.gh-me{padding:.1cqw .7cqw;border-radius:99px;background:#f08300;color:#fff;font-size:max(9px,.7cqw);font-weight:700;line-height:1.6}
-.gh-info:hover{background:#fff}
-.gh-floor:hover{background:rgba(74,46,20,.95)}
+.gh-stats b{color:#c0561f;font-size:1.12em}
+.gh-me{padding:.1cqw .7cqw;border-radius:99px;background:#3b58a3;color:#fbf3df;font-size:max(9px,.7cqw);line-height:1.6}
+.gh-info:hover,.gh-floor:hover{background:#fdf6e6}
 @media (hover:hover){
   .gh-door:hover .gh-leaf-l{transform:rotateY(10deg)}
   .gh-door:hover .gh-leaf-r{transform:rotateY(-10deg)}
@@ -91,7 +89,7 @@
   .gh-hall{display:none}
   .gh-swipe{position:relative;display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;padding:0 5% 8px;margin:0 -4px;scrollbar-width:none}
   .gh-swipe::-webkit-scrollbar{display:none}
-  .gh-slide{position:relative;flex:0 0 90%;max-width:420px;aspect-ratio:1080/1920;scroll-snap-align:center;border-radius:16px;overflow:hidden;background:#d8c4a2 url(guild-hall/hall-sp.webp) center/100% 100% no-repeat;box-shadow:0 8px 24px rgba(60,40,15,.18)}
+  .gh-slide{position:relative;flex:0 0 90%;max-width:420px;aspect-ratio:1080/1920;scroll-snap-align:center;border-radius:16px;overflow:hidden;background:#e8efd9 url(guild-hall/hall-sp.webp) center/100% 100% no-repeat;box-shadow:0 8px 24px rgba(60,40,15,.18)}
   .gh-slide .gh-door{left:12.96%;top:19.48%;width:74.07%;height:67.71%}
   .gh-slide{container-type:inline-size}
   .gh-slide .gh-info{left:15%;right:15%;bottom:81.5%;padding:2.2cqw 3cqw;border-radius:3cqw}
@@ -103,7 +101,7 @@
   .gh-swipe-hint{display:block;text-align:center;font-size:12px;color:#8a7a62}
 }
 @media (prefers-reduced-motion:reduce){
-  .gh-leaf,.gh-bloom,.gh-sparkle,.gh-text{transition:none}
+  .gh-leaf,.gh-bloom,.gh-sparkle,.gh-text{transition:none;animation:none !important}
   .gh-hall[data-entering="1"]::after,.gh-swipe[data-entering="1"]::after{animation:none}
 }
 .sp-guild-rules-close{border:0;background:transparent;font-size:22px;line-height:1;color:#6E695C;cursor:pointer;padding:4px 6px}
@@ -600,7 +598,7 @@ if (window.top === window.self) window.location.replace('/');
                    扉を押すと左右に開いて光り、そのギルドの画面へ入る。スマホは扉を1枚ずつ横にスワイプ -->
               <div class="gh-hall" data-entering="{{ ghEntering }}">
                 <!-- 11/18 オーナー：旗のあいだの空いた壁に、SchoolPark の横断幕 -->
-                <div class="gh-banner" aria-hidden="true"><span class="gh-banner-kicker">✦ GUILD HALL ✦</span><span class="gh-banner-title">SchoolPark</span><span class="gh-banner-sub">ギルドホール</span></div>
+                <div class="gh-banner" aria-hidden="true"><span class="gh-banner-title">SchoolPark</span></div>
                 <!-- 扉の上の札：ひとことと数（扉には名前だけを残す） -->
                 <sc-for list="{{ guildDoors }}" as="d" hint-placeholder-count="5">
                   <span class="gh-info" role="presentation" onClick="{{ d.enter }}" style="{{ d.infoPos }}">

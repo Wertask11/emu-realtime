@@ -14,27 +14,23 @@
     ['#emuPracticePage [data-tour="quest-entry"]', 'card-quest']
   ];
   var ROOTS = { search: 'emuRequestsPage', practice: 'emuPracticePage' };
-  var cache = {};
 
   function timeOfDay(d) {
     var h = (d || new Date()).getHours();
     return h >= 5 && h < 10 ? 'morning' : h >= 10 && h < 17 ? 'day' : 'night';
   }
-  function svg(name) {
-    if (!cache[name]) cache[name] = fetch(BASE + name + '.svg').then(function (r) { if (!r.ok) throw Error('SVG'); return r.text(); });
-    return cache[name];
-  }
+  /* 11/19：絵本の絵柄の挿絵（WebP）に差し替えた。前の SVG は時間帯の色を CSS 変数で替えていたが、
+     WebP は絵そのものなので、img で出すだけにする（帯は今までどおり時間帯で src を替える）。 */
   function visible(el) { return !!(el && el.getClientRects().length); }
   function slot(host, cls, name, before) {
     if (host.querySelector(':scope > .spi-slot[data-spi="' + name + '"]')) return;
     var box = document.createElement('div');
     box.className = 'spi-slot ' + cls; box.setAttribute('data-spi', name); box.setAttribute('aria-hidden', 'true');
+    var img = document.createElement('img'); img.alt = ''; img.decoding = 'async'; img.loading = 'lazy';
+    img.src = BASE + name + '.webp';
+    img.onerror = function () { box.remove(); };
+    box.appendChild(img);
     host.insertBefore(box, before || host.firstChild);
-    svg(name).then(function (text) {
-      /* 自分のサイトに置いた絵だけを読む。念のため、script と on… の属性が無いものだけを入れる。 */
-      if (/<script|\son[a-z]+=|<foreignObject/i.test(text)) return;
-      box.innerHTML = text;
-    }).catch(function () { box.remove(); });
   }
   function band(root, kind) {
     var pair = root.querySelector('.emu-knowledge-pair');
@@ -46,7 +42,7 @@
       wrap.appendChild(img);
       pair.parentNode.insertBefore(wrap, pair.nextSibling);
     }
-    var src = BASE + 'band-' + kind + '-' + root.getAttribute('data-sp-time') + '.svg';
+    var src = BASE + 'band-' + kind + '-' + root.getAttribute('data-sp-time') + '.webp';
     var im = wrap.querySelector('img');
     if (im.getAttribute('src') !== src) im.setAttribute('src', src);
   }
