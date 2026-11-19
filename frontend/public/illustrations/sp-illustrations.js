@@ -7,7 +7,11 @@
 (function () {
   'use strict';
   var BASE = '/illustrations/';
-  /* 絵の版。絵を差し替えたら上げる（名前が同じなので、上げないと前の絵がブラウザに残る。11/19） */
+  /* 11/19 夜：帯とカードは、絵本のハンドオフ（/ehon/bands・/ehon/cards）の絵を使う。
+     emu-ehon.js が、開くたびに仲間の顔ぶれが違う絵（-2・-3）に差し替える。
+     その差し替えは名前が「.webp」で終わる絵だけが対象なので、ここには版（?v=）を付けない（新しい置き場所なので前の絵は残っていない） */
+  var ART = { card: '/ehon/cards/', band: '/ehon/bands/' };
+  /* ワンポイントは今までどおり /illustrations/。絵を差し替えたら版を上げる */
   var VER = '?v=1119';
   var CARDS = [
     ['#emuRequestsPage [data-tour="emu-lab-entry"]', 'card-lab'],
@@ -29,7 +33,7 @@
     var box = document.createElement('div');
     box.className = 'spi-slot ' + cls; box.setAttribute('data-spi', name); box.setAttribute('aria-hidden', 'true');
     var img = document.createElement('img'); img.alt = ''; img.decoding = 'async'; img.loading = 'lazy';
-    img.src = BASE + name + '.webp' + VER;
+    img.src = name.indexOf('card-') === 0 ? ART.card + name + '.webp' : BASE + name + '.webp' + VER;
     img.onerror = function () { box.remove(); };
     box.appendChild(img);
     host.insertBefore(box, before || host.firstChild);
@@ -44,9 +48,10 @@
       wrap.appendChild(img);
       pair.parentNode.insertBefore(wrap, pair.nextSibling);
     }
-    var src = BASE + 'band-' + kind + '-' + root.getAttribute('data-sp-time') + '.webp' + VER;
+    var src = ART.band + 'band-' + kind + '-' + root.getAttribute('data-sp-time') + '.webp';
     var im = wrap.querySelector('img');
-    if (im.getAttribute('src') !== src) im.setAttribute('src', src);
+    /* emu-ehon.js が -2・-3 に替えた絵は、同じ時間帯なら戻さない。時間帯が変わったら替え、もう一度選ばせる */
+    if (String(im.getAttribute('src') || '').replace(/-[23]\.webp$/, '.webp') !== src) { im.__ehon = 0; im.setAttribute('src', src); }
   }
   function paint() {
     var t = timeOfDay();
