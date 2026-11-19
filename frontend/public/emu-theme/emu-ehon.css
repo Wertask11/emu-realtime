@@ -100,6 +100,12 @@ button[style*="background:#fff2e5"],button[style*="background:#F4F1EA"]{
   font-family:var(--ehon-body)!important;font-size:16px!important;background:#fffdf6!important;color:var(--ehon-ink)!important;
   border:2px solid var(--ehon-line-ink)!important;border-radius:var(--ehon-r-sm)!important;box-shadow:inset 2px 2px 0 rgba(58,42,32,.06)}
 .search input{border:0!important;box-shadow:none!important;background:transparent!important}
+/* Emu 11/19：知識を探すの検索欄。枠は外側（form）に1つだけ。中の入力欄に枠を付けると、枠の中にもう1つ太い枠ができてずれて見えた */
+.emu-search-entry{border:2px solid var(--ehon-line-ink)!important;background:#fffdf6!important;box-shadow:inset 2px 2px 0 rgba(58,42,32,.06)!important}
+.emu-search-entry input{border:0!important;box-shadow:none!important;background:transparent!important;border-radius:0!important}
+.emu-search-entry span{color:var(--ehon-shu)!important}
+.emu-search-entry .ese-facet{font-family:var(--ehon-head)!important;font-weight:500!important;background:var(--ehon-cream-2)!important;color:var(--ehon-ink)!important;border:1.5px solid var(--ehon-line-ink)!important}
+.emu-search-entry .ese-go{font-family:var(--ehon-head)!important;font-weight:500!important;background:var(--ehon-shu)!important;color:#fffaf0!important;border:2px solid var(--ehon-line-ink)!important}
 ::placeholder{color:#8f7a62;opacity:1}
 
 /* ---------- 6. 数字（落ち着いて、読みやすく） ---------- */
@@ -109,15 +115,17 @@ button[style*="background:#fff2e5"],button[style*="background:#F4F1EA"]{
 [data-economy-slot],[data-economy-slot] *,#walletAddressButton{font-family:var(--ehon-body)!important;color:var(--ehon-muted)!important;background:none!important;box-shadow:none!important;text-shadow:none!important}
 
 /* ---------- 7. 吹き出し・空っぽのとき ---------- */
+/* Emu 11/19：考えている冷蔵庫くん（reizo-think）は右手が描かれていなかったので、左手を左右反転して足した reizo-think-arms を使う */
 .toast,.mx-posted{font-family:var(--ehon-head)!important;background:var(--ehon-card)!important;color:var(--ehon-ink)!important;border:2px solid var(--ehon-line-ink)!important;border-radius:var(--ehon-r)!important;box-shadow:var(--ehon-shadow)!important}
 .ehon-bubble{position:relative;display:inline-block;padding:12px 16px;background:var(--ehon-card);border:2px solid var(--ehon-line-ink);border-radius:var(--ehon-r);box-shadow:var(--ehon-shadow);font-size:15px}
 .ehon-bubble::after{content:"";position:absolute;left:24px;bottom:-11px;width:16px;height:16px;background:var(--ehon-card);border-right:2px solid var(--ehon-line-ink);border-bottom:2px solid var(--ehon-line-ink);transform:rotate(45deg)}
-.empty,.mix-empty{position:relative;padding-top:170px!important;background:var(--ehon-card) url("/ehon/common/reizo-think.webp") center 24px/140px no-repeat!important;text-align:center}
+.empty,.mix-empty{position:relative;padding-top:170px!important;background:var(--ehon-card) url("/ehon/common/reizo-think-arms.webp") center 24px/140px no-repeat!important;text-align:center}
 .empty h3{font-size:20px!important}
 
 /* ---------- 8. 知識を読む（knowledge.html） ---------- */
 .shell{background:none}
-.left .write{font-size:17px}
+/* Emu 11/19：スマホでは「＋」だけの丸いボタン（文字は font-size:0 で隠す）。17px をパソコンだけにする（スマホで白い文字がはみ出ていた） */
+@media(min-width:761px){.left .write{font-size:17px}}
 .side-me-btn img,.side-me-avatar{border:2px solid var(--ehon-line-ink)!important}
 .side-me-btn:hover,.side-me-btn[aria-expanded="true"]{background:var(--ehon-shu-soft)!important;color:var(--ehon-ink)!important}
 .filters{border-bottom:2px dashed #b9a17c!important}
@@ -130,7 +138,13 @@ button[style*="background:#fff2e5"],button[style*="background:#F4F1EA"]{
 .card .actions>button::before{filter:saturate(.85)}
 /* 投票（みんなで決める） */
 .card [class*="opt"],.card .choices button{border-radius:var(--ehon-r-sm)!important}
-@media(max-width:760px){.filters{background:var(--ehon-cream)!important}.left .write{border-radius:50%!important}}
+@media(max-width:760px){.filters{background:var(--ehon-cream)!important}.left .write{border-radius:50%!important;font-size:0!important;letter-spacing:0!important;padding:0!important}}
+/* Emu 11/19：知識を読むの一覧は、列の幅を決めていない grid だった。区切れない長い文字（URL など）が1つあると、
+   列ごと画面より広がり、スマホで全部のカードが右に切れていた。列を画面の幅に収め、長い文字は折り返す */
+.posts{grid-template-columns:minmax(0,1fr)}
+.posts>*{min-width:0}
+.card h3,.card .body,.card .author-meta,.card .impact,.card .tags span,.card [data-cheer-line]{overflow-wrap:anywhere}
+.badges .access{white-space:normal}
 
 /* Emu 11/19 夜：見出しの絵は同じ名前で描き直されたので、ブラウザに残った前の絵が出ないよう ?v=1119b を付けた */
 /* ---------- 9. 知識を試す（dao.html）：黒いカードを絵の見出しにする ---------- */
@@ -211,4 +225,4 @@ section[style*="background:#FBF9F3"]:has(> [style*="letter-spacing:.12em"]){back
 .ehon-kicker{font-family:var(--ehon-head);font-size:13px;letter-spacing:.12em;color:var(--ehon-shu-dark)}
 .ehon-deco{position:absolute;pointer-events:none;width:40px;height:40px;background:center/contain no-repeat}
 .ehon-deco.note{background-image:url("/ehon/common/deco-note-pink.webp")}.ehon-deco.star{background-image:url("/ehon/common/deco-star.webp")}.ehon-deco.flower{background-image:url("/ehon/common/deco-flower.webp")}
-.ehon-empty{text-align:center;padding:170px 24px 28px;background:url("/ehon/common/reizo-think.webp") center 20px/140px no-repeat}
+.ehon-empty{text-align:center;padding:170px 24px 28px;background:url("/ehon/common/reizo-think-arms.webp") center 20px/140px no-repeat}
