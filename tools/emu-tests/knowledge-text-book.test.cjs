@@ -56,7 +56,7 @@ test('テーマとコンテンツが本棚の本（表紙・小口）として�
     const book = w.page.locator('#list .bfx-book').first();
     assert.equal(await book.locator('.bfx-cov__title').textContent(), w.sub);
     assert.equal(await book.locator('.bfx-b__er').count(), 1, 'ページの小口がある');
-    assert.match(await book.locator('.bfx-cov').evaluate((el) => getComputedStyle(el).backgroundImage), /gradient/);
+    assert.match(await book.locator('.bfx-cov').evaluate((el) => getComputedStyle(el).backgroundImage), /gradient|url\(/);
     await book.click();
     assert.equal(await w.page.locator('.bfx-fx').count(), 0, 'テーマを選ぶときは演出しない');
     await w.page.locator('#detailList .bfx-book').nth(1).waitFor();

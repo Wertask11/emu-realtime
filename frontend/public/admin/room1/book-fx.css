@@ -1,4 +1,6 @@
-/* book-fx.css — Knowledge Text : bookshelf + book-opening effect (CSS only, no images) */
+/* book-fx.css — Knowledge Text : 本棚と本を開く演出
+   11/19 絵本の絵柄に描き直し。下の「絵本の絵柄」の段が、上の元の見た目を上書きする（仕組み・クラス名・時間は同じ）。
+   絵は /ehon/text/（book-cover-*.webp・pop-*.webp・shelf-board.webp・page-paper.webp・room-text.webp） */
 
 /* ---------- theme colors (scoped to bfx elements) ---------- */
 :where(.bfx-book,.bfx-fx,.bfx-theme,.bfx-cov)[data-theme="money"]{--c:#c25e0a;--c2:#7a3a05;--foil:#fff3dc;--foil2:#f6d7a2}
@@ -247,3 +249,46 @@
 .bfx-cov__label { word-break:auto-phrase; }
 #detailBody.bfx-reader { color:var(--ink,#211f1c); font-size:15px; }
 #subList[hidden] { display:none !important; }
+
+
+/* ═════════════ 絵本の絵柄（11/19）═════════════ */
+:where(.bfx-book,.bfx-fx,.bfx-theme,.bfx-cov)[data-theme="money"]{--c:#e2ac45;--c2:#7a5420;--cov:url("/ehon/text/book-cover-money.webp")}
+:where(.bfx-book,.bfx-fx,.bfx-theme,.bfx-cov)[data-theme="net"]{--c:#5fa8cf;--c2:#2d5f7d;--cov:url("/ehon/text/book-cover-net.webp")}
+:where(.bfx-book,.bfx-fx,.bfx-theme,.bfx-cov)[data-theme="life"]{--c:#5e9a58;--c2:#2f5a2c;--cov:url("/ehon/text/book-cover-life.webp")}
+:where(.bfx-book,.bfx-fx,.bfx-theme,.bfx-cov)[data-theme="blue"]{--c:#3b58a3;--c2:#1f3063;--cov:url("/ehon/text/book-cover-blue.webp")}
+.bfx-theme__head h2{font-family:'Kiwi Maru',serif;font-weight:500;font-size:21px;color:#3a2a20}
+.bfx-theme__tag{font-family:'Kiwi Maru',serif;font-weight:500;color:#3a2a20;background:#fffaf0;border:2px solid #3a2a20;box-shadow:2px 2px 0 rgba(58,42,32,.14)}
+/* 本棚：木の箱＋手描きの棚板 */
+.bfx-case{padding:14px 14px 6px;border:2.5px solid #3a2a20;border-radius:10px 14px 9px 13px/13px 9px 14px 10px;background:#9b6a43 url("/ehon/common/paper-grain.webp");box-shadow:4px 6px 0 rgba(58,42,32,.18)}
+.bfx-row{background:#f6ead0 url("/ehon/common/paper-grain.webp");box-shadow:inset 0 0 0 2px #3a2a20}
+.bfx-row::before{background:repeating-linear-gradient(to bottom,transparent 0 calc(var(--row) - 26px),#b07a4c calc(var(--row) - 26px) calc(var(--row) - 10px),#8a5a36 calc(var(--row) - 10px) calc(var(--row) - 3px),#3a2a20 calc(var(--row) - 3px) var(--row))}
+.bfx-row::after{display:none}
+.bfx-book::after{content:"";position:absolute;left:-1px;right:-1px;bottom:-4px;height:30px;z-index:-1;pointer-events:none;background:url("/ehon/text/shelf-board.webp") repeat-x 0 0/400px 30px}
+/* 表紙：絵の上にタイトル（表紙の絵の白い札の中） */
+.bfx-cov{background:var(--cov) center/100% 100% no-repeat!important;box-shadow:none!important;border-radius:0!important;color:#3a2a20}
+.bfx-cov__frame{inset:18.5% 15.5% 47% 27%!important;border:0!important;padding:4% 3%!important;gap:2%!important;justify-content:center}
+.bfx-cov__frame::before,.bfx-cov__band{display:none!important}
+.bfx-cov__label{font-family:'Kiwi Maru',serif;color:#6f5a46!important;opacity:1!important;font-size:max(8px,5cqi)!important;letter-spacing:.08em!important}
+.bfx-cov__title{flex:0 1 auto!important;font-family:'Kiwi Maru',serif!important;font-weight:500!important;font-size:clamp(12px,9.6cqi,30px)!important;line-height:1.35!important;color:#3a2a20!important;background:none!important;-webkit-background-clip:border-box!important;background-clip:border-box!important;filter:none!important}
+.bfx-b__er,.bfx-b__eb{display:none}
+.bfx-b::after{background:rgba(58,42,32,.22);filter:blur(4px)}
+.bfx-book:focus-visible .bfx-cov{outline:3px solid #3b58a3}
+/* 開く演出：暗くしすぎず、あたたかい部屋の光 */
+.bfx-fx__bg{background:radial-gradient(70% 60% at 50% 48%,rgba(248,238,214,.55),rgba(58,42,32,.78))}
+.bfx-fx__back{background:color-mix(in oklab,var(--c),#000 25%);border:2px solid #3a2a20}
+.bfx-fx__cf .bfx-cov{border:2px solid #3a2a20}
+.bfx-fx__page,.bfx-fx__lf{background:repeating-linear-gradient(to bottom,rgba(58,42,32,0) 0 calc(var(--bw) * .056),rgba(58,42,32,.14) calc(var(--bw) * .056) calc(var(--bw) * .066)) content-box,#fbf3df url("/ehon/text/page-paper.webp") 0 0/300px;border:1.5px solid rgba(58,42,32,.5)}
+.bfx-fx__lf--back{background:#f8eed6 url("/ehon/text/page-paper.webp") 0 0/300px}
+.bfx-fx__cb{background:#f8eed6 url("/ehon/text/page-paper.webp") 0 0/300px;box-shadow:inset 0 0 0 calc(var(--bw) * .035) color-mix(in oklab,var(--c),#000 12%)}
+.bfx-fx__glow{background:radial-gradient(closest-side,rgba(255,246,216,.9),rgba(242,195,90,.35) 45%,rgba(242,195,90,0))}
+.bfx-fx__ray{background:linear-gradient(to top,rgba(255,248,224,.85),rgba(242,195,90,.35) 40%,rgba(242,195,90,0))}
+/* 飛び出すもの：絵（160×160）。大きさは今までの絵文字と同じくらい */
+.bfx-p--e{width:calc(var(--bw) * .3);height:calc(var(--bw) * .3);margin:calc(var(--bw) * -.15) 0 0 calc(var(--bw) * -.15);font-size:0!important;background:center/contain no-repeat}
+.bfx-p--c{border-radius:2px 4px 2px 3px;box-shadow:0 0 0 1.5px rgba(58,42,32,.45)}
+.bfx-p--s{background:url("/ehon/common/deco-star.webp") center/contain no-repeat;width:calc(var(--bw) * .09);height:calc(var(--bw) * .09)}
+.bfx-p--p{background:url("/ehon/common/deco-note-pink.webp") center/contain no-repeat;clip-path:none;width:calc(var(--bw) * .12);height:calc(var(--bw) * .12)}
+/* 本文のページ：手描きの紙。本文は 16px 以上・行間は今と同じ */
+.bfx-reader{background:#fbf3df url("/ehon/text/page-paper.webp") 0 0/600px repeat!important;border:2px solid #3a2a20;border-radius:6px 12px 8px 10px/10px 8px 12px 6px;box-shadow:4px 5px 0 #f1e4c2,4px 5px 0 2px rgba(58,42,32,.35),9px 11px 0 rgba(58,42,32,.14)!important;color:#3a2a20;font-size:17px;line-height:1.9}
+#detailBody.bfx-reader{font-size:17px!important}
+.bfx-reader::before{background:linear-gradient(90deg,rgba(58,42,32,.16),rgba(58,42,32,0))}
+.bfx-reader h1,.bfx-reader h2,.bfx-reader h3{font-family:'Kiwi Maru',serif;font-weight:500}
