@@ -25,7 +25,10 @@ async function start(options={}){
   const original=(await f.db.collection('sp_quests').doc('unified-quest').get()).data();
   await seed('sp_quests',questId,{...original,createdAt:Date.now(),closesAt:Date.now()+30*86400000});
   await seed('sp_wisdom',wisdomId,{questId,questTitle:original.title,author:actor,authorName:'LOCAL 運営',insight:'LOCAL 実行別の引用確認 '+run,knowledge:'LOCAL 元の知識',experiment:'LOCAL 検証記録',tag:'Emu',createdAt:Date.now()});
-  res.json({questId,wisdomId});
+  /* 11/20「これを試す」：投稿から開く #001（一般・1番）を実行ごとに新しく置く。いちばん新しい受付中の #001 が選ばれる */
+  const tryQuestId='unified-try-'+run;
+  await seed('sp_quests',tryQuestId,{...original,title:'LOCAL #001 Emuの知識を、やってみる',series:'general',questNumber:1,status:'OPEN',createdAt:Date.now(),closesAt:Date.now()+30*86400000});
+  res.json({questId,wisdomId,tryQuestId});
  });
  f.app.get('/test/unified-state',async(req,res)=>{const data={};for(const name of ['posts','sp_wisdom','sp_guild_members/learn/joins','sp_quests/unified-quest/commits','sp_quest_logs','emuer_v2_rewards','emuer_v2_ledger']){const s=await f.db.collection(name).get();data[name]=s.docs.map(d=>({id:d.id,data:d.data()}));}res.json(data);});
  console.log('LOCAL UNIFIED FIXTURE ready '+f.base);return f;

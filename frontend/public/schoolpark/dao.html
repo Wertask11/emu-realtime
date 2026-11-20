@@ -672,7 +672,7 @@ if (window.top === window.self) window.location.replace('/');
                     <div style="font-family:Inter,sans-serif; font-size:11px; color:var(--emu-brand-strong); padding-top:2px">6</div>
                     <div style="color:#3B382F"><b>運営が確認して完走</b></div>
                   </div>
-                  <div style="font-size:12px; line-height:1.8; color:#6E695C; padding-top:10px; border-top:1px solid rgba(20,19,16,.1)">報告は3種類すべてが必要です。「つまずいた」「気づいた」は「やってみた」のあとに出せます。</div>
+                  <div style="font-size:12px; line-height:1.8; color:#6E695C; padding-top:10px; border-top:1px solid rgba(20,19,16,.1)">報告は3種類すべてが必要です。「やってみた記録を書く」なら、3つの報告と知恵カードを1枚で出せます。</div>
                 </div>
               </sc-if>
 
@@ -682,9 +682,19 @@ if (window.top === window.self) window.location.replace('/');
                   <div style="flex:1; height:1px; background:rgba(20,19,16,.14)"></div>
                   <div style="font-size:12px; color:#6E695C">{{ cur.logCount }} 件</div>
                 </div>
+                <!-- 11/20 オーナー：やってみた記録（1枚）。3つ書くだけで、受ける・3種類の報告・知恵カードまで残る -->
+                <sc-if value="{{ cur.canTry }}">
+                  <div class="sp-paper sp-try-box" style="background:#FBF9F3; border:1.5px solid var(--emu-brand-strong); border-radius:12px; padding:20px; display:flex; align-items:center; gap:12px; flex-wrap:wrap">
+                    <div style="flex:1; min-width:200px; display:flex; flex-direction:column; gap:4px">
+                      <div style="font-size:15px; font-weight:700; color:#3B382F">やってみた記録を書く</div>
+                      <div style="font-size:12px; line-height:1.8; color:#6E695C">やったこと・つまずいたこと・分かったことを1枚に書くと、報告と知恵カードが一度に残ります。{{ cur.tryNote }}</div>
+                    </div>
+                    <button type="button" class="sp-try-btn" onClick="{{ cur.tryOne }}" style="padding:12px 20px; min-height:44px; border-radius:10px; border:0; background:var(--emu-brand-strong); color:#fff; font:inherit; font-size:14px; font-weight:700; cursor:pointer">記録する →</button>
+                  </div>
+                </sc-if>
                 <sc-if value="{{ cur.canLog }}">
                   <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:20px; display:flex; align-items:center; gap:8px; flex-wrap:wrap">
-                    <div style="font-size:13px; color:#6E695C; flex:1; min-width:160px">{{ cur.logLead }}</div>
+                    <div style="font-size:13px; color:#6E695C; flex:1; min-width:160px">1つずつ書く（画像を添えるときも）：{{ cur.logLead }}</div>
                     <div onClick="{{ cur.logDid }}" style="padding:8px 14px; border:1px solid rgba(20,19,16,.16); border-radius:16px; font-size:12px; cursor:pointer" style-hover="border-color:var(--emu-brand-strong); color:var(--emu-brand-strong)">やってみた</div>
                     <div onClick="{{ cur.logStuck }}" style="padding:8px 14px; border:1px solid rgba(20,19,16,.16); border-radius:16px; font-size:12px; cursor:pointer" style-hover="border-color:var(--emu-brand-strong); color:var(--emu-brand-strong)">つまずいた</div>
                     <div onClick="{{ cur.logFound }}" style="padding:8px 14px; border:1px solid rgba(20,19,16,.16); border-radius:16px; font-size:12px; cursor:pointer" style-hover="border-color:var(--emu-brand-strong); color:var(--emu-brand-strong)">気づいた</div>
@@ -2257,6 +2267,10 @@ class Component extends DCLogic {
          閉じたあとも置ける。締切のあとに書き上げる人がいるため。 */
       canWisdom: !e.isFounder && !!e.iTook,
       canLog: !e.isFounder && !!e.iTook && e.status !== 'CLOSED',
+      /* やってみた記録（1枚）。受けていなくても出せる（出すときに受ける） */
+      canTry: !e.isFounder && e.status !== 'CLOSED',
+      tryNote: e.iTook ? '' : '出すと、このクエストを受けたことになります。',
+      tryOne: () => { try { window.parent.openSpTryForm(e.id, this); } catch (err) {} },
       /* 完走までの手順。#000（原点）には報告も完走も無いので出さない。 */
       showSteps: !e.isFounder && !!(e.reportSteps && e.reportSteps.length),
       logLead: e.logLead || '今日やったことを書く',
