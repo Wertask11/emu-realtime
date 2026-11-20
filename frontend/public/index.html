@@ -16732,7 +16732,6 @@ async function spDaoRefreshNow(why) {
     if (st && st.reason === 'quota' && Date.now() < st.blockedUntil) {
       console.warn('今日のぶんの読み取り枠を使い切っています。'
         + '読み直しを見合わせます（' + Math.ceil((st.blockedUntil - Date.now()) / 60000) + '分後にもう一度）。');
-      _spQuotaShow(true);
       return false;
     }
   } catch (e) {}
@@ -31034,7 +31033,8 @@ window.emuInAppRefresh = async function (source) {
     if (typeof window.spDaoRefreshNow === 'function') {
       const ok = await window.spDaoRefreshNow('引っぱって読み直し', { frame: frameOf('spDaoFrame') || frameOf('spRoomFrame') });
       /* 11/20：無料枠を使い切っているときは、そう伝える（引っぱった画面に「何時ごろに戻ります」と出る） */
-      if (ok === false) throw new Error(_spQuotaBlocked() ? 'QUOTA:' + _spQuotaResetLabel() : 'REFRESH_FAILED');
+      if (ok === false && _spQuotaBlocked()) { _spQuotaShow(true); throw new Error('QUOTA:' + _spQuotaResetLabel()); }
+      if (ok === false) throw new Error('REFRESH_FAILED');
     }
     return 'schoolpark';
   }
@@ -31048,7 +31048,10 @@ window.emuInAppRefresh = async function (source) {
     return 'profile';
   }
   if (b.contains('sp-dao-open') && typeof window.spDaoRefreshNow === 'function') {
-    if (await window.spDaoRefreshNow('引っぱって読み直し') === false) throw new Error(_spQuotaBlocked() ? 'QUOTA:' + _spQuotaResetLabel() : 'REFRESH_FAILED');
+    if (await window.spDaoRefreshNow('引っぱって読み直し') === false) {
+      if (_spQuotaBlocked()) { _spQuotaShow(true); throw new Error('QUOTA:' + _spQuotaResetLabel()); }
+      throw new Error('REFRESH_FAILED');
+    }
     return 'schoolpark';
   }
   /* 知識を探す・知識を試すは読み込むデータが無いので、画面を出し直すだけ */
