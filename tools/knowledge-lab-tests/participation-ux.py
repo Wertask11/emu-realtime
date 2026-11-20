@@ -51,62 +51,53 @@ with sync_playwright() as p:
     identity=g.evaluate('async()=>({uid:auth.currentUser.uid,spid:(await spPassportLoad()).spid})')
     baseline=state();assert not baseline['entryCommits'] and not baseline['guildJoins']
     d=g.frame_locator('#spDaoFrame')
-    def schoolpark():
-        g.evaluate('openSpDao()');d.locator('[data-sp-head] .service-switch').wait_for()
+    def hub():
+        # 11/19：知識を試す は、すぐクエストの拠点を開く（上の見出しとサービスの切り替えは 11/19 になくなった）
+        g.evaluate('showEmuPractice()')
+        g.wait_for_function('document.getElementById("spDaoFrame").contentWindow.app?.tourRenderedScreen==="experiments"')
+        g.locator('#spLoadingOverlay').wait_for(state='hidden',timeout=30000)
+        d.get_by_role('tab',name='挑戦を探す',exact=False).wait_for()
     def overflow():
         assert g.evaluate('document.documentElement.scrollWidth<=innerWidth+1')
         assert d.locator('html').evaluate('el=>el.scrollWidth<=innerWidth+1')
     results=[]
     for width in [375,390,412,768,1280,1440,1920]:
-        g.set_viewport_size({'width':width,'height':950});g.wait_for_timeout(200);schoolpark()
-        # Real parent bridge and existing entry checks, using the new header switch.
-        switch=d.locator('[data-sp-head] .service-switch')
-        assert switch.bounding_box()['height']>=44
-        assert d.locator('.service-mobile-menu').is_hidden()
-        if width<700:
-            assert d.locator('[data-sp-head] [data-tour~="menu"]:visible').count()==1
-        switch.click();menu=g.locator('#spMobileMenu')
+        g.set_viewport_size({'width':width,'height':950});g.wait_for_timeout(200);hub()
+        # The shared account menu replaces the retired header service switch (Passport and contact stay one tap away).
+        g.locator('#emuHeaderProfile').click();menu=g.locator('#emuAccountMenu')
         menu.wait_for(state='visible')
-        assert menu.get_by_role('button',name='SchoolPark パスポート',exact=False).is_visible()
-        assert menu.get_by_role('button',name='お問い合わせ・イベント申込',exact=False).is_visible()
-        assert menu.locator('[data-brand="schoolpark"]').get_attribute('aria-current')=='page'
-        g.keyboard.press('Escape');menu.wait_for(state='hidden');assert switch.evaluate('async el=>{for(let i=0;i<30;i++){if(el.ownerDocument.querySelector("[data-sp-head] .service-switch")===el.ownerDocument.activeElement)return true;await new Promise(requestAnimationFrame)}return false}')
-        d.locator('html').evaluate('()=>app.setState({})');assert switch.evaluate('async el=>{await new Promise(requestAnimationFrame);return document.querySelector("[data-sp-head] .service-switch")===document.activeElement}')
-        switch.click();menu.locator('[data-brand="emu"]').click()
-        g.locator('#mainApp .service-switch').wait_for(state='visible')
-        assert g.locator('#emuMenuBtn').is_hidden()
+        assert menu.get_by_role('menuitem',name='SchoolParkパスポート',exact=True).is_visible()
+        assert menu.locator('[data-help=contact]').count()==1
+        g.keyboard.press('Escape');menu.wait_for(state='hidden')
         assert g.evaluate('auth.currentUser.uid')==identity['uid']
-        g.screenshot(path=str(OUT/f'LOCAL-Emu-switch-{width}.png'))
-        g.locator('#mainApp .service-switch').click();menu.locator('[data-brand="schoolpark"]').click()
-        g.locator('#spLoadingOverlay').wait_for(state='hidden',timeout=30000)
-        d.locator('[data-sp-head] .service-switch').wait_for()
-        # Browsing home, guild list and guild details cannot enroll the user.
-        d.locator('html').evaluate("()=>{app.setState({screen:'home'});app.toTop()}")
-        d.get_by_role('button',name='ギルドの活動を見る',exact=True).click()
-        d.locator('[data-tour="guild-list"]').wait_for()
-        guild=d.locator('[data-tour="guild-card"]').filter(has_text='LEARN').first
-        guild.focus();g.keyboard.press('Enter')
-        d.locator('[data-tour="guild-before-join"]').wait_for()
-        guild_value=d.locator('[data-ux-value="guild"]')
-        assert guild_value.is_visible() and guild_value.locator('dt').count()==3
-        assert '知識を使うテーマ' in guild_value.inner_text()
-        join=d.get_by_role('button',name='このギルドに参加したい',exact=False)
-        join.wait_for();assert len(state()['guildJoins'])==0
+        g.screenshot(path=str(OUT/f'LOCAL-hub-{width}.png'))
+        # Browsing the hub, the guild hall and a guild cannot enroll the user.
+        assert len(state()['guildJoins'])==0 and len(state()['entryCommits'])==0
+        d.get_by_role('button',name='LEARN ギルドに入る',exact=True).click()
+        d.locator('[data-tour="guild-before-join"]').first.wait_for()
+        assert '学ぶ' in d.locator('[data-tour="guild-before-join"]').first.inner_text()
+        join=d.locator('.sp-gs-join')
+        join.wait_for();assert join.inner_text().strip()=='参加する';assert len(state()['guildJoins'])==0
         overflow();g.screenshot(path=str(OUT/f'LOCAL-guild-before-{width}.png'))
         join.click();joined=await_state(g,'guildJoins',1)
         assert set(joined['guildJoins'][0]['fields'])=={'name','at'}
-        d.get_by_role('button',name='✓ 参加したい',exact=False).wait_for()
+        d.get_by_role('button',name='✓ 参加している',exact=True).wait_for()
         g.screenshot(path=str(OUT/f'LOCAL-guild-after-{width}.png'))
         # Wait for the existing busy flag before requesting the next actual action.
         g.wait_for_function('!_spGuildBusy')
-        d.get_by_role('button',name='✓ 参加したい',exact=False).click();await_state(g,'guildJoins',0)
+        d.get_by_role('button',name='✓ 参加している',exact=True).click();await_state(g,'guildJoins',0)
         g.wait_for_function('!_spGuildBusy')
+        # 応援は「詳細」の中（11/19 LEARN のかんたんな形）
+        d.locator('.sp-gs-more').click()
         d.get_by_role('button',name='このギルドを応援する',exact=False).click();await_state(g,'guildSupports',1)
         g.wait_for_function('!_spGuildBusy')
         d.get_by_role('button',name='✓ 応援している',exact=False).click();await_state(g,'guildSupports',0)
+        g.wait_for_function('!_spGuildBusy')
+        d.locator('.sp-guild-rules-close').click()
         d.get_by_text('← ギルド',exact=True).click();d.locator('[data-tour="guild-list"]').wait_for()
         # Existing stages only; an unclassified quest must never become an entry quest.
-        d.locator('html').evaluate("()=>{app.setState({screen:'experiments',filter:'すべて',series:'general',entryOnly:false});app.toTop()}")
+        hub()
+        d.locator('html').evaluate("()=>{app.setState({qTab:'find',qPick:'all',filter:'すべて',series:'general',entryOnly:false});app.toTop()}")
         d.get_by_role('button',name='入門だけ（未経験OK）',exact=True).click()
         d.locator('[data-tour="quest-card"]').first.wait_for()
         assert d.locator('[data-tour="quest-card"]').count()==1
@@ -128,23 +119,33 @@ with sync_playwright() as p:
         d.get_by_role('button',name='✓ 受けている',exact=True).wait_for()
         g.screenshot(path=str(OUT/f'LOCAL-quest-after-{width}.png'))
         g.wait_for_function('!_spQuestBusy')
+        # 受けたクエストは、拠点の「自分の挑戦」に並ぶ。そこから詳細へ戻れる
+        d.get_by_text('← クエスト一覧',exact=True).click()
+        d.get_by_role('tab',name='自分の挑戦',exact=False).click()
+        d.get_by_role('button',name='続きをする →',exact=True).first.wait_for()
+        assert d.locator('.sp-qh-item').count()==1
+        d.get_by_role('button',name='続きをする →',exact=True).first.click()
         d.get_by_role('button',name='✓ 受けている',exact=True).click();await_state(g,'entryCommits',0)
         g.wait_for_function('!_spQuestBusy')
-        d.get_by_text('← クエスト一覧',exact=True).click();d.locator('[data-tour="quest-card"]').first.wait_for()
+        d.get_by_text('← クエスト一覧',exact=True).click()
+        d.get_by_role('tab',name='挑戦を探す',exact=False).click();d.locator('[data-tour="quest-card"]').first.wait_for()
         after=state();assert after['counts']==baseline['counts'];assert after['approvedCommits']==baseline['approvedCommits']
         assert g.evaluate('auth.currentUser.uid')==identity['uid']
         assert g.evaluate('async()=>(await spPassportLoad()).spid')==identity['spid']
-        results.append({'width':width,'switchAndKeyboard':True,'browseDoesNotJoin':True,'guildJoinSupportAndUndo':True,'questJoinAndLeave':True,'existingStageFilter':True,'backAndSession':True,'noNewRewardOrNotification':True})
+        results.append({'width':width,'accountMenuAndKeyboard':True,'questHub':True,'browseDoesNotJoin':True,'guildJoinSupportAndUndo':True,'questJoinAndLeave':True,'existingStageFilter':True,'backAndSession':True,'noNewRewardOrNotification':True})
         print('PASS width',width,flush=True)
     # Emu remains four tabs; reading never forces participation.
     g.evaluate('showEmuRequests()');g.locator('.emu-practice-entry').wait_for()
     assert '見るだけでは参加になりません' in g.locator('.emu-practice-entry').inner_text()
     g.locator('.emu-practice-entry button').click();g.locator('#spLoadingOverlay').wait_for(state='hidden',timeout=30000)
-    d.locator('[data-sp-head]').wait_for();g.evaluate('showEmuFeed()')
+    g.wait_for_function('document.getElementById("spDaoFrame").contentWindow.app?.tourRenderedScreen==="experiments"')
+    # 761px 以上の「知識を読む」では右上の冷蔵庫くんは出さない（左の列にある）。右上に出ている拠点の画面で開く
+    # 冷蔵庫くんは、まず「聞く」の窓を1つだけ開く（reizo/mode-switch.js）。チュートリアルの進み具合は変えない
+    g.locator('#emuHeaderReizo').click();g.locator('#spReizoPanel').wait_for(state='visible')
+    assert g.locator('#spReizoPanel:visible').count()==1
+    g.locator('#spReizoPanel .sp-reizo-close').first.click();g.locator('#spReizoPanel').wait_for(state='hidden')
+    g.evaluate('showEmuFeed()')
     k=g.frame_locator('#emuKnowledgeFrame');k.get_by_role('button',name='新着',exact=True).first.click()
-    g.locator('#emuHeaderReizo').click();g.locator('#rk-tour .rk-panel:not([hidden])').wait_for()
-    assert g.locator('#rk-tour .rk-panel:not([hidden])').count()==1
-    g.locator('#rk-tour .rk-close').click()
     progress=g.evaluate('JSON.parse(localStorage.getItem("rk-tour-v1"))')
     assert all(progress['tours'][key]['state']=='done' for key in TOURS)
     assert not errors,errors

@@ -55,7 +55,9 @@ test('書き手の名前は、出すときに本人が付けた名前（プロ�
   assert.ok(INDEX.indexOf('const name = _spNameFor(l.author, l.authorName);') > 0);
   assert.ok(INDEX.indexOf('people.push(_spNameFor(c.id, c.name));') > 0);
   assert.ok(INDEX.indexOf("Object.keys(M).forEach(function (k) { M[k].name = _spNameFor(k, M[k].name); });") > 0);
-  assert.ok(INDEX.indexOf('author: _spNameFor(w.author, w.authorName), uses: uses,') > 0);
+  /* 11/20：知恵カードは名前を探す言葉にも使うので、先に authorName に入れてから出す */
+  assert.ok(INDEX.indexOf('const authorName = _spNameFor(w.author, w.authorName);') > 0);
+  assert.ok(INDEX.indexOf('author: authorName, uses: uses,') > 0);
 });
 
 test('パスポートの名前：プロフィールを読めなかったときに、ログイン元の名前で埋めない', () => {

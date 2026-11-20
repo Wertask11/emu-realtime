@@ -312,5 +312,6 @@ test('知恵ライブラリのカードは長いとたたみ、「詳細を見�
   assert.equal(opened.reportsOn, true);
   assert.ok(DAO.indexOf('-webkit-line-clamp:{{ w.clampInsight }}') > 0);
   assert.ok(DAO.indexOf('<sc-if value="{{ w.reportsOn }}">') > 0);
-  assert.ok(DAO.indexOf('.map(w => this.foldWisdom(w, s))') > 0);
+  /* 11/20：棚・言葉・並べ方で絞ってから（wisdomVals）、出すカードをみな foldWisdom に通す */
+  assert.ok(DAO.indexOf('return { ...this.foldWisdom(w, s),') > 0);
 });
