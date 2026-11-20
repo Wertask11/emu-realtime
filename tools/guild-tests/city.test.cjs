@@ -93,7 +93,7 @@ async function fixture(width=390, visits=[]) {
     assert.equal(result.status,200);
   }
   const context=await browser.newContext({viewport:{width,height:844},hasTouch:width<700});
-  const requests=[],errors=[],control={historyFailure:false,historyGate:null};
+  const requests=[],errors=[],control={historyFailure:false,historyGate:null,saveResponseLost:false};
   await context.route('**/*',async route=>{
     const req=route.request(),url=new URL(req.url());
     if(url.hostname==='fonts.googleapis.com' && process.env.CITY_FONT_ROOT) {
@@ -107,13 +107,14 @@ async function fixture(width=390, visits=[]) {
       if(control.historyFailure && url.pathname.endsWith('/me')) return route.fulfill({status:503,json:{error:'CITY_HISTORY_UNAVAILABLE'}});
       const response=await fetch(base+url.pathname,{method:req.method(),headers:req.headers(),body:req.postData()||undefined});
       const body=await response.text();
+      if(control.saveResponseLost && req.method()==='PUT' && url.pathname.endsWith('/room/me')) { control.saveResponseLost=false;return route.fulfill({status:503,json:{error:'ROOM_UNAVAILABLE'}}); }
       if(url.pathname.endsWith('/me') && control.historyGate) await control.historyGate;
       return route.fulfill({status:response.status,body,contentType:'application/json',headers:{'Access-Control-Allow-Origin':'*'}});
     }
     if(url.origin!==base) return route.abort();
     return route.continue();
   });
-  const page=await context.newPage(); page.on('pageerror',e=>errors.push(e.message));
+  const page=await context.newPage(); page.setDefaultTimeout(8000); page.on('pageerror',e=>errors.push(e.message));
   const modules=[];page.on('request',r=>{if(/\/city(?:-bridge)?\.(js|css)$/.test(r.url()))modules.push(r.url());});
   await page.goto(base+'/test/parent.html');
   const frame=page.frames().find(f=>f.url().endsWith('/schoolpark/dao.html'));
@@ -234,4 +235,15 @@ test('City UI: in-flight room read cannot erase a later check-in; MyCity no long
   await f.frame.locator('.city-nav [data-value="real"]').click();await f.frame.locator('[data-action="spot"][data-value="demo-cafe"]').click();await f.frame.locator('[data-action="checkin"]').click();await f.frame.getByText(/記録済み ·/).waitFor();release();f.control.historyGate=null;
   await f.frame.locator('.city-nav [data-value="my"]').click();await f.frame.getByText('保存済みの部屋を開きました。',{exact:true}).waitFor();assert.equal((await db.collection('sp_identities/'+SPID+'/city_checkins').get()).docs.length,3);assert.equal(f.requests.filter(r=>r.path==='/api/schoolpark/city/me'||r.path.endsWith('/stars/mine')).length,0);assert.deepEqual(f.errors,[]);
  }finally{release?.();await f.close();}
+});
+
+// Simulate loss of an acknowledgement AFTER the real room router commits.
+test('City UI: lost save acknowledgement preserves layout and reuses requestId without another revision',async()=>{
+ const f=await fixture();try{
+  await f.city();await f.frame.locator('.city-nav [data-value="my"]').click();await f.frame.getByText('保存済みの部屋を開きました。',{exact:true}).waitFor();
+  await f.frame.locator('[data-room-instance="start-reizo"]').click();await f.frame.locator('[data-room-action="x+"]').click();f.control.saveResponseLost=true;await f.frame.locator('[data-room-action="save"]').click();
+  await f.frame.getByText('通信を確認できませんでした。配置はこの画面に残しています。もう一度保存できます。',{exact:true}).waitFor();assert.equal((await db.collection('city_rooms').doc(SPID).get()).data().revision,1);
+  await f.frame.getByRole('button',{name:'同じ内容で保存を再試行',exact:true}).click();await f.frame.getByText('保存しました。 自分だけに見えます。',{exact:true}).waitFor();
+  const requests=f.requests.filter(r=>r.method==='PUT'&&r.path.endsWith('/room/me'));assert.equal(requests.length,2);assert.deepEqual(JSON.parse(requests[0].body),JSON.parse(requests[1].body));const saved=(await db.collection('city_rooms').doc(SPID).get()).data();assert.equal(saved.revision,1);assert.equal(saved.layout.placements.find(p=>p.id==='start-reizo').x,6);assert.deepEqual(f.errors,[]);
+ }finally{await f.close();}
 });
