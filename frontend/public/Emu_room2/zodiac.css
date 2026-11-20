@@ -1,0 +1,79 @@
+/* 星空の黄道12星座：星空モード／図鑑モードの切り替えと、星座図鑑（11/20 オーナー） */
+#zodiacModes {
+  position: fixed; top: 104px; left: 12px; z-index: 30;
+  display: flex; padding: 3px; gap: 2px;
+  border-radius: 999px; border: 1px solid rgba(140,170,255,0.25);
+  background: rgba(5,10,40,0.72); backdrop-filter: blur(8px);
+}
+#zodiacModes button {
+  min-height: 36px; padding: 6px 14px; border: 0; border-radius: 999px;
+  background: transparent; color: #a0b8e8; font: 600 12px/1 system-ui, -apple-system, sans-serif; cursor: pointer;
+}
+#zodiacModes button[aria-selected="true"] { background: rgba(160,190,255,0.22); color: #f2f6ff; }
+#zodiacModes button:focus-visible { outline: 2px solid #ffe2a8; outline-offset: 2px; }
+
+/* 図鑑は、上のボタン（名前・シェア・切り替え）の下から始める。中を送っても、切り替えの下に文字が潜り込まない */
+#zodiacBook {
+  position: fixed; top: 150px; left: 0; right: 0; bottom: 0; z-index: 25; overflow-y: auto;
+  padding: 8px 16px 40px; box-sizing: border-box;
+  background: rgba(3,6,20,0.9); backdrop-filter: blur(6px);
+  color: #dfe7ff; font-family: system-ui, -apple-system, sans-serif;
+}
+#zodiacBook[hidden] { display: none; }
+/* 図鑑のあいだは、下の星座記録の札と「星空の見方」を隠す（重ならないように） */
+body.zodiac-book-open #starInfo, body.zodiac-book-open #detailBtn, body.zodiac-book-open #birthHint { display: none !important; }
+/* 図鑑のあいだは、上の帯も暗くして、星空の上に文字が浮かないようにする */
+body.zodiac-book-open::before { content: ""; position: fixed; left: 0; right: 0; top: 0; height: 150px; z-index: 24; background: rgba(3,6,20,0.9); }
+
+.zb-head { max-width: 920px; margin: 0 auto 16px; }
+.zb-head h2 { margin: 6px 0 6px; font-size: 20px; color: #f2f6ff; }
+.zb-head h2 small { font-size: 12px; color: #8ea3d6; font-weight: 500; margin-left: 6px; }
+.zb-head p { margin: 0; font-size: 13px; color: #a8b8e0; line-height: 1.7; }
+.zb-back { min-height: 36px; padding: 6px 12px; border-radius: 10px; border: 1px solid rgba(140,170,255,0.3); background: transparent; color: #c8d8ff; cursor: pointer; font: 600 12px system-ui, sans-serif; }
+
+.zb-grid { max-width: 920px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; }
+.zb-card {
+  display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 8px 12px;
+  border-radius: 14px; border: 1px solid rgba(140,170,255,0.18); background: rgba(14,22,56,0.55);
+  color: #c8d8ff; cursor: pointer; font: inherit;
+}
+.zb-card svg { width: 100%; max-width: 120px; height: auto; }
+.zb-card b { font-size: 14px; color: #e8eeff; }
+.zb-card span { font-size: 12px; color: #8ea3d6; }
+.zb-card.going { border-color: rgba(190,210,255,0.45); }
+.zb-card.done { border-color: rgba(255,226,168,0.6); background: rgba(48,40,20,0.45); }
+.zb-card.done span { color: #ffe2a8; }
+.zb-card:focus-visible, .zb-chip:focus-visible, .zb-share:focus-visible { outline: 2px solid #ffe2a8; outline-offset: 2px; }
+
+.zb-custom { max-width: 920px; margin: 22px auto 0; padding-top: 16px; border-top: 1px solid rgba(140,170,255,0.18); }
+.zb-custom h3 { margin: 0 0 4px; font-size: 16px; color: #f2f6ff; }
+.zb-custom p { margin: 0 0 10px; font-size: 13px; color: #a8b8e0; }
+.zb-row { max-width: 920px; margin: 10px auto; display: flex; flex-wrap: wrap; gap: 8px; }
+.zb-chip {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 6px 12px;
+  border-radius: 999px; border: 1px solid rgba(140,170,255,0.3); background: rgba(14,22,56,0.6);
+  color: #dfe7ff; cursor: pointer; font: 600 12px system-ui, sans-serif;
+}
+.zb-chip i { width: 12px; height: 12px; border-radius: 50%; display: inline-block; box-shadow: 0 0 6px currentColor; }
+.zb-chip.on { border-color: #ffe2a8; background: rgba(255,226,168,0.15); }
+.zb-chip.add { border-style: dashed; }
+.zb-chip[disabled] { opacity: .45; cursor: default; }
+.zb-figure { max-width: 920px; margin: 8px auto; display: flex; justify-content: center; }
+.zb-figure svg { width: min(300px, 86vw); height: auto; background: radial-gradient(circle at 50% 45%, rgba(40,60,120,0.35), rgba(3,6,20,0) 70%); border-radius: 16px; }
+.zb-note { max-width: 920px; margin: 8px auto; font-size: 13px; color: #a8b8e0; line-height: 1.7; text-align: center; }
+.zb-share {
+  display: block; margin: 12px auto; min-height: 44px; padding: 10px 22px; border-radius: 12px;
+  border: 1px solid rgba(255,226,168,0.6); background: rgba(255,226,168,0.14); color: #ffe2a8;
+  cursor: pointer; font: 700 14px system-ui, sans-serif;
+}
+.zb-name { max-width: 300px; margin: 6px auto; display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #a8b8e0; }
+.zb-name input { min-height: 40px; padding: 8px 10px; border-radius: 10px; border: 1px solid rgba(140,170,255,0.35); background: rgba(10,16,44,0.8); color: #f2f6ff; font-size: 16px; }
+
+@media (max-width: 520px) {
+  #zodiacModes { top: 100px; }
+  #zodiacBook { top: 146px; }
+  .zb-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .zb-card { padding: 8px 4px 10px; }
+  .zb-card b { font-size: 12px; }
+}
+@media (prefers-reduced-motion: reduce) { #zodiacModes button, .zb-card { transition: none; } }
