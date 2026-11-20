@@ -17,13 +17,25 @@ let starCountsState = "waiting";
 const POSTS_PER_STAR = 10;
 const discussionStreaks = {};
 
-/* ───── 背景の夜空（11/20 オーナー：「リアルな星空に」） ─────
-   動かない部分（空の色・天の川・暗い星・地平の影）は、画面の大きさが変わったときに1回だけ
-   別のキャンバスに描いておき、毎フレームはそれを貼るだけにする（スマホでも重くしない）。
-   瞬くのは明るい星だけ。星の色は本物の星と同じく、青白・白・黄・橙を明るさの分布つきで混ぜる。 */
-let bgStars = [];      // 瞬く明るい星（毎フレーム描く）
-let skyLayer = null;   // 動かない夜空
+/* ───── 背景の夜空（11/20 オーナー：「リアルな星空に」「星空が動くのは残して」） ─────
+   本物の夜空と同じく、空全体が天の北極（POLE）のまわりをゆっくり回る（日周運動）。
+   記録の星も、背景の星も、天の川も一緒に回る。画面の端で反対側へ飛ぶことはなく、
+   地平の山に沈んだ星は、ひと回りしてまた昇ってくる。
+
+   重くしないために、絵は3枚に分けて、画面の大きさが変わったときに1回だけ描く。
+     gradLayer    … 空の色（回らない。地平ほど明るい）
+     starLayer    … 天の川と星（回る。天の北極を中心にした正方形）
+     horizonLayer … 地平の明るみ・かすみと、山と木々の影（回らない。いちばん手前）
+   毎フレームは、回した starLayer を貼り、明るい星だけ瞬かせる。 */
+let bgStars = [];      // 瞬く明るい星（天の北極からの距離と角度で持つ）
+let gradLayer = null, starLayer = null, horizonLayer = null, starLayerSize = 0;
 const REDUCED_MOTION = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+/* ひと回り 8 分。本物（約24時間）だと止まって見えるので、動いているのが分かる速さにする。
+   前の「左へ流れる」動き（毎秒 4〜7px ほど）と、記録の星のあたりで同じくらいの速さ */
+const SKY_TURN_MS = 8 * 60 * 1000;
+const POLE = { x: 0, y: 0 };
+let skyAngle = 0;
+function skyAngleAt(time) { return REDUCED_MOTION ? 0 : -(time / SKY_TURN_MS) * Math.PI * 2; }
 const STAR_TINTS = ["#9db4ff", "#aabfff", "#cad7ff", "#f8f7ff", "#fff4ea", "#ffe7c4", "#ffd2a1", "#ffbe7f"];
 /* 本物の星の色の割合（青白は少なく、白〜黄が多く、橙はやや少ない） */
 const TINT_WEIGHT = [0.04, 0.08, 0.12, 0.26, 0.2, 0.15, 0.1, 0.05];
@@ -32,25 +44,26 @@ function pickTint(r) {
   for (let i = 0; i < TINT_WEIGHT.length; i++) { acc += TINT_WEIGHT[i]; if (r <= acc) return STAR_TINTS[i]; }
   return STAR_TINTS[3];
 }
-/* 天の川の帯。画面の左下から右上へ斜めに通す。帯からの距離（0〜1）を返す */
-function bandDistance(x, y) {
-  const ax = -0.1 * W, ay = 0.95 * H, bx = 1.1 * W, by = 0.05 * H;
-  const dx = bx - ax, dy = by - ay, len = Math.hypot(dx, dy);
-  const d = Math.abs((x - ax) * dy - (y - ay) * dx) / len;
-  return d / (Math.min(W, H) * 0.28);
-}
 function horizonY(x) {
-  /* 地平の稜線（なだらかな山と木々）。上の記録の星はこれより上に置く */
+  /* 地平の稜線（なだらかな山と木々） */
   return H * 0.86 - Math.sin(x / W * Math.PI * 1.3 + 0.6) * H * 0.035 - Math.sin(x / W * Math.PI * 4.1) * H * 0.012;
 }
-function initBgStars() {
-  bgStars = [];
-  skyLayer = document.createElement("canvas");
-  skyLayer.width = Math.round(W * DPR); skyLayer.height = Math.round(H * DPR);
-  const g = skyLayer.getContext("2d");
-  g.setTransform(DPR, 0, 0, DPR, 0, 0);
+/* 記録の星を置く範囲（天の北極からの距離）。ここに置くと、回っても多くの時間は画面の中にいる */
+function recordRadiusMax() {
+  /* 星の数が夜空の準備より先に届いたときも、天の北極の位置は決めておく */
+  if (!POLE.x) { POLE.x = W * 0.5; POLE.y = H * 0.36; }
+  /* スマホ（縦長）は横幅が狭いので、横にはみ出しすぎない大きさに */
+  return Math.max(80, Math.min(horizonY(W / 2) - POLE.y - 40, Math.max(W, H) * 0.42, W * 0.6)); }
 
-  /* 1. 空の色。天頂は黒に近い紺、地平はわずかに明るく（街の灯りと大気の光） */
+function initBgStars() {
+  POLE.x = W * 0.5; POLE.y = H * 0.36;
+  bgStars = [];
+
+  /* 1. 空の色（回らない） */
+  gradLayer = document.createElement("canvas");
+  gradLayer.width = Math.round(W * DPR); gradLayer.height = Math.round(H * DPR);
+  let g = gradLayer.getContext("2d");
+  g.setTransform(DPR, 0, 0, DPR, 0, 0);
   const sky = g.createLinearGradient(0, 0, 0, H);
   sky.addColorStop(0, "#02030a");
   sky.addColorStop(0.55, "#060b1d");
@@ -58,56 +71,75 @@ function initBgStars() {
   sky.addColorStop(1, "#1a2238");
   g.fillStyle = sky; g.fillRect(0, 0, W, H);
 
-  /* 2. 天の川の淡い雲。帯に沿って大小の光のかたまりを重ね、真ん中に暗い筋（暗黒星雲）を通す */
+  /* 2. 天の川と星（回る）。天の北極を中心に、画面のいちばん遠い角まで届く大きさの正方形に描く */
+  const reach = Math.max(Math.hypot(POLE.x, POLE.y), Math.hypot(W - POLE.x, POLE.y),
+    Math.hypot(POLE.x, H - POLE.y), Math.hypot(W - POLE.x, H - POLE.y));
+  starLayerSize = Math.ceil(reach * 2 + 8);
+  const ls = Math.min(DPR, 2800 / starLayerSize);   // 大きすぎる画像にしない（スマホのメモリ）
+  starLayer = document.createElement("canvas");
+  starLayer.width = Math.round(starLayerSize * ls); starLayer.height = Math.round(starLayerSize * ls);
+  g = starLayer.getContext("2d");
+  g.setTransform(ls, 0, 0, ls, starLayerSize * ls / 2, starLayerSize * ls / 2);   // (0,0) が天の北極
+  /* 天の川の帯：天の北極から少し離れたところを斜めに通る直線のまわり */
+  const bandAng = Math.PI * 0.2, bandOff = Math.min(W, H) * 0.32;
+  const ux = Math.cos(bandAng), uy = Math.sin(bandAng);           // 帯の向き
+  const nx = -uy, ny = ux;                                         // 帯に直角
+  const bandWidth = Math.min(W, H) * 0.28;
+  const bandDist = (x, y) => Math.abs((x * nx + y * ny) - bandOff) / bandWidth;
   g.save();
   g.globalCompositeOperation = "lighter";
-  const steps = 70;
-  for (let i = 0; i < steps; i++) {
-    const t = i / (steps - 1);
-    const cx = -0.1 * W + t * 1.2 * W + (Math.random() - 0.5) * W * 0.05;
-    const cy = 0.95 * H - t * 0.9 * H + (Math.random() - 0.5) * H * 0.08;
+  for (let i = 0; i < 90; i++) {
+    const t = (i / 89 - 0.5) * 2 * reach;
+    const cx = nx * bandOff + ux * t + (Math.random() - 0.5) * bandWidth * 0.25;
+    const cy = ny * bandOff + uy * t + (Math.random() - 0.5) * bandWidth * 0.25;
     const r = Math.min(W, H) * (0.08 + Math.random() * 0.16);
-    const warm = t > 0.35 && t < 0.65;   // 中心ほど少し黄みがかる
+    const warm = Math.abs(t) < reach * 0.3;   // 帯のまん中ほど少し黄みがかる
     const cg = g.createRadialGradient(cx, cy, 0, cx, cy, r);
     cg.addColorStop(0, warm ? "rgba(255,236,210,0.055)" : "rgba(190,205,255,0.045)");
     cg.addColorStop(1, "rgba(0,0,0,0)");
     g.fillStyle = cg; g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.fill();
   }
   g.restore();
-  g.save();
-  for (let i = 0; i < 40; i++) {
-    const t = 0.15 + Math.random() * 0.7;
-    const cx = -0.1 * W + t * 1.2 * W, cy = 0.95 * H - t * 0.9 * H + (Math.random() - 0.5) * H * 0.03;
+  for (let i = 0; i < 50; i++) {   // 暗い筋（暗黒星雲）
+    const t = (Math.random() - 0.5) * 1.6 * reach;
+    const cx = nx * bandOff + ux * t + (Math.random() - 0.5) * bandWidth * 0.1;
+    const cy = ny * bandOff + uy * t + (Math.random() - 0.5) * bandWidth * 0.1;
     const r = Math.min(W, H) * (0.02 + Math.random() * 0.06);
     const dg = g.createRadialGradient(cx, cy, 0, cx, cy, r);
     dg.addColorStop(0, "rgba(2,3,10,0.35)"); dg.addColorStop(1, "rgba(2,3,10,0)");
     g.fillStyle = dg; g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.fill();
   }
-  g.restore();
-
-  /* 3. 星。暗い星ほど多い（明るさの分布）。天の川の帯の中は密に */
-  const count = Math.floor(W * H / 260);
+  /* 星。暗い星ほど多い（明るさの分布）。天の川の帯の中は密に。円の中に均等に散らす */
+  const count = Math.floor(Math.PI * reach * reach / 260);
+  const bright = [];
   for (let i = 0; i < count; i++) {
-    let x = Math.random() * W, y = Math.random() * H;
-    const bd = bandDistance(x, y);
-    if (bd > 1 && Math.random() < 0.55) { x = Math.random() * W; y = Math.random() * H; }   // 帯の外は少し間引く
-    if (y > horizonY(x)) continue;
+    let rr = reach * Math.sqrt(Math.random()), th = Math.random() * Math.PI * 2;
+    let x = Math.cos(th) * rr, y = Math.sin(th) * rr;
+    if (bandDist(x, y) > 1 && Math.random() < 0.55) { rr = reach * Math.sqrt(Math.random()); th = Math.random() * Math.PI * 2; x = Math.cos(th) * rr; y = Math.sin(th) * rr; }
     const m = Math.pow(Math.random(), 3.2);           // 0（暗い）〜1（明るい）。ほとんどが暗い
     const tint = pickTint(Math.random());
-    const r = 0.25 + m * 1.35;
-    const a = 0.18 + m * 0.75 - Math.max(0, (y / H - 0.7)) * 0.6;  // 地平に近いほど霞む
-    if (m > 0.55) { bgStars.push({ x, y, r, tint, a, off: Math.random() * Math.PI * 2, spd: 0.0012 + Math.random() * 0.003 }); continue; }
-    g.globalAlpha = Math.max(0.05, Math.min(1, a));
-    g.fillStyle = tint;
+    const r = 0.25 + m * 1.35, a = 0.18 + m * 0.75;
+    g.globalAlpha = Math.min(1, a); g.fillStyle = tint;
     g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
+    if (m > 0.6) bright.push({ rr, th, r, tint, a, m });
   }
   g.globalAlpha = 1;
+  /* 北極星（天の北極のすぐそば。回っても動かない星） */
+  g.fillStyle = "#fff6e8"; g.beginPath(); g.arc(0, 0, 1.9, 0, Math.PI * 2); g.fill();
+  /* 瞬かせるのは、いちばん明るい星から 160 個まで（毎フレーム描くので数をしぼる） */
+  bgStars = bright.sort((p, q) => q.m - p.m).slice(0, 160)
+    .map(b => Object.assign(b, { off: Math.random() * Math.PI * 2, spd: 0.0012 + Math.random() * 0.003 }));
 
-  /* 4. 地平の影（山と木々のシルエット）と、地平のわずかな明るみ */
-  const glow = g.createLinearGradient(0, H * 0.72, 0, H);
-  glow.addColorStop(0, "rgba(60,80,120,0)");
-  glow.addColorStop(1, "rgba(70,85,120,0.25)");
-  g.fillStyle = glow; g.fillRect(0, H * 0.72, W, H * 0.28);
+  /* 3. 地平（回らない。いちばん手前）。地平に近い星はかすむ → 山と木々の影 */
+  horizonLayer = document.createElement("canvas");
+  horizonLayer.width = Math.round(W * DPR); horizonLayer.height = Math.round(H * DPR);
+  g = horizonLayer.getContext("2d");
+  g.setTransform(DPR, 0, 0, DPR, 0, 0);
+  const haze = g.createLinearGradient(0, H * 0.6, 0, H);
+  haze.addColorStop(0, "rgba(13,24,48,0)");
+  haze.addColorStop(0.7, "rgba(16,26,48,0.55)");
+  haze.addColorStop(1, "rgba(40,52,82,0.8)");
+  g.fillStyle = haze; g.fillRect(0, H * 0.6, W, H * 0.4);
   g.fillStyle = "#03050b";
   g.beginPath(); g.moveTo(0, H);
   for (let x = 0; x <= W; x += 6) {
@@ -118,6 +150,19 @@ function initBgStars() {
     g.lineTo(x, y);
   }
   g.lineTo(W, H); g.closePath(); g.fill();
+
+  /* 大きさが変わったら、記録の星は新しい天の北極のまわりで角度を取り直す */
+  stars.forEach(st => { st.r0 = undefined; });
+}
+
+/* 記録の星を、空と一緒に回す。初めて見る星は、いまの位置から天の北極までの距離と角度を覚える */
+function placeOnSky(star) {
+  if (star.r0 === undefined) {
+    star.r0 = Math.hypot(star.x - POLE.x, star.y - POLE.y);
+    star.a0 = Math.atan2(star.y - POLE.y, star.x - POLE.x) - skyAngle;
+  }
+  star.x = POLE.x + Math.cos(star.a0 + skyAngle) * star.r0;
+  star.y = POLE.y + Math.sin(star.a0 + skyAngle) * star.r0;
 }
 
 /* 流れ星（ときどき）。動きを減らす設定では出さない */
@@ -286,11 +331,12 @@ function applyRealStarCounts(counts) {
   let n = 0;
   const place = function (type, look, num) {
     for (let i = 0; i < num; i++) {
+      const rr = 40 + Math.sqrt(Math.random()) * (recordRadiusMax() - 40), th = Math.random() * Math.PI * 2;
+      const polar = { x: POLE.x + Math.cos(th) * rr, y: POLE.y + Math.sin(th) * rr };
       const star = createStar(Object.assign({ type: type }, look, {
-        /* 地平の山より上、左下の「星座記録」の札にかからない所に置く */
-        x: 40 + Math.random() * Math.max(1, w - 80),
-        /* 上は名前とシェアのボタン、下は星座記録の札と地平。スマホは札が高いので、もう少し上で止める */
-        y: 120 + Math.random() * Math.max(1, h * (w < 600 ? 0.66 : 0.72) - 120)
+        /* 天の北極のまわりに置く（空と一緒に回るので、四角ではなく円の中） */
+        x: polar.x,
+        y: polar.y
       }));
       n++;
       star.birthAt   = now - 2000 - n * 120;
@@ -530,23 +576,33 @@ function applyChangeToTarget(id) {
    Drawing Logic
 ========================== */
 function drawBgStars(time) {
-  if (skyLayer) ctx.drawImage(skyLayer, 0, 0, W, H);
-  bgStars.forEach(st => {
-    /* 大気のゆらぎで瞬く（明るい星だけ）。動きを減らす設定では止める */
-    const flicker = REDUCED_MOTION ? 0 : Math.sin(time * st.spd + st.off) * 0.22 + Math.sin(time * st.spd * 2.7 + st.off) * 0.08;
-    const alpha = Math.max(0.15, Math.min(1, st.a + flicker));
+  if (gradLayer) ctx.drawImage(gradLayer, 0, 0, W, H);
+  if (starLayer) {
     ctx.save();
-    ctx.globalAlpha = alpha;
-    const halo = ctx.createRadialGradient(st.x, st.y, 0, st.x, st.y, st.r * 4.5);
+    ctx.translate(POLE.x, POLE.y); ctx.rotate(skyAngle);
+    ctx.drawImage(starLayer, -starLayerSize / 2, -starLayerSize / 2, starLayerSize, starLayerSize);
+    ctx.restore();
+  }
+  /* 明るい星だけ、大気のゆらぎで瞬く。動きを減らす設定では止める */
+  bgStars.forEach(st => {
+    const x = POLE.x + Math.cos(st.th + skyAngle) * st.rr, y = POLE.y + Math.sin(st.th + skyAngle) * st.rr;
+    if (x < -10 || x > W + 10 || y < -10 || y > H) return;
+    const flicker = REDUCED_MOTION ? 0 : Math.sin(time * st.spd + st.off) * 0.22 + Math.sin(time * st.spd * 2.7 + st.off) * 0.08;
+    ctx.save();
+    ctx.globalAlpha = Math.max(0.1, Math.min(1, st.a * 0.55 + flicker));
+    const halo = ctx.createRadialGradient(x, y, 0, x, y, st.r * 4.5);
     halo.addColorStop(0, st.tint); halo.addColorStop(1, "rgba(0,0,0,0)");
-    ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(st.x, st.y, st.r * 4.5, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = "#ffffff"; ctx.beginPath(); ctx.arc(st.x, st.y, st.r * 0.8, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(x, y, st.r * 4.5, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
   });
 }
 
+function drawHorizon() {
+  if (horizonLayer) ctx.drawImage(horizonLayer, 0, 0, W, H);
+}
+
 function drawMilkyWay() {
-  /* 天の川は動かない夜空（skyLayer）に描き込んである */
+  /* 天の川は、回る星の絵（starLayer）に描き込んである */
 }
 
 /* あなたの記録の星座線。同じ種類の星どうしを、近い順に細い線でつなぐ（星座のように見せる）。
@@ -642,7 +698,9 @@ function drawPendingBirth(time) {
 function render(time = 0) {
   ctx.clearRect(0, 0, W, H);
 
-  // 1〜2. 夜空（空の色・天の川・星・地平）と、瞬く明るい星
+  // 1〜2. 夜空（空の色・回る天の川と星）と、瞬く明るい星。記録の星も空と一緒に回す
+  skyAngle = skyAngleAt(time);
+  stars.forEach(placeOnSky);
   drawMilkyWay();
   drawBgStars(time);
   drawMeteor(time);
@@ -728,6 +786,9 @@ function render(time = 0) {
       ctx.restore();
     }
   });
+
+  // 6. 地平（山と木々の影）。いちばん手前に置き、沈んでいく星を隠す
+  drawHorizon();
 
   requestAnimationFrame(render);
 
