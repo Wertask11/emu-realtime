@@ -1678,6 +1678,11 @@ service cloud.firestore {
       return false;
     }
 
+    // SchoolPark City の部屋。公開・本人確認はサーバーAPIだけで行う。
+    match /city_rooms/{document=**} {
+      allow read, write: if false;
+    }
+
     // 既存の施設・議論等は現状維持。上記の重要コレクションはここへ到達しない。
     match /{coll}/{document=**} {
       /* 未使用の旧コレクションも汎用許可へ漏らさない。

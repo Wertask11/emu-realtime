@@ -8,6 +8,7 @@
   const QUEUE = 'emu.analytics.queue.v1', STARTED = 'emu.analytics.started.v1';
   const HOST = 'https://us.i.posthog.com', TOKEN = 'phc_C7uHQF9QnDo497kex9cdZqwKx53hDBiVU54sBSDHPaks';
   const schemas = {
+    city_room_action: { action: ['open','save','share_preview'] },
     session_start: {}, knowledge_list_view: { surface: ['feed'] },
     knowledge_detail_view: { surface: ['feed','source','lab','permalink'] },
     post_create_start: { surface: ['feed','lab','legacy'] }, post_publish: { surface: ['feed','lab'] },

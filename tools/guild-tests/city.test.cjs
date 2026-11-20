@@ -12,6 +12,7 @@ const { chromium } = require('playwright');
 const express = require('../../backend/node_modules/express');
 const { makeFirestore } = require('../../backend/fake-firestore');
 const { createIdentity } = require('../../backend/identity');
+const { createCityRoomRouter } = require('../../backend/city-room');
 const { createCityRouter, SPOTS } = require('../../backend/city');
 
 const PUB = path.join(__dirname, '../../frontend/public');
@@ -57,6 +58,8 @@ before(async () => {
     return col;
   };
   const app = express(); app.use(express.json());
+  const roomAuth=(req,res,next)=>{const uid=String(req.headers.authorization||'').replace('Bearer city-fixture-','');if(!['alice','bob'].includes(uid))return res.status(401).json({error:'AUTH_REQUIRED'});req.identity={uid};next();};
+  app.use('/api/schoolpark/city/room',createCityRoomRouter({db,identity:createIdentity({db}),entitlement:{holdsOfficialPass:async()=>true},requireFirebaseUser:roomAuth,requireOwner:roomAuth,rateLimit:()=> (_q,_s,n)=>n()}));
   app.use('/api/schoolpark/city',createCityRouter({db,identity:createIdentity({db}),
     now:()=>Date.parse('2026-09-28T12:00:00Z'), entitlement:{holdsOfficialPass:async()=>true},
     rateLimit:()=> (_req,_res,next)=>next(),
@@ -80,6 +83,7 @@ after(async()=>{await browser?.close();await new Promise(r=>server?server.close(
 
 async function fixture(width=390, visits=[]) {
   for(const spid of [SPID,OTHER]) {
+    await db.collection('city_rooms').doc(spid).delete();
     const col=db.collection('sp_identities/'+spid+'/city_checkins');
     for(const row of (await col.get()).docs) await col.doc(row.id).delete();
   }
@@ -176,17 +180,26 @@ for(const width of [375,390,412,768,1440]) test(`City UI ${width}px: current rou
     await f.frame.getByRole('button',{name:'このVirtual Spotに入る',exact:true}).click();
     await f.frame.getByText(/記録済み ·/).waitFor();
     await f.frame.locator('.city-nav [data-value="my"]').click();
-    await f.frame.getByText(SPID,{exact:true}).waitFor();
-    await f.frame.getByText('限定Starの記録はありません',{exact:true}).waitFor();
-    assert.equal(await f.frame.locator('.city-room .city-card').count(),2);
+    await f.frame.getByText('保存済みの部屋を開きました。',{exact:true}).waitFor();
+    assert.equal(await f.frame.locator('[data-room-instance]').count(),3);
+    assert.doesNotMatch(await f.frame.locator('[data-city-room]').innerText(),/SP-AAAA|Quest実績|限定Star/);
+    assert.equal((await db.collection('sp_identities/'+SPID+'/city_checkins').get()).docs.length,2,'old check-ins remain intact');
     await noOverflow(f);
     await f.page.screenshot({path:path.join(qa,`city-my-${width}.png`)});
-    await f.frame.locator('[data-action="preview-share"]').click();
-    const share=await f.frame.locator('.city-share pre').innerText();
-    assert.match(share,/DEMO/);assert.doesNotMatch(share,/SP-AAAA|alice|uid|wallet|kyc/i);
-    await f.frame.locator('[data-action="cancel-share"]').click();
-    assert.equal(await f.frame.locator('.city-share').count(),0);
-    await f.frame.locator('[data-action="passport"]').first().click();
+    await f.frame.locator('[data-room-instance="start-reizo"]').click();
+    await f.frame.locator('[data-room-action="x+"]').click();
+    await f.frame.locator('[data-room-action="save"]').click();
+    await f.frame.getByText('保存しました。 自分だけに見えます。',{exact:true}).waitFor();
+    assert.equal((await db.collection('city_rooms').doc(SPID).get()).data().layout.placements.find(p=>p.id==='start-reizo').x,6);
+    await f.frame.locator('[data-room-action="publication"]').click();
+    await f.frame.locator('[data-room-confirm]').check();
+    await f.frame.locator('[data-room-action="publish"]').click();
+    await f.frame.getByText('保存しました。 部屋を公開しています。',{exact:true}).waitFor();
+    await f.frame.locator('[data-room-action="share"]').click();
+    await f.frame.getByRole('heading',{name:'この画像とURLだけを共有します'}).waitFor();
+    assert.doesNotMatch(await f.frame.locator('.room-share').innerText(),/SP-AAAA|alice|uid|wallet|kyc/i);
+    await f.frame.locator('[data-room-action="close-share"]').click();
+    await f.frame.locator('[data-room-action="passport"]').first().click();
     await f.page.getByRole('heading',{name:/Passport \/ 星空/}).waitFor();
     await f.page.getByRole('button',{name:'SchoolParkへ戻る',exact:true}).click();
     // Leaving City returns to the existing Quest list; the retired home is absent.
@@ -194,73 +207,31 @@ for(const width of [375,390,412,768,1440]) test(`City UI ${width}px: current rou
     await f.nav('01');
     assert.equal(await f.frame.evaluate(()=>app.state.screen),'experiments');
     assert.deepEqual(f.errors,[]);
-    for(const req of f.requests.filter(r=>r.method==='POST')) assert.deepEqual(Object.keys(JSON.parse(req.body)).sort(),['checkInType','spotId']);
+    for(const req of f.requests.filter(r=>r.path.endsWith('/checkins')&&r.method==='POST')) assert.deepEqual(Object.keys(JSON.parse(req.body)).sort(),['checkInType','spotId']);
   } finally {await f.close();}
 });
 
-test('City UI: logout clears private UI; new account has no inherited records; login reloads saved records',async()=>{
-  const f=await fixture(390,['demo-book','schoolpark-lab']);
-  try {
-    await f.city();await f.frame.locator('.city-nav [data-value="my"]').click();
-    await f.frame.getByText(SPID,{exact:true}).waitFor();
-    await f.page.evaluate(()=>__login(null));
-    assert.doesNotMatch(await f.frame.locator('#sp-city').innerText(),/SP-AAAA/);
-    await f.frame.locator('[data-action="retry"]').click();
-    await f.frame.getByText('ログインしてからCityを開いてください。',{exact:true}).waitFor();
-    await f.page.evaluate(()=>__login('bob'));
-    await f.frame.locator('[data-action="retry"]').click();
-    await f.frame.locator('.city-grid .city-card').first().waitFor();
-    await f.frame.locator('.city-nav [data-value="my"]').click();
-    await f.frame.getByText(OTHER,{exact:true}).waitFor();
-    await f.frame.getByText('まだCityの記録はありません',{exact:true}).waitFor();
-    await f.frame.getByText('限定Starの記録はありません',{exact:true}).waitFor();
-    assert.equal(await f.frame.getByRole('button',{name:'LEARN · 参加したい',exact:true}).count(),0,'previous account Guild label must not carry over');
-    await f.page.evaluate(()=>__login('alice'));
-    await f.frame.locator('[data-action="retry"]').click();
-    await f.frame.locator('.city-grid .city-card').first().waitFor();
-    await f.frame.locator('.city-nav [data-value="my"]').click();
-    await f.frame.getByText(SPID,{exact:true}).waitFor();
-    assert.equal(await f.frame.locator('.city-room .city-card').count(),2);
-    assert.deepEqual(f.errors,[]);
-  } finally {await f.close();}
+test('City UI: logout clears private room; new account has no inherited layout; login reloads saved layout',async()=>{
+ const f=await fixture(390,['demo-book','schoolpark-lab']);try{
+  await f.city();await f.frame.locator('.city-nav [data-value="my"]').click();await f.frame.getByText('保存済みの部屋を開きました。',{exact:true}).waitFor();
+  await f.frame.locator('[data-room-instance="start-reizo"]').click();await f.frame.locator('[data-room-action="store"]').click();await f.frame.locator('[data-room-action="save"]').click();await f.frame.getByText('保存しました。 自分だけに見えます。',{exact:true}).waitFor();
+  await f.page.evaluate(()=>__login(null));assert.equal(await f.frame.locator('[data-city-room]').count(),0);
+  await f.frame.locator('[data-action="retry"]').click();await f.frame.getByText('ログインしてからCityを開いてください。',{exact:true}).waitFor();
+  for(const [uid,count] of [['bob',3],['alice',2]]){await f.page.evaluate(uid=>{_spIdentity={schoolParkId:uid==='bob'?'SP-BBBB-BBBB-BBBB-BBBB':'SP-AAAA-AAAA-AAAA-AAAA'};__login(uid);},uid);await f.frame.locator('[data-action="retry"]').click();await f.frame.locator('.city-grid .city-card').first().waitFor();await f.frame.locator('.city-nav [data-value="my"]').click();await f.frame.getByText('保存済みの部屋を開きました。',{exact:true}).waitFor();assert.equal(await f.frame.locator('[data-room-instance]').count(),count);}
+  assert.equal((await db.collection('sp_identities/'+SPID+'/city_checkins').get()).docs.length,2);assert.deepEqual(f.errors,[]);
+ }finally{await f.close();}
 });
-
-test('City UI: read failure is not an empty collection; old-account late response is discarded',async()=>{
-  const f=await fixture();let release;
-  try {
-    await f.city(); f.control.historyFailure=true;
-    await f.frame.locator('.city-nav [data-value="my"]').click();
-    await f.frame.locator('[role="alert"]').waitFor();
-    assert.equal(await f.frame.getByText('まだCityの記録はありません',{exact:true}).count(),0);
-    f.control.historyFailure=false;
-    f.control.historyGate=new Promise(r=>{release=r;});
-    await f.frame.locator('[data-action="refresh"]').click();
-    await f.frame.getByText('自分のCity記録を読み込んでいます…',{exact:true}).waitFor();
-    await f.page.evaluate(()=>__login('bob')); release(); f.control.historyGate=null;
-    await f.frame.locator('[data-action="retry"]').click();
-    await f.frame.locator('.city-grid .city-card').first().waitFor();
-    await f.frame.locator('.city-nav [data-value="my"]').click();
-    await f.frame.getByText(OTHER,{exact:true}).waitFor();
-    assert.doesNotMatch(await f.frame.locator('#sp-city').innerText(),/SP-AAAA/);
-    assert.deepEqual(f.errors,[]);
-  } finally {release?.();await f.close();}
+test('City UI: failed room read is not empty inventory; old-account late response is discarded',async()=>{
+ const f=await fixture();let release;try{
+  await f.city();f.control.historyFailure=true;await f.frame.locator('.city-nav [data-value="my"]').click();await f.frame.getByRole('button',{name:'もう一度読み込む',exact:true}).waitFor();assert.equal(await f.frame.locator('[data-room-instance]').count(),0);
+  f.control.historyFailure=false;f.control.historyGate=new Promise(r=>release=r);await f.frame.locator('[data-room-action="reload"]').click();await f.page.evaluate(()=>{_spIdentity={schoolParkId:'SP-BBBB-BBBB-BBBB-BBBB'};__login('bob');});release();f.control.historyGate=null;
+  await f.frame.locator('[data-action="retry"]').click();await f.frame.locator('.city-grid .city-card').first().waitFor();await f.frame.locator('.city-nav [data-value="my"]').click();await f.frame.getByText('保存済みの部屋を開きました。',{exact:true}).waitFor();assert.equal(await f.frame.locator('[data-room-instance]').count(),3);assert.deepEqual(f.errors,[]);
+ }finally{release?.();await f.close();}
 });
-
-test('City UI: in-flight history cannot erase a later check-in; founder-only records show empty Quest state',async()=>{
-  const f=await fixture(390,['demo-book','schoolpark-lab']);let release;
-  try {
-    await f.page.evaluate(()=>{__quests=[{id:'founder',isFounder:true}];});
-    await f.city(); f.control.historyGate=new Promise(r=>{release=r;});
-    await f.frame.locator('.city-nav [data-value="my"]').click();
-    await f.frame.getByText('自分のCity記録を読み込んでいます…',{exact:true}).waitFor();
-    await f.frame.locator('.city-nav [data-value="real"]').click();
-    await f.frame.locator('[data-action="spot"][data-value="demo-cafe"]').click();
-    await f.frame.locator('[data-action="checkin"]').click();
-    await f.frame.getByText(/記録済み ·/).waitFor();
-    release();f.control.historyGate=null;
-    await f.frame.locator('.city-nav [data-value="my"]').click();
-    await f.frame.getByText('まだ承認済みのQuestはありません',{exact:true}).waitFor();
-    assert.equal(await f.frame.locator('.city-room .city-card').count(),3);
-    assert.deepEqual(f.errors,[]);
-  } finally {release?.();await f.close();}
+test('City UI: in-flight room read cannot erase a later check-in; MyCity no longer requests achievements',async()=>{
+ const f=await fixture(390,['demo-book','schoolpark-lab']);let release;try{
+  await f.page.evaluate(()=>{__quests=[{id:'founder',isFounder:true}];});await f.city();f.control.historyGate=new Promise(r=>release=r);await f.frame.locator('.city-nav [data-value="my"]').click();await f.frame.getByText('持ち物と部屋を読み込んでいます…',{exact:true}).waitFor();
+  await f.frame.locator('.city-nav [data-value="real"]').click();await f.frame.locator('[data-action="spot"][data-value="demo-cafe"]').click();await f.frame.locator('[data-action="checkin"]').click();await f.frame.getByText(/記録済み ·/).waitFor();release();f.control.historyGate=null;
+  await f.frame.locator('.city-nav [data-value="my"]').click();await f.frame.getByText('保存済みの部屋を開きました。',{exact:true}).waitFor();assert.equal((await db.collection('sp_identities/'+SPID+'/city_checkins').get()).docs.length,3);assert.equal(f.requests.filter(r=>r.path==='/api/schoolpark/city/me'||r.path.endsWith('/stars/mine')).length,0);assert.deepEqual(f.errors,[]);
+ }finally{release?.();await f.close();}
 });
