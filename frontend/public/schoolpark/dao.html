@@ -694,7 +694,7 @@ if (window.top === window.self) window.location.replace('/');
                 </sc-if>
                 <sc-if value="{{ cur.canLog }}">
                   <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:20px; display:flex; align-items:center; gap:8px; flex-wrap:wrap">
-                    <div style="font-size:13px; color:#6E695C; flex:1; min-width:160px">1つずつ書く（画像を添えるときも）：{{ cur.logLead }}</div>
+                    <div style="font-size:13px; color:#6E695C; flex:1; min-width:160px">{{ cur.logSplitLead }}</div>
                     <div onClick="{{ cur.logDid }}" style="padding:8px 14px; border:1px solid rgba(20,19,16,.16); border-radius:16px; font-size:12px; cursor:pointer" style-hover="border-color:var(--emu-brand-strong); color:var(--emu-brand-strong)">やってみた</div>
                     <div onClick="{{ cur.logStuck }}" style="padding:8px 14px; border:1px solid rgba(20,19,16,.16); border-radius:16px; font-size:12px; cursor:pointer" style-hover="border-color:var(--emu-brand-strong); color:var(--emu-brand-strong)">つまずいた</div>
                     <div onClick="{{ cur.logFound }}" style="padding:8px 14px; border:1px solid rgba(20,19,16,.16); border-radius:16px; font-size:12px; cursor:pointer" style-hover="border-color:var(--emu-brand-strong); color:var(--emu-brand-strong)">気づいた</div>
@@ -2268,12 +2268,15 @@ class Component extends DCLogic {
       canWisdom: !e.isFounder && !!e.iTook,
       canLog: !e.isFounder && !!e.iTook && e.status !== 'CLOSED',
       /* やってみた記録（1枚）。受けていなくても出せる（出すときに受ける） */
-      canTry: !e.isFounder && e.status !== 'CLOSED',
+      canTry: !e.isFounder && e.status !== 'CLOSED' && e.oneSheet !== false,
       tryNote: e.iTook ? '' : '出すと、このクエストを受けたことになります。',
       tryOne: () => { try { window.parent.openSpTryForm(e.id, this); } catch (err) {} },
       /* 完走までの手順。#000（原点）には報告も完走も無いので出さない。 */
       showSteps: !e.isFounder && !!(e.reportSteps && e.reportSteps.length),
       logLead: e.logLead || '今日やったことを書く',
+      /* 1枚で出せるクエストでは、こちらは「1つずつ書く」入口。日を分けて出すクエストでは、こちらが本来の入口 */
+      logSplitLead: e.oneSheet === false ? (e.logLead || '今日やったことを書く') + '（開始宣言 → 中間 → 最終の順に、その時々に出します）'
+        : '1つずつ書く（画像を添えるときも）：' + (e.logLead || '今日やったことを書く'),
       noLogs: !(e.logs && e.logs.length),
       logDid:   () => { try { window.parent.spQuestLog(e.id, 'やってみた', this); } catch (err) {} },
       logStuck: () => { try { window.parent.spQuestLog(e.id, 'つまずいた', this); } catch (err) {} },

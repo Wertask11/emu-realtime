@@ -80,7 +80,9 @@ test('クエストの詳細に「完走までの手順」が出る（#000 には
   assert.ok(DAO.indexOf('<sc-if value="{{ cur.showSteps }}">') > 0);
   assert.ok(DAO.indexOf('<sc-for list="{{ cur.reportSteps }}" as="s"') > 0);
   assert.ok(DAO.indexOf("showSteps: !e.isFounder && !!(e.reportSteps && e.reportSteps.length),") > 0);
-  assert.ok(DAO.indexOf('{{ cur.logLead }}') > 0);
+  /* 11/20：報告欄の頭の一言は logSplitLead の中に入れて出す（1枚で出せるクエストでは「1つずつ書く」入口の説明にもなる） */
+  assert.ok(DAO.indexOf('{{ cur.logSplitLead }}') > 0);
+  assert.ok(/logSplitLead: [^\n]*e\.logLead/.test(DAO) && /\(e\.logLead \|\| '今日やったことを書く'\)/.test(DAO));
   assert.ok(INDEX.indexOf("? '提出物は「やってみた」で出します'") > 0);
 });
 
