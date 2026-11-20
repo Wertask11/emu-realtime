@@ -46,6 +46,18 @@ test('writer consent, partial nonpublic profile restore and public fields only',
   await assert.rejects(f.api.service.writer(alice.spid),/NOT_FOUND/);assert.equal((await f.api.service.me(alice)).writer.bio,value.bio);
   const live=await f.api.service.profile(alice,{...value,published:true,consent:true});assert.equal(live.revision,2);const pub=await f.api.service.writer(alice.spid);assert.equal(pub.email,undefined);assert.equal(pub.uid,undefined);assert.equal(pub.qualification,'self-reported');
 });
+test('writer icon: a small photo from the device (data URL) is kept; other forms are refused',async()=>{
+  /* 11/20 オーナー：アイコンは端末の写真から選ぶ。画面が 256px の JPEG に縮めた data URL を送る */
+  const me=await f.api.service.me(alice);let rev=me.writer?me.writer.revision:0;
+  const photo='data:image/jpeg;base64,'+Buffer.from('LOCAL test image bytes').toString('base64');
+  const saved=await f.api.service.profile(alice,{displayName:'検証書き手',bio:'',facets:{},published:false,revision:rev,icon:photo});
+  assert.equal(saved.icon,photo);rev=saved.revision;
+  await assert.rejects(f.api.service.profile(alice,{displayName:'検証書き手',facets:{},published:false,revision:rev,icon:'data:text/html;base64,PGgxPg=='}),/INVALID_ICON/);
+  await assert.rejects(f.api.service.profile(alice,{displayName:'検証書き手',facets:{},published:false,revision:rev,icon:'data:image/jpeg;base64,'+'A'.repeat(100000)}),/ICON_TOO_LARGE/);
+  await assert.rejects(f.api.service.profile(alice,{displayName:'検証書き手',facets:{},published:false,revision:rev,icon:'http://example.invalid/a.png'}),/INVALID_ICON/);
+  const link=await f.api.service.profile(alice,{displayName:'検証書き手',facets:{},published:false,revision:rev,icon:'https://example.invalid/a.png'});
+  assert.equal(link.icon,'https://example.invalid/a.png','前からの https のリンクも通す');
+});
 test('manual comparison uses real sources and does not claim AI analysis',async()=>{
   const p1=await f.api.service.savePost(alice,post('source-a',{facets:{field:['field-business'],kind:['kind-story']}})),p2=await f.api.service.savePost(alice,post('source-b',{facets:{field:['field-it'],kind:['kind-story']}}));
   const compared=await f.api.service.comparison(alice,{sourceIds:[p1.id,p2.id]});assert.deepEqual(compared.common.kind,['kind-story']);assert.deepEqual(new Set(compared.differences.field),new Set(['field-business','field-it']));assert.equal(compared.aiAvailable,false);

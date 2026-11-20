@@ -1628,6 +1628,7 @@
     $("#writerName").value = w?.displayName || "";
     $("#writerBio").value = w?.bio || "";
     $("#writerIcon").value = w?.icon || "";
+    paintWriterIcon();
     $("#writerPublished").checked = !!w?.published;
     $("#writerConsent").checked = !!w?.consentVersion;
     facetUI("#writerFacets", w?.facets, [
@@ -1637,6 +1638,50 @@
       "job",
     ]);
   }
+  /* 書き手アイコン（11/20 オーナー）。端末の写真から選び、正方形に切り出して 256px の JPEG にする。
+     プロフィール写真（index.html の shrinkImage）と同じ作り。送るのは data URL（サーバーで形と大きさを確かめる）。 */
+  const WRITER_ICON_PX = 256;
+  function paintWriterIcon() {
+    const v = $("#writerIcon").value, box = $("#writerIconPreview");
+    if (!box) return;
+    box.textContent = v ? "" : "👤";
+    box.style.backgroundImage = v ? `url("${v.replace(/"/g, "%22")}")` : "";
+    $("#writerIconClear").hidden = !v;
+    $("#writerIconChoose").textContent = v ? "写真を変える" : "写真を選ぶ";
+  }
+  function shrinkWriterIcon(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error("READ_FAILED"));
+      reader.onload = () => {
+        const img = new Image();
+        img.onerror = () => reject(new Error("DECODE_FAILED"));
+        img.onload = () => {
+          const side = Math.min(img.width, img.height);
+          const canvas = document.createElement("canvas");
+          canvas.width = canvas.height = WRITER_ICON_PX;
+          canvas.getContext("2d").drawImage(img, (img.width - side) / 2, (img.height - side) / 2, side, side, 0, 0, WRITER_ICON_PX, WRITER_ICON_PX);
+          resolve(canvas.toDataURL("image/jpeg", 0.82));
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+  $("#writerIconChoose").onclick = () => $("#writerIconFile").click();
+  $("#writerIconClear").onclick = () => { $("#writerIcon").value = ""; $("#writerIconMsg").textContent = ""; paintWriterIcon(); };
+  $("#writerIconFile").onchange = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (!file) return;
+    try {
+      $("#writerIcon").value = await shrinkWriterIcon(file);
+      $("#writerIconMsg").textContent = "保存すると、この写真がアイコンになります。";
+    } catch (err) {
+      $("#writerIconMsg").textContent = "この画像は読み込めませんでした。別の画像でお試しください。";
+    }
+    paintWriterIcon();
+  };
   async function saveWriter(privateOnly = false) {
     const body = {
       displayName: $("#writerName").value,

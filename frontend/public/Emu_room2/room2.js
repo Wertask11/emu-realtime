@@ -17,28 +17,138 @@ let starCountsState = "waiting";
 const POSTS_PER_STAR = 10;
 const discussionStreaks = {};
 
-// 背景用の静的な小星（本物の夜空）
-let bgStars = [];
-
+/* ───── 背景の夜空（11/20 オーナー：「リアルな星空に」） ─────
+   動かない部分（空の色・天の川・暗い星・地平の影）は、画面の大きさが変わったときに1回だけ
+   別のキャンバスに描いておき、毎フレームはそれを貼るだけにする（スマホでも重くしない）。
+   瞬くのは明るい星だけ。星の色は本物の星と同じく、青白・白・黄・橙を明るさの分布つきで混ぜる。 */
+let bgStars = [];      // 瞬く明るい星（毎フレーム描く）
+let skyLayer = null;   // 動かない夜空
+const REDUCED_MOTION = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+const STAR_TINTS = ["#9db4ff", "#aabfff", "#cad7ff", "#f8f7ff", "#fff4ea", "#ffe7c4", "#ffd2a1", "#ffbe7f"];
+/* 本物の星の色の割合（青白は少なく、白〜黄が多く、橙はやや少ない） */
+const TINT_WEIGHT = [0.04, 0.08, 0.12, 0.26, 0.2, 0.15, 0.1, 0.05];
+function pickTint(r) {
+  let acc = 0;
+  for (let i = 0; i < TINT_WEIGHT.length; i++) { acc += TINT_WEIGHT[i]; if (r <= acc) return STAR_TINTS[i]; }
+  return STAR_TINTS[3];
+}
+/* 天の川の帯。画面の左下から右上へ斜めに通す。帯からの距離（0〜1）を返す */
+function bandDistance(x, y) {
+  const ax = -0.1 * W, ay = 0.95 * H, bx = 1.1 * W, by = 0.05 * H;
+  const dx = bx - ax, dy = by - ay, len = Math.hypot(dx, dy);
+  const d = Math.abs((x - ax) * dy - (y - ay) * dx) / len;
+  return d / (Math.min(W, H) * 0.28);
+}
+function horizonY(x) {
+  /* 地平の稜線（なだらかな山と木々）。上の記録の星はこれより上に置く */
+  return H * 0.86 - Math.sin(x / W * Math.PI * 1.3 + 0.6) * H * 0.035 - Math.sin(x / W * Math.PI * 4.1) * H * 0.012;
+}
 function initBgStars() {
   bgStars = [];
-  const w = canvas.width, h = canvas.height;
-  const count = Math.floor(w * h / 1200); // 密度
-  for (let i = 0; i < count; i++) {
-    bgStars.push({
-      x: Math.random() * w,
-      y: Math.random() * h,
-      r: Math.random() * 0.9 + 0.1,
-      alpha: Math.random() * 0.55 + 0.1,
-      twinkleOff: Math.random() * Math.PI * 2,
-      twinkleSpd: 0.0004 + Math.random() * 0.0012
-    });
+  skyLayer = document.createElement("canvas");
+  skyLayer.width = Math.round(W * DPR); skyLayer.height = Math.round(H * DPR);
+  const g = skyLayer.getContext("2d");
+  g.setTransform(DPR, 0, 0, DPR, 0, 0);
+
+  /* 1. 空の色。天頂は黒に近い紺、地平はわずかに明るく（街の灯りと大気の光） */
+  const sky = g.createLinearGradient(0, 0, 0, H);
+  sky.addColorStop(0, "#02030a");
+  sky.addColorStop(0.55, "#060b1d");
+  sky.addColorStop(0.82, "#0d1830");
+  sky.addColorStop(1, "#1a2238");
+  g.fillStyle = sky; g.fillRect(0, 0, W, H);
+
+  /* 2. 天の川の淡い雲。帯に沿って大小の光のかたまりを重ね、真ん中に暗い筋（暗黒星雲）を通す */
+  g.save();
+  g.globalCompositeOperation = "lighter";
+  const steps = 70;
+  for (let i = 0; i < steps; i++) {
+    const t = i / (steps - 1);
+    const cx = -0.1 * W + t * 1.2 * W + (Math.random() - 0.5) * W * 0.05;
+    const cy = 0.95 * H - t * 0.9 * H + (Math.random() - 0.5) * H * 0.08;
+    const r = Math.min(W, H) * (0.08 + Math.random() * 0.16);
+    const warm = t > 0.35 && t < 0.65;   // 中心ほど少し黄みがかる
+    const cg = g.createRadialGradient(cx, cy, 0, cx, cy, r);
+    cg.addColorStop(0, warm ? "rgba(255,236,210,0.055)" : "rgba(190,205,255,0.045)");
+    cg.addColorStop(1, "rgba(0,0,0,0)");
+    g.fillStyle = cg; g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.fill();
   }
+  g.restore();
+  g.save();
+  for (let i = 0; i < 40; i++) {
+    const t = 0.15 + Math.random() * 0.7;
+    const cx = -0.1 * W + t * 1.2 * W, cy = 0.95 * H - t * 0.9 * H + (Math.random() - 0.5) * H * 0.03;
+    const r = Math.min(W, H) * (0.02 + Math.random() * 0.06);
+    const dg = g.createRadialGradient(cx, cy, 0, cx, cy, r);
+    dg.addColorStop(0, "rgba(2,3,10,0.35)"); dg.addColorStop(1, "rgba(2,3,10,0)");
+    g.fillStyle = dg; g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.fill();
+  }
+  g.restore();
+
+  /* 3. 星。暗い星ほど多い（明るさの分布）。天の川の帯の中は密に */
+  const count = Math.floor(W * H / 260);
+  for (let i = 0; i < count; i++) {
+    let x = Math.random() * W, y = Math.random() * H;
+    const bd = bandDistance(x, y);
+    if (bd > 1 && Math.random() < 0.55) { x = Math.random() * W; y = Math.random() * H; }   // 帯の外は少し間引く
+    if (y > horizonY(x)) continue;
+    const m = Math.pow(Math.random(), 3.2);           // 0（暗い）〜1（明るい）。ほとんどが暗い
+    const tint = pickTint(Math.random());
+    const r = 0.25 + m * 1.35;
+    const a = 0.18 + m * 0.75 - Math.max(0, (y / H - 0.7)) * 0.6;  // 地平に近いほど霞む
+    if (m > 0.55) { bgStars.push({ x, y, r, tint, a, off: Math.random() * Math.PI * 2, spd: 0.0012 + Math.random() * 0.003 }); continue; }
+    g.globalAlpha = Math.max(0.05, Math.min(1, a));
+    g.fillStyle = tint;
+    g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
+  }
+  g.globalAlpha = 1;
+
+  /* 4. 地平の影（山と木々のシルエット）と、地平のわずかな明るみ */
+  const glow = g.createLinearGradient(0, H * 0.72, 0, H);
+  glow.addColorStop(0, "rgba(60,80,120,0)");
+  glow.addColorStop(1, "rgba(70,85,120,0.25)");
+  g.fillStyle = glow; g.fillRect(0, H * 0.72, W, H * 0.28);
+  g.fillStyle = "#03050b";
+  g.beginPath(); g.moveTo(0, H);
+  for (let x = 0; x <= W; x += 6) {
+    let y = horizonY(x);
+    /* 木々のぎざぎざ（決まった形にするため、x から作る） */
+    const n = Math.sin(x * 0.37) * Math.sin(x * 0.11 + 1.7);
+    if (n > 0.55) y -= (n - 0.55) * H * 0.06;
+    g.lineTo(x, y);
+  }
+  g.lineTo(W, H); g.closePath(); g.fill();
+}
+
+/* 流れ星（ときどき）。動きを減らす設定では出さない */
+let meteor = null, nextMeteorAt = 0;
+function drawMeteor(time) {
+  if (REDUCED_MOTION) return;
+  if (!meteor && time > nextMeteorAt) {
+    if (nextMeteorAt) {
+      const x = W * (0.2 + Math.random() * 0.7), y = H * (0.05 + Math.random() * 0.3);
+      const ang = Math.PI * (0.72 + Math.random() * 0.12);
+      meteor = { x, y, dx: Math.cos(ang), dy: Math.sin(ang), start: time, life: 700 + Math.random() * 500, len: 120 + Math.random() * 120 };
+    }
+    nextMeteorAt = time + 9000 + Math.random() * 16000;
+  }
+  if (!meteor) return;
+  const p = (time - meteor.start) / meteor.life;
+  if (p >= 1) { meteor = null; return; }
+  const dist = p * meteor.len * 2.4;
+  const hx = meteor.x + meteor.dx * dist, hy = meteor.y + meteor.dy * dist;
+  const tx = hx - meteor.dx * meteor.len, ty = hy - meteor.dy * meteor.len;
+  const grad = ctx.createLinearGradient(hx, hy, tx, ty);
+  const a = Math.sin(p * Math.PI);
+  grad.addColorStop(0, "rgba(255,255,255," + (0.9 * a).toFixed(3) + ")");
+  grad.addColorStop(1, "rgba(160,190,255,0)");
+  ctx.save(); ctx.strokeStyle = grad; ctx.lineWidth = 1.6; ctx.lineCap = "round";
+  ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(tx, ty); ctx.stroke(); ctx.restore();
 }
 
 // ページ読み込み時に初期化
 window.addEventListener("load", () => {
-  resize();         // canvas.width/height を先に確定
+  resize();         // W/height を先に確定
   loadState();
   loadUserName();
   initBgStars();
@@ -48,9 +158,15 @@ window.addEventListener("load", () => {
 
 window.addEventListener("resize", () => { resize(); initBgStars(); });
 
+/* 画面の大きさ（CSS ピクセル）。描くのはこの座標で、キャンバスの実寸は画面の細かさ（devicePixelRatio）ぶん大きくする。
+   前は実寸＝CSS ピクセルだったので、スマホや高精細の画面で星がぼやけていた。 */
+let W = window.innerWidth, H = window.innerHeight, DPR = 1;
 function resize() {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
+  W = window.innerWidth; H = window.innerHeight;
+  DPR = Math.min(2, window.devicePixelRatio || 1);
+  canvas.width = Math.round(W * DPR);
+  canvas.height = Math.round(H * DPR);
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
 }
 
 /* ==========================
@@ -160,8 +276,8 @@ function applyRealStarCounts(counts) {
     return;
   }
   const now = performance.now();
-  const w = canvas.width  || window.innerWidth;
-  const h = canvas.height || window.innerHeight;
+  const w = W  || window.innerWidth;
+  const h = H || window.innerHeight;
 
   stars.length = 0;
   links.length = 0;
@@ -171,8 +287,10 @@ function applyRealStarCounts(counts) {
   const place = function (type, look, num) {
     for (let i = 0; i < num; i++) {
       const star = createStar(Object.assign({ type: type }, look, {
-        x: 80 + Math.random() * Math.max(1, w - 160),
-        y: 80 + Math.random() * Math.max(1, h - 160)
+        /* 地平の山より上、左下の「星座記録」の札にかからない所に置く */
+        x: 40 + Math.random() * Math.max(1, w - 80),
+        /* 上は名前とシェアのボタン、下は星座記録の札と地平。スマホは札が高いので、もう少し上で止める */
+        y: 120 + Math.random() * Math.max(1, h * (w < 600 ? 0.66 : 0.72) - 120)
       }));
       n++;
       star.birthAt   = now - 2000 - n * 120;
@@ -240,8 +358,8 @@ function createStar({ type, power, baseColor, baseRadius, projectId = null, outl
   return {
     id: crypto.randomUUID(),
     type,
-    x: x ?? Math.random() * canvas.width,
-    y: y ?? Math.random() * canvas.height,
+    x: x ?? Math.random() * W,
+    y: y ?? Math.random() * H,
     vx: -0.04 - Math.random() * 0.08,
     vy: (Math.random() - 0.5) * 0.015,
     baseColor,
@@ -332,8 +450,8 @@ function handlePostAccumulation(type) {
     pendingBirth = {
       type,
       color: "#ffffff",
-      x: 80 + Math.random() * (canvas.width - 160),
-      y: 80 + Math.random() * (canvas.height - 160),
+      x: 80 + Math.random() * (W - 160),
+      y: 80 + Math.random() * (H - 160),
       startedAt: performance.now()
     };
   }
@@ -350,8 +468,8 @@ function spawnStarFromPending() {
     pendingBirth = {
       type: "post",
       color: "#ffffff",
-      x: 80 + Math.random() * (canvas.width - 160),
-      y: 80 + Math.random() * (canvas.height - 160),
+      x: 80 + Math.random() * (W - 160),
+      y: 80 + Math.random() * (H - 160),
       startedAt: performance.now()
     };
   }
@@ -362,8 +480,8 @@ function spawnStarFromPending() {
 }
 
 function spawnNFTStar() {
-  const x = 80 + Math.random() * (canvas.width - 160);
-  const y = 80 + Math.random() * (canvas.height - 160);
+  const x = 80 + Math.random() * (W - 160);
+  const y = 80 + Math.random() * (H - 160);
   pendingBirth = { x, y, color: "#4da3ff", startedAt: performance.now() };
   setTimeout(() => {
     nftBuyAction({ x, y });
@@ -385,8 +503,8 @@ function handleDiscussionStreak(projectId) {
   const streak = discussionStreaks[projectId].streak;
   if ([2, 4, 6].includes(streak)) {
     pendingBirth = {
-      x: 80 + Math.random() * (canvas.width - 160),
-      y: 80 + Math.random() * (canvas.height - 160),
+      x: 80 + Math.random() * (W - 160),
+      y: 80 + Math.random() * (H - 160),
       color: "#ffd166",
       startedAt: performance.now()
     };
@@ -412,41 +530,59 @@ function applyChangeToTarget(id) {
    Drawing Logic
 ========================== */
 function drawBgStars(time) {
-  bgStars.forEach(s => {
-    const flicker = Math.sin(time * s.twinkleSpd + s.twinkleOff) * 0.15;
-    const alpha = Math.max(0.05, Math.min(0.9, s.alpha + flicker));
+  if (skyLayer) ctx.drawImage(skyLayer, 0, 0, W, H);
+  bgStars.forEach(st => {
+    /* 大気のゆらぎで瞬く（明るい星だけ）。動きを減らす設定では止める */
+    const flicker = REDUCED_MOTION ? 0 : Math.sin(time * st.spd + st.off) * 0.22 + Math.sin(time * st.spd * 2.7 + st.off) * 0.08;
+    const alpha = Math.max(0.15, Math.min(1, st.a + flicker));
     ctx.save();
     ctx.globalAlpha = alpha;
-    // 明るい星はほんのりグロー
-    if (s.r > 0.6) {
-      const g = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, s.r * 3);
-      g.addColorStop(0, '#ffffff');
-      g.addColorStop(1, 'transparent');
-      ctx.fillStyle = g;
-      ctx.beginPath();
-      ctx.arc(s.x, s.y, s.r * 3, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.fillStyle = '#ffffff';
-    ctx.beginPath();
-    ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
-    ctx.fill();
+    const halo = ctx.createRadialGradient(st.x, st.y, 0, st.x, st.y, st.r * 4.5);
+    halo.addColorStop(0, st.tint); halo.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(st.x, st.y, st.r * 4.5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#ffffff"; ctx.beginPath(); ctx.arc(st.x, st.y, st.r * 0.8, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
   });
 }
 
 function drawMilkyWay() {
-  // 天の川：ページ中央に薄い帯
-  const w = canvas.width, h = canvas.height;
-  const grad = ctx.createLinearGradient(w * 0.1, h * 0.2, w * 0.9, h * 0.85);
-  grad.addColorStop(0, 'transparent');
-  grad.addColorStop(0.3, 'rgba(140,170,255,0.025)');
-  grad.addColorStop(0.5, 'rgba(180,200,255,0.04)');
-  grad.addColorStop(0.7, 'rgba(140,170,255,0.025)');
-  grad.addColorStop(1, 'transparent');
+  /* 天の川は動かない夜空（skyLayer）に描き込んである */
+}
+
+/* あなたの記録の星座線。同じ種類の星どうしを、近い順に細い線でつなぐ（星座のように見せる）。
+   種類ごとに1本の木（最小全域木）にするので、線が交差しすぎない。並びが変わらない限り作り直さない。 */
+let constellationCache = { sig: "", lines: [] };
+function constellationLines() {
+  const sig = stars.length + ":" + stars.map(st => st.id).join(",");
+  if (constellationCache.sig === sig) return constellationCache.lines;
+  const byType = {};
+  stars.forEach(st => { (byType[st.type] = byType[st.type] || []).push(st); });
+  const lines = [];
+  Object.keys(byType).forEach(type => {
+    const list = byType[type];
+    if (list.length < 2) return;
+    const inTree = [list[0]], rest = list.slice(1);
+    while (rest.length) {
+      let best = null, bi = -1, bd = Infinity;
+      inTree.forEach(a => rest.forEach((b, i) => { const d = Math.hypot(a.x - b.x, a.y - b.y); if (d < bd) { bd = d; best = [a, b]; bi = i; } }));
+      /* 遠すぎる星どうしはつながない（画面を横切る線は星座に見えない） */
+      if (bd < Math.min(W, H) * 0.32) lines.push({ a: best[0], b: best[1], color: best[0].baseColor });
+      inTree.push(rest.splice(bi, 1)[0]);
+    }
+  });
+  constellationCache = { sig, lines };
+  return lines;
+}
+function drawConstellations(time) {
+  const lines = constellationLines();
+  if (!lines.length) return;
   ctx.save();
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, w, h);
+  ctx.lineWidth = 0.8;
+  lines.forEach(l => {
+    ctx.globalAlpha = 0.22 + (REDUCED_MOTION ? 0 : Math.sin(time * 0.0006) * 0.04);
+    ctx.strokeStyle = l.color || "rgba(180,200,255,1)";
+    ctx.beginPath(); ctx.moveTo(l.a.x, l.a.y); ctx.lineTo(l.b.x, l.b.y); ctx.stroke();
+  });
   ctx.restore();
 }
 
@@ -504,13 +640,12 @@ function drawPendingBirth(time) {
 }
 
 function render(time = 0) {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.clearRect(0, 0, W, H);
 
-  // 1. 背景：天の川
+  // 1〜2. 夜空（空の色・天の川・星・地平）と、瞬く明るい星
   drawMilkyWay();
-
-  // 2. 背景の静的小星
   drawBgStars(time);
+  drawMeteor(time);
 
   // 3. 予兆エフェクト
   drawPendingBirth(time);
@@ -519,23 +654,18 @@ function render(time = 0) {
     if (hintEl) hintEl.classList.remove("active");
   }
 
-  // 4. 星座線
+  // 4. 星座線（これまでの線と、同じ種類の星をつなぐ星座）
   drawLinks();
+  drawConstellations(time);
 
   // 5. 動的な星（アクション記録）
   stars.forEach(star => {
-    star.x += (star.vx || -0.06);
-    star.y += (star.vy || 0);
-
-    // 画面外でワープ
-    if (star.x < -30) star.x = canvas.width + 30;
-    else if (star.x > canvas.width + 30) star.x = -30;
-    if (star.y < -30) star.y = canvas.height + 30;
-    if (star.y > canvas.height + 30) star.y = -30;
+    /* 本物の星は横に流れていかない。前は左へ流れて画面の端で反対側へ飛んでいた。
+       位置は動かさず、瞬きと光の強さで生きているように見せる。 */
 
     const age = time - star.birthAt;
     const progress = Math.min(age / star.birthDuration, 1);
-    const twinkle = Math.sin((time - star.createdAt) * 0.0008) * 0.3;
+    const twinkle = REDUCED_MOTION ? 0 : Math.sin((time - star.createdAt) * 0.0016 + star.x) * 0.3;
     star.radius = star.baseRadius * progress + twinkle * 0.5;
 
     const auraSize = Math.max(0.5, star.radius * (2.5 + star.brightness * 0.6));
@@ -581,8 +711,10 @@ function render(time = 0) {
     }
 
     // クロス（十字）スパーク（大きい星のみ）
-    if (star.baseRadius >= 5 && progress > 0.5) {
-      const sparkLen = auraSize * 2;
+    /* 光の筋（回折の十字）は、本物の夜空と同じく、いちばん明るい星（体験星・限定星）だけに付ける。
+       前は大きさ5以上の星すべてに長い十字が付いていて、星が多い人ほど画面が十字だらけになっていた。 */
+    if (star.baseRadius >= 7 && progress > 0.5) {
+      const sparkLen = auraSize * (W < 600 ? 1.2 : 1.6);
       ctx.save();
       ctx.globalAlpha = 0.4 * progress * star.brightness;
       ctx.strokeStyle = '#ffffff';

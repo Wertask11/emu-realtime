@@ -2976,6 +2976,10 @@ body.emu-workspace-open[data-emu-screen="guild"] #spDaoPage > .emu-workspace-too
   gap:18px; margin-top:18px;
 }
 .eth-profile-summary { display:grid; gap:14px; align-content:start; }
+/* 11/20 オーナー（スマホで価値プロフィールが右に切れる）：1列のとき、長いアドレス（0x…40桁）が折り返さず
+   列ごと画面より広げていた。列は画面幅を超えない（minmax(0,…)）・中の長い文字列はどこでも折り返す */
+.eth-profile > * { min-width:0; }
+.eth-profile .eth-card { overflow-wrap:anywhere; word-break:break-word; }
 
 /* ── 取引所（新デザイン）。旧マイウォレット画面を開かず、この中で完結させる ── */
 .exch-balance {
@@ -3897,7 +3901,7 @@ body.emu-requests-open .header-right .search-bar,
 body.emu-requests-open #openPostFormButton { display:none !important; }
 @media (max-width:850px) {
   #emuTodayHome { padding:16px 12px 28px; }
-  .eth-hero, .eth-profile { grid-template-columns:1fr; }
+  .eth-hero, .eth-profile { grid-template-columns:minmax(0,1fr); }
   
   .emu-request-grid { grid-template-columns:1fr; }
 }
@@ -3949,7 +3953,7 @@ body.emu-requests-open #openPostFormButton { display:none !important; }
   #emu-contact-label { display:none; }
   /* スマホでは上の見出しとタブ列を出さない。行き来は下の固定ナビ（#emuBottomNav）で行う。 */
   .eth-topbar { display:none; }
-  .eth-hero,.eth-profile { grid-template-columns:1fr; }
+  .eth-hero,.eth-profile { grid-template-columns:minmax(0,1fr); }
   .eth-card { padding:16px; border-radius:14px; }
   .eth-welcome { gap:11px; }
   .eth-welcome h2 { font-size:20px; line-height:1.45; }
@@ -22600,7 +22604,10 @@ async function openSpPassport() {
       /* ギルドは色の札で出す。文字色にすると、WORK(#141310) や WEB3(#3B382F) が
          パスポートの暗い紙に沈んで読めない。札の地色にして、上に明るい字を置く。 */
       const tag = q.guildShort
-        ? '<span style="display:inline-block;background:' + escapeHtml(q.accent || '#6E695C')
+        /* 11/20：background ではなく background-color で書く。WORK の色（#141310）だと、
+           絵本の見た目（emu-ehon.css の [style*="background:#141310"]）が札を「見出しの絵」とみなし、
+           札の中に絵が入って細長いカードになって見切れていた */
+        ? '<span style="display:inline-block;background-color:' + escapeHtml(q.accent || '#6E695C')
           + ';color:#F4F1EA;font-size:10px;font-weight:700;letter-spacing:.06em;'
           + 'padding:2px 6px;border-radius:999px;margin-right:6px;vertical-align:1px;'
           + 'box-shadow:0 0 0 1px rgba(244,241,234,.25)">' + escapeHtml(q.guildShort) + '</span>'
