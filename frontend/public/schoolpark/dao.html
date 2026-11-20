@@ -37,6 +37,22 @@
 [data-tour="wisdom-tags"] .sp-wtag:hover{background:#fbf3df}
 [data-tour="wisdom-tags"] .sp-wtag[aria-pressed="true"]{background:var(--wt)!important;color:#fffaf0!important}
 [data-tour="wisdom-tags"] .sp-wtag:focus-visible{outline:3px solid var(--wt);outline-offset:2px}
+/* ───── 知恵ライブラリ（11/20 オーナー）：検索・並べ替え・自分の知恵だけ・つながりの名前 ───── */
+.sp-wl-tools{display:flex;flex-direction:column;gap:12px}
+.sp-wl-search{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.sp-wl-input{flex:1 1 260px;min-width:0;box-sizing:border-box;min-height:44px;padding:10px 14px;border:2px solid #3a2a20;border-radius:12px;background:#fffaf0;color:#3a2a20;font:inherit;font-size:16px}
+.sp-wl-search .sp-wl-go,.sp-wl-search .sp-wl-clear{appearance:none;min-height:44px;padding:8px 18px;border-radius:999px;font:inherit;font-size:14px;font-weight:700;cursor:pointer}
+.sp-wl-search .sp-wl-go{border:2px solid #3a2a20;background:#3a2a20;color:#fffaf0}
+.sp-wl-search .sp-wl-clear{border:2px solid #b85f00;background:#fffaf0;color:#b85f00}
+.sp-wl-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.sp-wl-row .sp-wl-chip{appearance:none;margin:0;padding:8px 16px;min-height:40px;border:2px solid #3a2a20;border-radius:999px;background:#fffaf0;color:#3a2a20;font:inherit;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap}
+.sp-wl-row .sp-wl-chip[aria-pressed="true"]{background:#3a2a20!important;color:#fffaf0!important}
+.sp-wl-count{font-size:13px;color:#6E695C;margin-left:auto}
+.sp-wl-chain{display:grid;grid-template-columns:86px 1fr;gap:10px;font-size:12px;line-height:1.75;color:#6E695C}
+.sp-wl-k{color:#9A9484;white-space:nowrap}
+.sp-wl-v{min-width:0;display:-webkit-box;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
+.sp-wl-quest{appearance:none;border:0;background:none;padding:0;font:inherit;font-size:12px;color:#b85f00;text-decoration:underline;text-underline-offset:3px;cursor:pointer;text-align:left}
+@media(max-width:700px){.sp-wl-count{margin-left:0;width:100%}}
 /* ───── クエストの拠点（11/19 オーナー）：挑戦を探す・自分の挑戦・完走した実績。ギルドへの入口もここに ───── */
 .sp-qh{display:flex;flex-direction:column;gap:22px;min-width:0}
 .sp-qh-origin{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
@@ -1354,11 +1370,26 @@ if (window.top === window.self) window.location.replace('/');
                 <button type="button" class="sp-wtag" aria-pressed="{{ t.on }}" onClick="{{ t.go }}" style="--wt:{{ t.c }}">{{ t.label }}</button>
               </sc-for>
             </div>
+            <!-- 11/20 オーナー：検索・並べ替え・自分の知恵だけ。検索は「探す」か Enter で決める（1文字ごとに描き直すと入力欄からカーソルが外れるため） -->
+            <div class="sp-wl-tools">
+              <div class="sp-wl-search" role="search">
+                <input type="search" class="sp-wl-input" aria-label="知恵カードを探す" placeholder="言葉で探す（知恵・知識・クエストなど）" value="{{ wqDraft }}" onInput="{{ onWq }}" onKeyDown="{{ onWqKey }}">
+                <button type="button" class="sp-wl-go" onClick="{{ applyWq }}">探す</button>
+                <sc-if value="{{ hasWq }}"><button type="button" class="sp-wl-clear" onClick="{{ clearWq }}">検索をやめる</button></sc-if>
+              </div>
+              <div class="sp-wl-row" role="group" aria-label="並べ方">
+                <sc-for list="{{ wSorts }}" as="o" hint-placeholder-count="2">
+                  <button type="button" class="sp-wl-chip" aria-pressed="{{ o.on }}" onClick="{{ o.go }}">{{ o.label }}</button>
+                </sc-for>
+                <button type="button" class="sp-wl-chip" aria-pressed="{{ wMineOn }}" onClick="{{ toggleWMine }}">自分の知恵だけ</button>
+                <span class="sp-wl-count">{{ wCountLabel }}</span>
+              </div>
+            </div>
             <sc-if value="{{ noWisdom }}">
               <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:22px; font-size:13px; line-height:1.9; color:#6E695C">まだ知恵カードがありません。知恵は、クエストを受けてやってみた人が置きます。</div>
             </sc-if>
             <sc-if value="{{ noHit }}">
-              <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:22px; font-size:13px; line-height:1.9; color:#6E695C">この分類の知恵はまだありません。</div>
+              <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:22px; font-size:13px; line-height:1.9; color:#6E695C">{{ noHitText }}</div>
             </sc-if>
             <!-- 段組み（columns）だと、カードが中身の分だけ伸び縮みして高さがそろわない。
                  グリッドにして、同じ行のカードを同じ高さに引き伸ばす。 -->
@@ -1373,10 +1404,13 @@ if (window.top === window.self) window.location.replace('/');
                     <div style="font-family:Inter,sans-serif; font-size:11px; color:#6E695C">引用 {{ w.uses }}</div>
                   </div>
                   <!-- 長い知恵はたたんで出す（縦長で読みにくかった）。「詳細を見る」で全文と報告を出す。 -->
+                  <div class="sp-wl-k" style="font-size:11px; margin-bottom:-10px">残った一文</div>
                   <div style="font-family:'Zen Old Mincho',serif; font-size:21px; font-weight:900; line-height:1.6; text-wrap:pretty; display:-webkit-box; -webkit-box-orient:vertical; overflow:hidden; -webkit-line-clamp:{{ w.clampInsight }}" data-tour="wisdom-list wisdom-card">{{ w.insight }}</div>
                   <div style="display:flex; flex-direction:column; gap:10px; padding-top:14px; border-top:1px dashed rgba(20,19,16,.16)">
-                    <div style="display:grid; grid-template-columns:52px 1fr; gap:10px; font-size:12px; line-height:1.75; color:#6E695C"><div style="color:#9A9484">知識</div><div onClick="{{ w.openPost }}" style="text-decoration:{{ w.fromLinked }}; cursor:{{ w.fromCursor }}; min-width:0; display:-webkit-box; -webkit-box-orient:vertical; overflow:hidden; -webkit-line-clamp:{{ w.clampMeta }}">{{ w.from }}</div></div>
-                    <div style="display:grid; grid-template-columns:52px 1fr; gap:10px; font-size:12px; line-height:1.75; color:#6E695C"><div style="color:#9A9484">経験</div><div style="min-width:0; display:-webkit-box; -webkit-box-orient:vertical; overflow:hidden; -webkit-line-clamp:{{ w.clampMeta }}">{{ w.experiment }}</div></div>
+                    <!-- 11/20 オーナー：「元の知識 → 通した経験 → 残った一文」のつながりが読めるように、名前をそろえ、もとのクエストへ戻れるようにする -->
+                    <div class="sp-wl-chain"><div class="sp-wl-k">元の知識</div><div onClick="{{ w.openPost }}" class="sp-wl-v" style="text-decoration:{{ w.fromLinked }}; cursor:{{ w.fromCursor }}; color:{{ w.fromColor }}; -webkit-line-clamp:{{ w.clampMeta }}">{{ w.fromShown }}</div></div>
+                    <div class="sp-wl-chain"><div class="sp-wl-k">通した経験</div><div class="sp-wl-v" style="-webkit-line-clamp:{{ w.clampMeta }}">{{ w.experimentShown }}</div></div>
+                    <div class="sp-wl-chain" style="display:{{ w.questShow }}"><div class="sp-wl-k">クエスト</div><div class="sp-wl-v"><button type="button" class="sp-wl-quest" style="display:{{ w.questLinkShow }}" onClick="{{ w.openQuest }}">{{ w.questTitle }} →</button><span style="display:{{ w.questTextShow }}">{{ w.questTitle }}</span></div></div>
                   </div>
                   <sc-if value="{{ w.reportsOn }}">
                     <div style="display:flex; flex-direction:column; gap:8px; padding-top:12px; border-top:1px dashed rgba(20,19,16,.16)">
@@ -1396,6 +1430,9 @@ if (window.top === window.self) window.location.replace('/');
                 </div>
               </sc-for>
             </div>
+            <sc-if value="{{ wHasMore }}">
+              <button type="button" class="sp-ux-button" style="align-self:center" onClick="{{ wMore }}">{{ wMoreLabel }}</button>
+            </sc-if>
           </div>
         </sc-if>
 
@@ -1818,6 +1855,54 @@ class Component extends DCLogic {
   }
   go(screen){ const aliases={home:'experiments',park:'city',plaza:'city',members:'library',treasury:'experiments'};screen=aliases[screen]||screen;return () => { if(this.bottomRef.current) this.tabScrollLeft = this.bottomRef.current.scrollLeft; this.setState({screen}); this.toTop(); }; }
   openExp(id){ return () => { this.setState({screen:'detail', expId:id}); this.toTop(); }; }
+  /* 知恵ライブラリ（11/20 オーナー）：棚・言葉で探す・並べ方・自分の知恵だけ・もっと見る。
+     読むのは親（index.html の spDaoLoadWisdom）で、全部の枚数を渡してくる。ここでは絞って並べて、30枚ずつ出す。
+     検索の言葉は打っている途中は state に入れない（1文字ごとに描き直すと、入力欄からカーソルが外れる）。 */
+  wqDraft = '';
+  wisdomVals(s){
+    const all = s.wisdom || [];
+    const tag = s.wtag || 'すべて';
+    const q = String(s.wq || '').trim().toLowerCase();
+    const words = q ? q.split(/\s+/).filter(Boolean) : [];
+    const sort = s.wsort === 'cited' ? 'cited' : 'new';
+    const quests = s.quests || [];
+    let list = all.filter(w => (tag === 'すべて' || w.tag === tag) && (!s.wmine || w.isMine)
+      && (!words.length || words.every(x => String(w.searchText || '').indexOf(x) >= 0)));
+    list = list.slice().sort((a, b) => sort === 'cited'
+      ? ((b.uses || 0) - (a.uses || 0)) || ((b.createdAt || 0) - (a.createdAt || 0))
+      : ((b.createdAt || 0) - (a.createdAt || 0)));
+    const limit = Math.max(30, Number(s.wlimit) || 30);
+    const shown = list.slice(0, limit).map(w => {
+      const qq = w.questId ? quests.find(x => x.id === w.questId) : null;
+      const qTitle = (qq && (qq.fullTitle || qq.title)) || w.questTitle || '';
+      return { ...this.foldWisdom(w, s),
+        fromShown: w.from || '（書かれていません）', fromColor: w.from ? 'inherit' : '#9A9484',
+        experimentShown: w.experiment || '（書かれていません）',
+        questTitle: qTitle, questShow: qTitle ? 'grid' : 'none',
+        questLinkShow: qq ? 'inline' : 'none', questTextShow: qq ? 'none' : 'inline',
+        openQuest: qq ? this.openExp(qq.id) : () => {} };
+    });
+    const narrowed = tag !== 'すべて' || !!s.wmine || words.length > 0;
+    return {
+      wisdom: shown,
+      noHit: !s.noWisdom && all.length > 0 && list.length === 0,
+      noHitText: words.length ? '「' + String(s.wq || '').trim() + '」に合う知恵カードはありません。'
+        : s.wmine ? (tag === 'すべて' ? 'まだ自分の知恵カードはありません。クエストをやり終えると置けます。' : 'この分類に自分の知恵カードはありません。')
+        : 'この分類の知恵はまだありません。',
+      wqDraft: this.wqDraft, hasWq: words.length > 0,
+      onWq: (ev) => { this.wqDraft = ev.target.value; },
+      onWqKey: (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); this.setState({ wq: this.wqDraft, wlimit: 30 }); } },
+      applyWq: () => this.setState({ wq: this.wqDraft, wlimit: 30 }),
+      clearWq: () => { this.wqDraft = ''; this.setState({ wq: '', wlimit: 30 }); },
+      wSorts: [['new', '新しい順'], ['cited', '引用が多い順']].map(([id, label]) => ({ label, on: sort === id ? 'true' : 'false', go: () => this.setState({ wsort: id }) })),
+      wMineOn: s.wmine ? 'true' : 'false',
+      toggleWMine: () => this.setState({ wmine: !s.wmine, wlimit: 30 }),
+      wCountLabel: narrowed ? (all.length + '枚中 ' + list.length + '枚') : ('全部で ' + all.length + '枚'),
+      wHasMore: list.length > shown.length,
+      wMoreLabel: 'もっと見る（残り ' + (list.length - shown.length) + '枚）',
+      wMore: () => this.setState({ wlimit: limit + 30 })
+    };
+  }
   /* 知恵カードをたたむ。知恵は4行・知識と経験は3行まで、報告は「詳細を見る」で出す。
      短いカードはたたむものが無いので、ボタンも出さない。 */
   foldWisdom(w, s){
@@ -2349,7 +2434,6 @@ class Component extends DCLogic {
       entryOnly:!!s.entryOnly, toggleEntryOnly:()=>this.setQuestFilter({entryOnly:!s.entryOnly}), noShownQuests:exps.length>0 && shownExps.length===0, resetQuestFilters:()=>this.setQuestFilter({entryOnly:false,filter:'すべて',qPick:'all',series:'general'}),
       noQuests:exps.length === 0,
       noWisdom:s.noWisdom,
-      noHit:!s.noWisdom && s.wtag !== 'すべて' && !(s.wisdom || []).some(w => w.tag === s.wtag),
       head: {kicker: (heads[s.screen] || heads.experiments)[0], title: (heads[s.screen] || heads.experiments)[1]},
       headScreen: String(s.screen || ''),
       isCity:s.screen==='city', goCity:this.go('city'),
@@ -2389,7 +2473,8 @@ class Component extends DCLogic {
       isPropose:s.screen==='propose', isTasks:s.screen==='tasks',
       goTasks:this.go('tasks'), goPractice:() => { try { window.parent.showEmuPractice(); } catch (_) {} },
       goPropose:() => { try { window.parent.openSpQuestForm(this); } catch (e) { this.setState({screen:'propose'}); } }, goLibrary:this.go('library'), goExperiments:this.go('experiments'), goLogs:this.go('logs'),
-      stats: {wisdomTotal:(s.wisdom || []).length, citations:s.citations || 0},
+      /* 知恵の数は、読んだ全部の枚数（親が wisdomTotal で渡す）。前は画面に出した50枚までしか数えていなかった */
+      stats: {wisdomTotal:(typeof s.wisdomTotal === 'number' ? s.wisdomTotal : (s.wisdom || []).length), citations:s.citations || 0},
       myQuests, hasMyQuests: myQuests.length > 0,
       noHomework: openTasks.length === 0 && myQuests.length === 0,
       openTasks, doneTasks,
@@ -2450,12 +2535,12 @@ class Component extends DCLogic {
       }),
       questsDenied:!!s.questsDenied, questsNote:s.questsNote || '',
       curLogs: cur.logs || [],
-      logs, wisdom: ((s.wtag && s.wtag !== 'すべて') ? (s.wisdom || []).filter(w => w.tag === s.wtag) : (s.wisdom || [])).map(w => this.foldWisdom(w, s)),
+      logs, ...this.wisdomVals(s),
       /* 棚はギルドと揃える。色は guild-store.js の accent と同じ。 */
       /* 棚はギルドと揃える。11/19 オーナー：文字はギルドそれぞれの色（絵本の色。emu-ehon.css の --ehon-learn など）。
          選んだ札は、その色の地にクリームの字。色は CSS（.sp-wtag）で付ける */
       tags: WISDOM_TAGS.map(x => ({
-        label:x.t, c:x.c, on: s.wtag===x.t ? 'true' : 'false', go:()=>this.setState({wtag:x.t})})),
+        label:x.t, c:x.c, on: s.wtag===x.t ? 'true' : 'false', go:()=>this.setState({wtag:x.t, wlimit:30})})),
       steps: STEPS.map((st,i) => ({num:'0'+(i+1), label:st.label, hint:st.hint, go:()=>this.setState({step:i}),
         bg: s.step===i ? '#E7E2D6' : 'transparent',
         fg: s.step===i ? '#141310' : '#6E695C',

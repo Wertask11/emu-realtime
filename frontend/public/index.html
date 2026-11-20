@@ -21309,6 +21309,17 @@ function spWisdomNormalizeTag(tag) {
   return SP_WISDOM_TAGS.indexOf(t) >= 0 ? t : 'その他';
 }
 
+/* 「元の知識」にクエストの名前を書いたときだけ、ひとこと出す（置くのは止めない。11/20） */
+function _spWisdomKnowledgeHint() {
+  const kn = document.getElementById('swKnowledge');
+  const hint = document.getElementById('swKnowledgeHint');
+  if (!kn || !hint) return;
+  const v = String(kn.value || '').trim();
+  const qt = String((_spWisdomQuest && (_spWisdomQuest.fullTitle || _spWisdomQuest.title)) || '');
+  hint.hidden = !(v && (/^(一般|特殊)?\s*(quest|クエスト)\s*#?\s*\d+/i.test(v) || (qt && (v === qt || qt.indexOf(v) >= 0 && v.length >= 6))));
+}
+window._spWisdomKnowledgeHint = _spWisdomKnowledgeHint;
+
 /* 置けなかった理由を、そのまま日本語にする。
    とくに「報告があと何本か」は、書いた人がいちばん知りたいこと。 */
 function _spWisdomErrorText(data) {
@@ -21418,7 +21429,9 @@ window.spDaoLoadWisdom = async function (app) {
   try {
     const all = await _spAllWisdom();
     if (all === null) return;          /* 読めなかった。0枚とは書かない */
-    docs = all.slice(0, 50);
+    /* 11/20 オーナー：前は新しい50枚だけで、数も50で止まっていた。全部読む（引用はメンバー画面と同じ共有の読み口なので、読み直しは増えない）。
+       画面（dao.html）が30枚ずつ出す。 */
+    docs = all;
   } catch (e) {
     _spWarnDenied('知恵', e);
     return;
@@ -21459,13 +21472,25 @@ window.spDaoLoadWisdom = async function (app) {
       return r ? {kind:kind, logId:r.id, body:r.body || '', bodyParts:_spTextParts(r.body || ''),
         images:_spLogImageViews(r), imagesShow:_spLogImageViews(r).length ? 'flex' : 'none'} : null;
     }).filter(Boolean);
+    /* 11/20 オーナー：「元の知識」にクエストの名前だけが入っているカード（例「一般Quest #002 WORK」）がある。
+       記録は書き換えず、出すときだけ「知識」から外す（クエストの名前は「クエスト」の行に出る）。
+       空なら、選んだ Emu の投稿の題を出す。 */
+    const qTitle = String(w.questTitle || '');
+    const kRaw = String(w.knowledge || '').trim();
+    const kIsQuest = !!kRaw && (/^(一般|特殊)?\s*(quest|クエスト)\s*#?\s*\d+/i.test(kRaw) || (!!qTitle && kRaw === qTitle));
+    const fromText = (kRaw && !kIsQuest) ? kRaw : String(w.fromPostTitle || '');
+    const authorName = _spNameFor(w.author, w.authorName);
+    const isMine = !!(mine && String(w.author || '').toLowerCase() === mine);
     wisdom.push({
+      createdAt: Number(w.createdAt) || 0, questId: String(w.questId || ''), questTitle: qTitle, isMine: isMine,
+      /* 言葉で探すときに見る中身（小文字にしてまとめる） */
+      searchText: [w.insight, fromText, w.experiment, authorName, qTitle, spWisdomNormalizeTag(w.tag)].join(' ').toLowerCase(),
       id: w.id, tag: spWisdomNormalizeTag(w.tag),
       /* 棚の色。カードの見出しにも同じ色を出す（ギルドと揃える）。 */
       tagColor: SP_WISDOM_TAG_COLORS[spWisdomNormalizeTag(w.tag)] || '#6E695C',
       insight: w.insight || '',
-      from: w.knowledge || '', experiment: w.experiment || '',
-      author: _spNameFor(w.author, w.authorName), uses: uses,
+      from: fromText, experiment: w.experiment || '',
+      author: authorName, uses: uses,
       reports: reports, hasReports: reports.length > 0,
       /* 元になった Emu の投稿があるときだけ、押して開けるようにする。
          自由入力だけの古い知恵カードは、これまでどおり字面のまま。 */
@@ -21483,7 +21508,7 @@ window.spDaoLoadWisdom = async function (app) {
       cite: (function (id) { return function () { window.spWisdomCite(id, app); }; })(w.id)
     });
   }
-  app.setState({ wisdom: wisdom, noWisdom: wisdom.length === 0, citations: cites });
+  app.setState({ wisdom: wisdom, wisdomTotal: wisdom.length, noWisdom: wisdom.length === 0, citations: cites });
   _spLogImagesFill(app);
 };
 
@@ -30719,7 +30744,9 @@ async function sendEmuFeedback() {
       <select class="spv-in" id="swFromPost" onchange="_spWisdomPickFrom()"></select>
     </div>
     <label class="spv-label" for="swKnowledge">元の知識（どこから来たか）</label>
-    <input class="spv-in" id="swKnowledge" maxlength="200" placeholder="例：Emu／人間関係の設計 第3回">
+    <!-- 11/20 オーナー：クエストの名前を書く人がいた。クエストは自動で結び付くので、ここには「もとにした知識」を書く -->
+    <input class="spv-in" id="swKnowledge" maxlength="200" placeholder="例：Emu／人間関係の設計 第3回（クエストの名前ではなく、もとにした知識）" oninput="_spWisdomKnowledgeHint()">
+    <p class="spp-note" id="swKnowledgeHint" hidden style="margin:6px 0 0;color:#a85a33">クエストの名前は、知恵カードに自動で付きます。ここには、もとにした知識（読んだ投稿・本・聞いた話など）を書いてください。</p>
     <p class="spp-note" id="swKnowledgeNote" hidden style="margin:6px 0 0"></p>
     <label class="spv-label" for="swExperiment">通した経験</label>
     <input class="spv-in" id="swExperiment" maxlength="200" placeholder="何を、どれだけやったか">
