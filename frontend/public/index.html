@@ -4532,6 +4532,26 @@ body.emu-maintenance-open{overflow:hidden}
   });
   window.emuShowMaintenance = show;
   window.emuCheckMaintenance = check;
+  /* 11/20 オーナー「firebase 復活するまで最初からメンテナンス画面出しといて。読み込み中から読み込めないから」
+     読み込みを始める前に、いちばん最初に決める。Firebase は読まない。
+       1) /maintenance.json の until（運営が置く。時刻を過ぎたら自然に外れる）
+       2) この端末が前に「上限（無料枠）」と言われたときの再開時刻（emu.quotaUntil）
+     どちらかがまだ先なら、すぐにメンテナンス中を出す（再開の少しあとに自分で読み込み直す）。 */
+  var KEY = 'emu.quotaUntil';
+  function rememberedUntil() {
+    try { var v = Number(localStorage.getItem(KEY)); return v > Date.now() ? v : 0; } catch (e) { return 0; }
+  }
+  window.emuRememberQuota = function (until) {
+    try { if (Number(until) > Date.now()) localStorage.setItem(KEY, String(Number(until))); } catch (e) {}
+  };
+  var early = rememberedUntil();
+  if (early) show(early);
+  try {
+    fetch('/maintenance.json', { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (d) {
+      var until = d && d.until ? Date.parse(d.until) : 0;
+      if (until && until > Date.now()) show(until);
+    }).catch(function () {});
+  } catch (e) {}
 })();
 </script>
 
@@ -18881,7 +18901,15 @@ function _spQuotaResetLabel() {
 /* 11/20 オーナー：上限（無料枠）に達したら、どの画面でも「ただいまメンテナンス中です」を出す（再開の時刻つき）。
    覆いは再開の少しあとに自分で読み込み直す（emuShowMaintenance）。 */
 function _spQuotaMaintenance() {
-  try { if (typeof window.emuShowMaintenance === 'function') { window.emuShowMaintenance(_spQuotaResetAt()); return true; } } catch (e) {}
+  try {
+    if (typeof window.emuShowMaintenance === 'function') {
+      const until = _spQuotaResetAt();
+      /* 次に開いたときは、読み込みを始める前にメンテナンス中を出す（再開の時刻まで） */
+      if (typeof window.emuRememberQuota === 'function') window.emuRememberQuota(until);
+      window.emuShowMaintenance(until);
+      return true;
+    }
+  } catch (e) {}
   return false;
 }
 /* 「公開状態を確認できなかった」とき、理由が上限かどうかを1回だけ確かめる（誰でも読める年内目標の題だけ。
