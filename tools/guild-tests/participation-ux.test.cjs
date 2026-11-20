@@ -39,7 +39,13 @@ test('quest rules, reward/identity backend and original quest/guild definitions 
  const approval=src=>src.slice(src.indexOf('router.post("/:questId/:address/approve"'),src.indexOf('router.get("/:questId/:address/rewards"'));
  const qc=fs.readFileSync(path.join(root,'backend/quest-completion.js'),'utf8');
  assert.ok(approval(qc).length>1000,'the approval route was not found');
- assert.equal(approval(qc),approval(before('backend/quest-completion.js')),'quest approval (rewards and certificates) must be unchanged');
+ // 11/20 owner: a completer without a linked wallet (LINE/Google) receives the reward on the account's own name,
+ // like the login bonus. The approved change (tools/tour-tests/approved-2026-11-07.json) is undone exactly once;
+ // everything else in the approval must still be the baseline's.
+ const pairs=require('../tour-tests/approved-2026-11-07.json')['backend/quest-completion.js'].filter(([now])=>now.includes('appAddress'));
+ assert.equal(pairs.length,1,'the approved wallet-less recipient change was not found');
+ let approvalNow=approval(qc);for(const [now,was] of pairs){assert.equal(approvalNow.split(now).length,2,'approved change not found exactly once');approvalNow=approvalNow.replace(now,was);}
+ assert.equal(approvalNow,approval(before('backend/quest-completion.js')),'quest approval (rewards and certificates) must be unchanged');
  const rules=fs.readFileSync(path.join(root,'firestore.rules'),'utf8');
  for(const block of ['match /sp_quests/{questId}','match /sp_guild_members/{guildId}'])
   assert.ok(rules.includes(block),block);

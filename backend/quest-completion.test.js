@@ -408,6 +408,48 @@ test("予算が尽きたら、周回でも止まる", AT(async () => {
   assert.equal(records.get("sp_quests/quest-002/commits/" + address).approvedRounds, 1);
 }));
 
+/* 11/20 オーナー：ウォレットを連携していない人（LINE・Google）も、完走の EMUER を受け取れる。
+   ログインボーナスと同じく、アカウントの名義（ches_accounts.walletAddress）に受け取り待ちとして残る。 */
+test("ウォレット未連携でも、アカウントの名義に受け取り待ちとして渡す（ログインボーナスと同じ）", AT(async () => {
+  seed();
+  records.set("sp_identities/spid-a", { links: [{ kind: "line", subject: "line:u1" }] });
+  const out = await request();
+  assert.equal(out.status, 200);
+  const reward = records.get("emuer_v2_rewards/" + out.body.rewardId);
+  assert.equal(reward.recipient, address, "アカウントの名義（LINE の人の walletAddress）に入る");
+  assert.equal(reward.status, "pending");
+  assert.equal(reward.amount, "100");
+  assert.equal(records.get("emuer_v2_guild_quest_budgets/quest:quest-001").allocatedEmuer, 100);
+}));
+
+test("ウォレットを連携していれば、今までどおりそのウォレットに渡す", AT(async () => {
+  seed();
+  const out = await request();
+  assert.equal(records.get("emuer_v2_rewards/" + out.body.rewardId).recipient, wallet);
+}));
+
+test("ウォレットでログインした人（名義が別の CHES アドレスで受けた）も、ログインの名義に渡す", AT(async () => {
+  seed();
+  const real = "0x" + "c".repeat(40);
+  records.set("ches_accounts/user-a", { chesAddress: address, walletAddress: real, spid: "spid-a" });
+  records.set("sp_identities/spid-a", { links: [] });
+  const out = await request();
+  assert.equal(out.status, 200);
+  assert.equal(records.get("emuer_v2_rewards/" + out.body.rewardId).recipient, real,
+    "公式ショップが見る名義（ログインの walletAddress）と同じにする");
+}));
+
+test("アカウントの名義も分からなければ、今までどおり WALLET_REQUIRED（何も引き当てない）", AT(async () => {
+  seed();
+  records.set("sp_identities/spid-a", { links: [] });
+  records.set("ches_accounts/user-a", { chesAddress: address, spid: "spid-a" });
+  const out = await request();
+  assert.equal(out.status, 409);
+  assert.equal(out.body.error, "WALLET_REQUIRED");
+  assert.equal(records.get("emuer_v2_guild_quest_budgets/quest:quest-001").allocatedEmuer, 0);
+  assert.equal([...records.keys()].some(key => key.startsWith("emuer_v2_rewards/")), false);
+}));
+
 test("1周目の鍵は、今までと同じままにする", AT(async () => {
   /* すでに出してある報酬と証明書を作り直さないため。 */
   seedOther();

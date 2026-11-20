@@ -310,7 +310,17 @@ function createQuestCompletionRouter({ db, requireOwner, requireFirebaseUser, en
       const identity = await db.collection("sp_identities").doc(spid).get();
       const links = identity.exists ? (identity.data() || {}).links || [] : [];
       const linkedWallet = links.find(link => link && link.kind === "wallet" && ethers.utils.isAddress(link.subject));
-      const recipient = String(linkedWallet && linkedWallet.subject || "").toLowerCase();
+      /* 11/20 オーナー：ウォレットを連携していない人（LINE・Google など）も、完走の EMUER を受け取れるようにする。
+         ログインボーナスと同じく、その人のアカウントの名義（ches_accounts.walletAddress。
+         ログインの証から決まる req.identity.walletAddress と同じもの）に「受け取り待ち」として残す。
+         公式ショップはこの名義の受け取り待ちから払うので、すぐ使える。
+         連携したウォレットがあれば、今までどおりそちらに渡す（そちらが先）。
+         アプリの名義で受け取った分は、あとからウォレットを連携しても移らない（ログインボーナスと同じ）。 */
+      const owners = accounts.map(doc => doc.data() || {});
+      const owner = owners.find(a => String(a.walletAddress || "").toLowerCase() === address)
+        || owners.find(a => String(a.chesAddress || "").toLowerCase() === address);
+      const appAddress = String(owner && owner.walletAddress || "").toLowerCase();
+      const recipient = String(linkedWallet && linkedWallet.subject || appAddress || "").toLowerCase();
       if (!ethers.utils.isAddress(recipient))
         return res.status(409).json({ error: "WALLET_REQUIRED" });
       /* 周回ごとに別の鍵。1周目だけは今までと同じ鍵にする
