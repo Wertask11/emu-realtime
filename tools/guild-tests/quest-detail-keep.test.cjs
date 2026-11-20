@@ -216,7 +216,10 @@ test('画面が低くても、右の列の中で「受けている人」まで�
         last = side.scrollTop;
       }
       const people = [...side.querySelectorAll('div')].find(x => /^受けている人/.test(x.textContent.trim()));
-      return { bottom: people.closest('div[style*="border-radius:12px"]').getBoundingClientRect().bottom, vh: window.innerHeight };
+      /* 「受けている人」の紙のカード（角の丸い枠）。style の書き方ではなく、見た目の丸みでさがす */
+      let card = people;
+      while (card && card !== side && getComputedStyle(card).borderTopLeftRadius === '0px') card = card.parentElement;
+      return { bottom: (card || people).getBoundingClientRect().bottom, vh: window.innerHeight };
     });
     assert.ok(r.bottom <= r.vh, `受けている人が画面の外: ${r.bottom} > ${r.vh}`);
   } finally { await ctx.close(); }

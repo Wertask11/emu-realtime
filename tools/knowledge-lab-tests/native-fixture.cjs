@@ -40,6 +40,8 @@ async function main(options={}){
   let html=source.replace(/https:\/\/emu-realtime\.onrender\.com/g,base).replace(/https:\/\/firestore\.googleapis\.com/g,'http://127.0.0.1:8787').replace(/emusch-2a111/g,'demo-emu-knowledge-lab');
   html=html.replace(/https:\/\/www\.gstatic\.com\/firebasejs\/10\.8\.0/g,'/test/firebase');
   html=html.replace('https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js','/test/ethers.js').replace('https://cdn.socket.io/4.7.2/socket.io.min.js','/test/socket.js');
+  // 本番の「メンテナンス中」の印（maintenance.json）は、隔離した検証環境には持ち込まない。
+  router.get('/maintenance.json',(req,res)=>res.json({}));
   router.get('/test/ethers.js',(req,res)=>res.type('js').sendFile('/tmp/knowledge-lab-ethers.js'));
   router.get('/test/socket.js',(req,res)=>res.type('js').sendFile('/tmp/knowledge-lab-socket.js'));
   router.get('/test/firebase/:name',(req,res)=>{if(!/^firebase-(?:app|auth|firestore)\.js$/.test(req.params.name))return res.sendStatus(404);const file=path.join(ROOT,'tools/quest-tests/node_modules/firebase',req.params.name);res.type('js').send(fs.readFileSync(file,'utf8').replace(/https:\/\/www\.gstatic\.com\/firebasejs\/10\.8\.0/g,'/test/firebase'));});

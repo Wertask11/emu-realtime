@@ -46,7 +46,8 @@
     var go=keep('peek',function(){return Math.random()<.34?1:0;});if(!go)return;
     var cards=[].slice.call(document.querySelectorAll('.card,.side-card,.mix-card,.mix-feed-card,[style*="background:#FBF9F3"]')).filter(function(c){return c.offsetWidth>160;});
     if(!cards.length)return;var host=cards[keep('peekAt',function(){return Math.floor(Math.random()*6);})%cards.length];
-    if(getComputedStyle(host).position==='static')host.style.position='relative';
+    /* style を直接さわると、style の文字が書き直されて絵本の見た目（[style*=…]）が外れるので、クラスで足す */
+    if(getComputedStyle(host).position==='static')host.classList.add('ehon-peek-host');
     var b=document.createElement('span');b.className='ehon-peek';b.setAttribute('aria-hidden','true');
     b.style.backgroundImage='url('+A+'common/reizo-wave.webp)';
     b.addEventListener('click',function(e){e.stopPropagation();b.style.backgroundImage='url('+A+'common/reizo-happy.webp)';b.classList.add('found');});

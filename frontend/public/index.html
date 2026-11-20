@@ -4448,31 +4448,43 @@ html.ches-resuming #spLoadingOverlay { display: flex; }
      上限に達すると、ログインはできても何も読めず、画面が真っ白になっていた。
      サーバーが SERVICE_MAINTENANCE（/api/auth/account・/api/auth/status）を返したら、これを出す。
      上限が戻る時刻（日本時間の夕方）を過ぎたら、自動で読み込み直す。 -->
+<!-- 11/20 オーナー：メンテナンス中の画面も絵本『とびらのむこう』に（Claude Design のハンドオフ handoff-maintenance）。
+     id・role・aria と、下の出し方の JavaScript は今までどおり。字体は Kiwi Maru・Klee One（読めなければ代わりの字体で出る） -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Kiwi+Maru:wght@500&family=Klee+One:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/emu-theme/maintenance-ehon.css">
 <div id="emuMaintenance" role="alertdialog" aria-modal="true" aria-labelledby="emuMaintenanceTitle" hidden>
-  <div class="emu-mt-card">
-    <div class="emu-mt-icon" aria-hidden="true">🛠️</div>
-    <h1 id="emuMaintenanceTitle">ただいまメンテナンス中です</h1>
-    <p>アクセスが集中したため、一時的にログインや読み込みができなくなっています。</p>
-    <p class="emu-mt-when" id="emuMaintenanceWhen">本日夕方ごろに再開する予定です。</p>
-    <p class="emu-mt-note">これまでの投稿・EMUER・パスポートなどのデータは消えていません。<br>再開まで、少しだけお待ちください。</p>
-    <button type="button" id="emuMaintenanceReload">もう一度読み込む</button>
+  <div class="emu-mt-wrap">
+    <div class="emu-mt-card">
+      <div class="emu-mt-scene" aria-hidden="true">
+        <img class="emu-mt-cloud" src="/ehon/common/deco-cloud.webp" alt="" width="100" height="100">
+        <img class="emu-mt-onpu" src="/ehon/common/deco-note-pink.webp" alt="" width="90" height="90">
+        <img class="emu-mt-star1" src="/ehon/common/deco-star.webp" alt="" width="100" height="100">
+        <img class="emu-mt-star2" src="/ehon/common/deco-star.webp" alt="" width="100" height="100">
+        <div class="emu-mt-ground"></div>
+        <div class="emu-mt-path"></div>
+        <div class="emu-mt-door">
+          <span class="emu-mt-knob"></span>
+          <div class="emu-mt-sign">ただいま<b>おやすみ中</b></div>
+        </div>
+        <img class="emu-mt-reizo" src="/ehon/common/reizo-wave.webp" alt="" width="240" height="240">
+        <img class="emu-mt-flower" src="/ehon/common/deco-flower.webp" alt="" width="100" height="100">
+      </div>
+      <div class="emu-mt-body">
+        <p class="emu-mt-eyebrow">おしらせ</p>
+        <h1 id="emuMaintenanceTitle">ただいまメンテナンス中です</h1>
+        <p class="emu-mt-why">たくさんの人が来てくれて、とびらの前が混み合いました。ありがとうございます。いまは一時的に、ログインや読み込みができなくなっています。</p>
+        <div class="emu-mt-whenbox">
+          <span class="emu-mt-whenlabel" aria-hidden="true">再開の予定</span>
+          <p class="emu-mt-when" id="emuMaintenanceWhen">本日夕方ごろに再開する予定です。</p>
+        </div>
+        <p class="emu-mt-note">これまでの投稿・EMUER・パスポートなどのデータは消えていません。再開まで、少しだけお待ちください。</p>
+        <button type="button" id="emuMaintenanceReload">もう一度読み込む</button>
+      </div>
+    </div>
   </div>
 </div>
-<style>
-#emuMaintenance{position:fixed;inset:0;z-index:2147483000;display:flex;align-items:center;justify-content:center;
-  padding:16px;background:#f4f6fb;font-family:'Noto Sans JP','Hiragino Sans',sans-serif;color:#1f2937}
-#emuMaintenance[hidden]{display:none}
-#emuMaintenance .emu-mt-card{box-sizing:border-box;width:min(440px,100%);background:#fff;border-radius:20px;
-  padding:32px 24px 28px;text-align:center;box-shadow:0 10px 40px rgba(31,41,55,.10)}
-#emuMaintenance .emu-mt-icon{font-size:2.6rem;line-height:1;margin-bottom:14px}
-#emuMaintenance h1{font-size:1.25rem;margin:0 0 14px;font-weight:700}
-#emuMaintenance p{font-size:.92rem;line-height:1.8;margin:0 0 10px}
-#emuMaintenance .emu-mt-when{font-weight:700;color:#0f766e;background:#ecfdf5;border-radius:12px;padding:10px 12px;margin:14px 0}
-#emuMaintenance .emu-mt-note{font-size:.82rem;color:#6b7280}
-#emuMaintenance button{margin-top:12px;border:0;border-radius:999px;padding:12px 24px;font-size:.95rem;font-weight:700;
-  color:#fff;background:linear-gradient(135deg,#14b8a6,#6366f1);cursor:pointer}
-body.emu-maintenance-open{overflow:hidden}
-</style>
 <script>
 (function () {
   'use strict';
