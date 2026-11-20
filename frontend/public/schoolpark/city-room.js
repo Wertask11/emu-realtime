@@ -1,0 +1,511 @@
+import { createRoomBridge } from "./city-room-bridge.js";
+import {
+  sceneSvg,
+  positionFromPointer,
+  roomPng,
+  escape as e,
+} from "./city-room-renderer.js";
+const copy = (v) => JSON.parse(JSON.stringify(v));
+const errors = {
+  PASSPORT_INACTIVE:
+    "有効なPassportの連携を確認できませんでした。Passportで連携状態を確認してください。",
+  SCHOOLPARK_ACCESS_DENIED:
+    "現在のアカウントではSchoolPark Cityを利用できません。入場条件をご確認ください。",
+  ACCOUNT_NOT_FOUND:
+    "アカウントを確認できませんでした。ログインし直してから開いてください。",
+  RATE_LIMITED: "操作が続いています。少し待ってから、もう一度お試しください。",
+  ROOM_LIMIT:
+    "置ける数は壁・床・窓を含め24個までです。道具を持ち物へ戻してからお試しください。",
+
+  ROOM_REVISION_CONFLICT:
+    "別の画面で保存されています。配置は残しています。読み直す前に現在の配置をご確認ください。",
+  ROOM_REQUEST_CONFLICT:
+    "保存内容が変わりました。読み直してからお試しください。",
+  ROOM_OVERLAP: "道具が重なっています。空いている場所を選んでください。",
+  OUTSIDE_ROOM: "部屋の内側へ置いてください。",
+  ROOM_ITEM_NOT_OWNED: "持ち物を確認できませんでした。読み直してください。",
+  ROOM_QUOTA_EXHAUSTED:
+    "現在、保存先の利用上限に達しています。配置はこの画面に残しています。",
+  SESSION_CHANGED: "ログイン情報が変わりました。開き直してください。",
+  AUTH_REQUIRED: "ログインしてから開いてください。",
+  ROOM_INVENTORY_LIMIT:
+    "持ち物が多いため、安全に確認できませんでした。運営へお問い合わせください。",
+};
+const message = (err) =>
+  errors[err.message] ||
+  "通信を確認できませんでした。配置はこの画面に残しています。もう一度保存できます。";
+const btn = (a, t, disabled = false) =>
+  `<button type="button" data-room-action="${a}"${disabled ? " disabled" : ""}>${t}</button>`;
+export function roomStyles() {
+  if (document.querySelector("link[data-city-room-style]")) return;
+  const l = document.createElement("link");
+  l.rel = "stylesheet";
+  l.href = "/schoolpark/city-room.css";
+  l.dataset.cityRoomStyle = "";
+  document.head.append(l);
+}
+export function createRoomUI(
+  host,
+  {
+    parent = window.parent,
+    onShop = () => {},
+    onPassport = () => {},
+    track = () => {},
+    bridge = createRoomBridge(parent),
+  } = {},
+) {
+  roomStyles();
+  let data = null,
+    layout = null,
+    selected = null,
+    dirty = false,
+    busy = false,
+    closed = false,
+    notice = "",
+    publishing = false,
+    pending = null,
+    share = null,
+    shareUrl = null,
+    reports = null,
+    drag = null,
+    loading = false;
+  const fire = (action) => track("city_room_action", { action });
+  const unload = (ev) => {
+    if (dirty || busy) {
+      ev.preventDefault();
+      ev.returnValue = "";
+    }
+  };
+  window.addEventListener("beforeunload", unload);
+  const items = () => new Map(data.catalog.items.map((i) => [i.id, i]));
+  const used = (id) =>
+    layout.placements.filter((p) => p.itemId === id).length +
+    ["floor", "wall", "window"].filter((k) => layout[k] === id).length;
+  const chosen = () => layout?.placements.find((p) => p.id === selected);
+  const changed = () => {
+    dirty = true;
+    pending = null;
+    notice = "配置を変更しました。保存すると反映されます。";
+    clearShare();
+  };
+  function clearShare() {
+    if (shareUrl) URL.revokeObjectURL(shareUrl);
+    shareUrl = null;
+    share = null;
+  }
+  function acceptable(candidate) {
+    const occupied = new Set(),
+      counts = {};
+    for (const p of candidate.placements) {
+      const i = items().get(p.itemId),
+        turn = p.rotation % 180,
+        w = turn ? i.depth : i.width,
+        d = turn ? i.width : i.depth,
+        maxX = p.surface === "floor" ? 8 : p.surface === "left_wall" ? 6 : 8,
+        maxY = p.surface === "floor" ? 6 : 3;
+      if (p.x < 0 || p.y < 0 || p.x + w > maxX || p.y + d > maxY) {
+        notice = "部屋の内側へ置いてください。";
+        return false;
+      }
+      for (let x = p.x; x < p.x + w; x++)
+        for (let y = p.y; y < p.y + d; y++) {
+          const key = p.surface + ":" + x + ":" + y;
+          if (occupied.has(key)) {
+            notice = "道具が重なっています。空いている場所を選んでください。";
+            return false;
+          }
+          occupied.add(key);
+        }
+      counts[p.itemId] = (counts[p.itemId] || 0) + 1;
+    }
+    return true;
+  }
+  function move(dx, dy, rotate = false) {
+    const p = chosen();
+    if (!p || busy) return;
+    const next = copy(layout),
+      n = next.placements.find((q) => q.id === p.id);
+    n.x += dx;
+    n.y += dy;
+    if (rotate) n.rotation = (n.rotation + 90) % 360;
+    if (n.surface !== "floor") n.rotation = 0;
+    if (acceptable(next)) {
+      layout = next;
+      changed();
+    }
+    render();
+  }
+  function render() {
+    if (closed) return;
+    if (!data) {
+      host.innerHTML = `<section class="sp-city-room"><h2 data-city-heading tabindex="-1">自分の部屋</h2><p role="status">${e(notice || "持ち物と部屋を読み込んでいます…")}</p>${notice ? btn("reload", "もう一度読み込む") : ""}</section>`;
+      return;
+    }
+    const p = chosen(),
+      i = p && items().get(p.itemId),
+      visibility = data.room.visibility,
+      publicUrl = data.room.publicId
+        ? new URL(
+            "/schoolpark/room.html?room=" + data.room.publicId,
+            location.origin,
+          ).href
+        : "";
+    host.innerHTML = `<section class="sp-city-room" aria-label="自分の部屋"><header class="room-head"><div><p class="room-caption">SCHOOLPARK CITY · MY ROOM</p><h2 data-city-heading tabindex="-1">自分の部屋</h2></div><span class="room-badge">${visibility === "public" ? "公開中" : "自分だけ"}${data.room.hidden ? " · 公開停止中" : ""}</span></header><p>小さな部屋に、お気に入りを置いてみよう。</p><div role="status" class="room-notice">${e(notice || "はじめの机・椅子・冷蔵庫くんは無料です。最初は自分だけに見えます。")}</div><div class="room-layout"><div><section class="room-panel"><div class="room-scene">${sceneSvg(layout, data.catalog, { selected })}</div><p class="room-caption">道具を選んでドラッグ、または下のボタンで移動できます。床は8×6マスです。</p><h3>${e(i?.name || "道具を選んでください")}</h3><div class="room-nudge">${btn("x-", "← 横へ", !p || busy)}${btn("x+", "横へ →", !p || busy)}${btn("y-", "↖ 奥へ", !p || busy)}${btn("y+", "手前へ ↘", !p || busy)}</div><div class="room-controls">${btn("rotate", "向きを変える", !p || p.surface !== "floor" || busy)}${btn("store", "持ち物へ戻す", !p || busy)}${p?.surface !== "floor" && p ? btn("wall-side", "反対の壁へ", busy) : ""}</div></section><div class="room-save"><strong>${busy ? "保存しています…" : dirty ? "まだ保存していません" : "保存済みの配置"}</strong>${btn("save", pending ? "同じ内容で保存を再試行" : "配置を保存する", busy || (!dirty && !pending))}${btn("reload", "保存済みを読み直す", busy)}</div><div class="room-tools">${btn("publication", visibility === "public" ? "非公開にする" : "公開の確認へ", busy)}${btn("share", "画像とURLをシェア", busy || dirty || visibility !== "public" || data.room.hidden)}</div><p class="room-caption">公開すると、URLを知る人が部屋だけを見られます。Passport ID・チェックイン・星・会員情報は表示しません。公開停止中の部屋は共有できません。</p>
+ ${publishing ? `<section class="room-publish"><h3>部屋を公開しますか？</h3><p>配置を保存し、部屋の画像と公開ページを共有できるようにします。誰でも見られるため、個人情報が分かる配置は避けてください。</p><label><input type="checkbox" data-room-confirm>この部屋を公開することを確認しました</label>${btn("publish", "確認して公開する", busy)}${btn("cancel-publish", "やめる")}</section>` : ""}
+ ${share ? `<section class="room-share"><h3>この画像とURLだけを共有します</h3><img src="${shareUrl}" alt="共有する部屋の画像"><input readonly aria-label="公開URL" value="${e(publicUrl)}"><div class="room-controls">${btn("send-share", "共有する")}<a class="room-button" href="${shareUrl}" download="schoolpark-room.png">画像を保存</a>${btn("copy-url", "URLをコピー")}<a class="room-button" href="https://twitter.com/intent/tweet?text=${encodeURIComponent("SchoolPark Cityの自分の部屋")}&url=${encodeURIComponent(publicUrl)}" target="_blank" rel="noopener noreferrer">Xの投稿画面へ</a>${btn("close-share", "閉じる")}</div><p class="room-caption">自動投稿はしません。Xでは保存した画像を、ご自身で添付してください。</p></section>` : ""}</div>
+ <aside class="room-panel"><h3>持ち物</h3><p class="room-caption">配置中の数 / 持っている数</p>${data.inventory
+   .filter((v) => v.count > 0)
+   .map((v) => {
+     const it = items().get(v.itemId);
+     return `<button type="button" class="room-item" data-room-add="${e(v.itemId)}"${busy || (used(v.itemId) >= v.count && !layout.placements.some((p) => p.itemId === v.itemId)) ? " disabled" : ""}><span>${e(it.name)}</span><small>${used(v.itemId)} / ${v.count}</small></button>`;
+   })
+   .join(
+     "",
+   )}<p class="room-caption">置き場が見つからないときは、ほかの道具を持ち物へ戻せます。置ける数は壁・床・窓を含め24個まで。</p>${[
+   "floor",
+   "wall",
+   "window",
+ ]
+   .filter((k) => layout[k])
+   .map((k) =>
+     btn(
+       "clear-" + k,
+       { floor: "床", wall: "壁紙", window: "窓の景色" }[k] + "を元に戻す",
+       busy,
+     ),
+   )
+   .join(
+     "",
+   )}<hr><p class="room-caption">公式ショップの部屋用アイテムは、引渡し済みになったものだけ持ち物に入ります。現在の販売・価格・条件はショップでご確認ください。</p>${btn("shop", "公式ショップへ", busy)}${btn("passport", "Passport・星空へ", busy)}${data.isOwner ? btn("reports", "公開部屋の通報を確認", busy) : ""}</aside></div>
+ ${reports ? `<section class="room-panel room-admin"><h3>公開部屋の通報（最大20件）</h3>${reports.reports.length ? reports.reports.map((v) => `<div class="room-admin-row"><p>${e({ spam: "迷惑行為", harass: "嫌がらせ", personal: "個人情報", other: "その他" }[v.reason])}</p><a href="/schoolpark/room.html?room=${e(v.publicId)}" target="_blank" rel="noopener">公開ページを確認</a><div>${[true, false].map((h) => `<button type="button" data-room-moderate="${e(v.publicId)}" data-room-hidden="${h}">${h ? "公開を停止" : "確認して公開を再開"}</button>`).join("")}</div></div>`).join("") : "<p>未確認の通報はありません。</p>"}${reports.nextBefore ? btn("next-reports", "次の通報へ") : ""}${btn("close-reports", "閉じる")}</section>` : ""}</section>`;
+    bindDrag();
+  }
+  async function load() {
+    if (busy || loading) return;
+    if (
+      dirty &&
+      !window.confirm("保存していない配置を破棄して読み直しますか？")
+    )
+      return;
+    loading = true;
+    try {
+      const d = await bridge.me();
+      if (closed) return;
+      data = d;
+      layout = copy(d.room.layout);
+      dirty = false;
+      pending = null;
+      selected = null;
+      publishing = false;
+      clearShare();
+      notice = d.room.unavailableInstances.length
+        ? "持ち物の状態が変わったため、使えない道具は表示から外しています。保存済みの原本は変更していません。"
+        : "保存済みの部屋を開きました。";
+      fire("open");
+    } catch (err) {
+      if (!closed) notice = message(err);
+    } finally {
+      loading = false;
+    }
+    render();
+  }
+  async function save(visibility = data.room.visibility) {
+    if (busy) return;
+    busy = true;
+    publishing = false;
+    if (!pending)
+      pending = {
+        requestId: crypto.randomUUID().replaceAll("-", ""),
+        expectedRevision: data.room.revision,
+        visibility,
+        layout: copy(layout),
+      };
+    render();
+    try {
+      const d = await bridge.save(pending);
+      if (closed) return;
+      data = d;
+      layout = copy(d.room.layout);
+      dirty = false;
+      pending = null;
+      notice =
+        "保存しました。" +
+        (d.room.visibility === "public"
+          ? " 部屋を公開しています。"
+          : " 自分だけに見えます。");
+      fire("save");
+    } catch (err) {
+      if (!closed) notice = message(err);
+    } finally {
+      busy = false;
+      if (!closed) render();
+    }
+  }
+  function add(id) {
+    if (busy) return;
+    if (used(id) >= (data.inventory.find((v) => v.itemId === id)?.count || 0)) {
+      const p = layout.placements.find((p) => p.itemId === id);
+      if (p) {
+        selected = p.id;
+        notice =
+          "配置中の道具を選びました。下のボタンで動かす・回す・しまうことができます。";
+        render();
+        host.querySelector(".room-nudge")?.scrollIntoView({ block: "center" });
+      }
+      return;
+    }
+    const it = items().get(id),
+      slot = { flooring: "floor", wallpaper: "wall", window: "window" }[
+        it.surface
+      ];
+    if (slot) {
+      layout[slot] = id;
+      changed();
+      render();
+      return;
+    }
+    if (
+      layout.placements.length +
+        ["floor", "wall", "window"].filter((k) => layout[k]).length >=
+      24
+    ) {
+      notice = "置ける数は24個までです。持ち物へ戻してから置いてください。";
+      render();
+      return;
+    }
+    const surface = it.surface === "wall" ? "left_wall" : "floor",
+      n = {
+        id: crypto.randomUUID().replaceAll("-", ""),
+        itemId: id,
+        surface,
+        x: 0,
+        y: 0,
+        rotation: 0,
+      };
+    let found = false;
+    for (let y = 0; y < (surface === "floor" ? 6 : 3) && !found; y++)
+      for (let x = 0; x < (surface === "floor" ? 8 : 6) && !found; x++) {
+        n.x = x;
+        n.y = y;
+        const test = copy(layout);
+        test.placements.push({ ...n });
+        if (acceptable(test)) {
+          layout = test;
+          found = true;
+        }
+      }
+    if (found) {
+      selected = n.id;
+      changed();
+    } else
+      notice = "置ける場所がありません。道具を動かすか持ち物へ戻してください。";
+    render();
+  }
+  function bindDrag() {
+    for (const g of host.querySelectorAll("[data-room-instance]")) {
+      g.addEventListener("pointerdown", (ev) => {
+        if (busy || ev.button !== 0) return;
+        const p = layout.placements.find(
+          (p) => p.id === g.dataset.roomInstance,
+        );
+        if (!p) return;
+        selected = p.id;
+        const svg = g.ownerSVGElement,
+          start = positionFromPointer(svg, ev);
+        drag = { id: p.id, start, x: p.x, y: p.y, moved: false };
+        g.setPointerCapture(ev.pointerId);
+        ev.preventDefault();
+      });
+      g.addEventListener("pointermove", (ev) => {
+        if (!drag || drag.id !== g.dataset.roomInstance) return;
+        const pos = positionFromPointer(g.ownerSVGElement, ev),
+          dx = pos.x - drag.start.x,
+          dy = pos.y - drag.start.y;
+        drag.dx = dx;
+        drag.dy = dy;
+        drag.moved = dx !== 0 || dy !== 0;
+        g.style.opacity = drag.moved ? ".65" : "1";
+        g.setAttribute(
+          "transform",
+          `translate(${(dx - dy) * 32} ${(dx + dy) * 16})`,
+        );
+      });
+      g.addEventListener("pointerup", () => {
+        if (!drag) return;
+        const d = drag;
+        drag = null;
+        if (d.moved) move(d.dx, d.dy);
+        else render();
+      });
+      g.addEventListener("pointercancel", () => {
+        drag = null;
+        render();
+      });
+      g.addEventListener("keydown", (ev) => {
+        selected = g.dataset.roomInstance;
+        if (ev.key === "Enter" || ev.key === " ") {
+          ev.preventDefault();
+          render();
+        } else if (
+          ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(ev.key)
+        ) {
+          ev.preventDefault();
+          move(
+            ev.key === "ArrowLeft" ? -1 : ev.key === "ArrowRight" ? 1 : 0,
+            ev.key === "ArrowUp" ? -1 : ev.key === "ArrowDown" ? 1 : 0,
+          );
+        }
+      });
+    }
+  }
+  async function click(ev) {
+    const addButton = ev.target.closest("[data-room-add]");
+    if (addButton) {
+      add(addButton.dataset.roomAdd);
+      return;
+    }
+    const moderate = ev.target.closest("[data-room-moderate]");
+    if (moderate) {
+      if (!window.confirm("この部屋の公開状態を変更しますか？")) return;
+      try {
+        await bridge.moderate({
+          publicId: moderate.dataset.roomModerate,
+          hidden: moderate.dataset.roomHidden === "true",
+        });
+        reports = await bridge.reports();
+        notice = "公開状態を記録しました。";
+      } catch (err) {
+        notice = message(err);
+      }
+      render();
+      return;
+    }
+    const t = ev.target.closest("[data-room-action]");
+    if (!t || t.disabled) return;
+    const a = t.dataset.roomAction;
+    if (a === "reload") return load();
+    if (!data || busy) return;
+    if (a === "save") return save();
+    if (a === "x-") return move(-1, 0);
+    if (a === "x+") return move(1, 0);
+    if (a === "y-") return move(0, -1);
+    if (a === "y+") return move(0, 1);
+    if (a === "rotate") return move(0, 0, true);
+    if (a === "wall-side") {
+      const next = copy(layout),
+        p = next.placements.find((p) => p.id === selected);
+      if (p) {
+        p.surface = p.surface === "left_wall" ? "right_wall" : "left_wall";
+        if (acceptable(next)) {
+          layout = next;
+          changed();
+        }
+      }
+    }
+    if (a === "store") {
+      layout.placements = layout.placements.filter((p) => p.id !== selected);
+      selected = null;
+      changed();
+    }
+    if (a.startsWith("clear-")) {
+      layout[a.slice(6)] = null;
+      changed();
+    }
+    if (a === "publication") {
+      if (data.room.visibility === "public") {
+        if (
+          window.confirm("非公開にしますか？今の公開URLは使えなくなります。")
+        ) {
+          pending = null;
+          return save("private");
+        }
+      } else publishing = true;
+    }
+    if (a === "publish") {
+      if (!host.querySelector("[data-room-confirm]")?.checked) {
+        notice = "公開の確認にチェックしてください。";
+      } else {
+        pending = null;
+        return save("public");
+      }
+    }
+    if (a === "cancel-publish") publishing = false;
+    if (a === "shop") {
+      onShop();
+      return;
+    }
+    if (a === "passport") {
+      if (canLeave()) onPassport();
+      return;
+    }
+    try {
+      if (a === "share") {
+        clearShare();
+        share = await roomPng(layout, data.catalog);
+        if (closed) return;
+        shareUrl = URL.createObjectURL(share);
+        fire("share_preview");
+      }
+      if (a === "close-share") clearShare();
+      if (a === "copy-url") {
+        await navigator.clipboard.writeText(
+          new URL(
+            "/schoolpark/room.html?room=" + data.room.publicId,
+            location.origin,
+          ).href,
+        );
+        notice = "公開URLをコピーしました。";
+      }
+      if (a === "send-share") {
+        const file = new File([share], "schoolpark-room.png", {
+            type: "image/png",
+          }),
+          url = new URL(
+            "/schoolpark/room.html?room=" + data.room.publicId,
+            location.origin,
+          ).href;
+        if (navigator.canShare?.({ files: [file] }) && navigator.share) {
+          await navigator.share({ files: [file], text: url });
+          notice = "共有画面を閉じました。";
+        } else
+          notice = "この端末では画像を保存し、URLと一緒に共有してください。";
+      }
+      if (a === "reports") reports = await bridge.reports();
+      if (a === "next-reports" && reports?.nextBefore)
+        reports = await bridge.reports(reports.nextBefore);
+      if (a === "close-reports") reports = null;
+    } catch (err) {
+      notice =
+        err.name === "AbortError" ? "共有をキャンセルしました。" : message(err);
+    }
+    render();
+    if (a === "share")
+      host.querySelector(".room-share")?.scrollIntoView({ block: "start" });
+    if (a === "publication" && publishing)
+      host.querySelector(".room-publish")?.scrollIntoView({ block: "start" });
+  }
+  function canLeave() {
+    return (
+      !busy &&
+      (!dirty || window.confirm("保存していない配置があります。移動しますか？"))
+    );
+  }
+  host.addEventListener("click", click);
+  render();
+  load();
+  return {
+    canLeave,
+    destroy() {
+      closed = true;
+      bridge.destroy();
+      clearShare();
+      data = null;
+      layout = null;
+      pending = null;
+      reports = null;
+      host.removeEventListener("click", click);
+      window.removeEventListener("beforeunload", unload);
+      host.replaceChildren();
+    },
+  };
+}
