@@ -138,11 +138,13 @@ with sync_playwright() as p:
     g.evaluate('showEmuRequests()');g.locator('.emu-practice-entry').wait_for()
     assert '見るだけでは参加になりません' in g.locator('.emu-practice-entry').inner_text()
     g.locator('.emu-practice-entry button').click();g.locator('#spLoadingOverlay').wait_for(state='hidden',timeout=30000)
-    g.wait_for_function('document.getElementById("spDaoFrame").contentWindow.app?.tourRenderedScreen==="experiments"');g.evaluate('showEmuFeed()')
-    k=g.frame_locator('#emuKnowledgeFrame');k.get_by_role('button',name='新着',exact=True).first.click()
+    g.wait_for_function('document.getElementById("spDaoFrame").contentWindow.app?.tourRenderedScreen==="experiments"')
+    # 761px 以上の「知識を読む」では右上の冷蔵庫くんは出さない（左の列にある）。右上に出ている拠点の画面で開く
     g.locator('#emuHeaderReizo').click();g.locator('#rk-tour .rk-panel:not([hidden])').wait_for()
     assert g.locator('#rk-tour .rk-panel:not([hidden])').count()==1
     g.locator('#rk-tour .rk-close').click()
+    g.evaluate('showEmuFeed()')
+    k=g.frame_locator('#emuKnowledgeFrame');k.get_by_role('button',name='新着',exact=True).first.click()
     progress=g.evaluate('JSON.parse(localStorage.getItem("rk-tour-v1"))')
     assert all(progress['tours'][key]['state']=='done' for key in TOURS)
     assert not errors,errors
