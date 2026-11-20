@@ -18846,6 +18846,7 @@ function _spRestBlock(res, body) {
   st.reason = kind;
   st.message = text.slice(0, 400);
   if (kind === 'quota' && typeof window._spQuotaShow === 'function') window._spQuotaShow(true);
+  if (kind === 'quota' && typeof window._spQuotaMaintenance === 'function') window._spQuotaMaintenance();
   if (kind === 'quota') {
     console.warn('今日のぶんの読み取り枠を使い切ったと言われました。'
       + Math.round(wait / 60000) + '分ほど待ってから1回だけ試します。'
@@ -18862,14 +18863,40 @@ function _spRestBlock(res, body) {
 function _spQuotaBlocked() {
   try { const st = _spRestState(); return !!(st && st.reason === 'quota' && Date.now() < st.blockedUntil); } catch (e) { return false; }
 }
-function _spQuotaResetLabel() {
+/* 無料枠が戻る時刻（アメリカ西海岸の0時）。ミリ秒で返す。分からなければ 0 */
+function _spQuotaResetAt() {
   try {
     const now = new Date();
     const la = new Date(now.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
     const next = new Date(la.getTime()); next.setHours(24, 0, 0, 0);
-    const at = new Date(now.getTime() + (next.getTime() - la.getTime()));
-    return at.getHours() + '時' + (at.getMinutes() ? at.getMinutes() + '分' : '') + 'ごろ';
-  } catch (e) { return '夕方'; }
+    return now.getTime() + (next.getTime() - la.getTime());
+  } catch (e) { return 0; }
+}
+function _spQuotaResetLabel() {
+  const ms = _spQuotaResetAt();
+  if (!ms) return '夕方';
+  const at = new Date(ms);
+  return at.getHours() + '時' + (at.getMinutes() ? at.getMinutes() + '分' : '') + 'ごろ';
+}
+/* 11/20 オーナー：上限（無料枠）に達したら、どの画面でも「ただいまメンテナンス中です」を出す（再開の時刻つき）。
+   覆いは再開の少しあとに自分で読み込み直す（emuShowMaintenance）。 */
+function _spQuotaMaintenance() {
+  try { if (typeof window.emuShowMaintenance === 'function') { window.emuShowMaintenance(_spQuotaResetAt()); return true; } } catch (e) {}
+  return false;
+}
+/* 「公開状態を確認できなかった」とき、理由が上限かどうかを1回だけ確かめる（誰でも読める年内目標の題だけ。
+   上限のあいだは断られるだけで、読み取りには数えられない） */
+async function _spQuotaProbe() {
+  try {
+    if (_spQuotaBlocked()) return true;
+    const opt = (window.db && window.db.app && window.db.app.options) || {};
+    if (!opt.projectId || !opt.apiKey) return false;
+    const r = await fetch('https://firestore.googleapis.com/v1/projects/' + opt.projectId
+      + '/databases/(default)/documents/sp_docs/year-goals?mask.fieldPaths=title&key=' + encodeURIComponent(opt.apiKey), { cache: 'no-store' });
+    if (r.status !== 429) return false;
+    const text = await r.text().catch(function () { return ''; });
+    return /RESOURCE_EXHAUSTED|[Qq]uota exceeded/.test(text);
+  } catch (e) { return false; }
 }
 function _spQuotaNote() {
   return '今日のぶんの読み込みの上限（無料枠）に達したため、いまは読み込めません。' + _spQuotaResetLabel() + 'に戻ります。書いたものや記録は消えていません。';
@@ -18884,6 +18911,8 @@ window._spQuotaBlocked = _spQuotaBlocked;
 window._spQuotaNote = _spQuotaNote;
 window._spQuotaShow = _spQuotaShow;
 window._spQuotaResetLabel = _spQuotaResetLabel;
+window._spQuotaMaintenance = _spQuotaMaintenance;
+window._spQuotaProbe = _spQuotaProbe;
 
 async function _spRestGetOnce(path, needAuth, post) {
   let opt = {};
@@ -23997,14 +24026,19 @@ async function spShowSchoolParkUnavailable(access) {
   if (unavailable && typeof window.emuCheckMaintenance === 'function') {
     try { if (await window.emuCheckMaintenance()) return; } catch (e) {}
   }
+  /* 11/20：サーバーは上限に気づいていなくても、こちらの読み込みが上限で断られているなら「メンテナンス中」にする */
+  if (unavailable && typeof window._spQuotaProbe === 'function') {
+    try { if (await window._spQuotaProbe() && window._spQuotaMaintenance()) return; } catch (e) {}
+  }
   const screen = document.getElementById('spAccessScreen');
   const lead = document.getElementById('spAccessLead');
   const title = document.getElementById('spAccessTitle');
   const eyebrow = document.getElementById('spAccessEyebrow');
   if (!screen) return;
   /* 確認できなかっただけのときに「公式パス保有者向け先行公開」と見出しを出さない（いまは一般公開中）。 */
-  if (title) title.textContent = unavailable ? 'SchoolParkを開けませんでした' : '公式パス保有者向け先行公開';
-  if (eyebrow) eyebrow.textContent = unavailable ? 'SCHOOLPARK' : 'SCHOOLPARK EARLY ACCESS';
+  /* 11/20 オーナー：名前は「Emu for SchoolPark」 */
+  if (title) title.textContent = unavailable ? 'Emu for SchoolParkを開けませんでした' : '公式パス保有者向け先行公開';
+  if (eyebrow) eyebrow.textContent = unavailable ? 'EMU FOR SCHOOLPARK' : 'SCHOOLPARK EARLY ACCESS';
   if (lead) lead.textContent = unavailable
     ? '公開状態を確認できませんでした。通信を確認して、もう一度お試しください。'
     : 'SchoolParkは現在、公式パス保有者向けに先行公開中です。';
@@ -30686,7 +30720,7 @@ async function sendEmuFeedback() {
     <div id="spAccessEyebrow" style="font-size:11px;letter-spacing:.18em;color:#b85f00;margin-bottom:10px">SCHOOLPARK EARLY ACCESS</div>
     <h2 id="spAccessTitle" style="font-size:clamp(21px,5vw,28px);margin:0 0 16px">公式パス保有者向け先行公開</h2>
     <p id="spAccessLead" style="font-size:14px;line-height:1.9;margin:0 0 10px">SchoolParkは現在、公式パス保有者向けに先行公開中です。</p>
-    <p style="font-size:14px;line-height:1.9;margin:0 0 24px">SchoolParkは一般公開中です。<br>LINE・Google・メールから無料で見学できます。</p>
+    <p style="font-size:14px;line-height:1.9;margin:0 0 24px">Emu for SchoolParkは一般公開中です。<br>LINE・Google・メールから無料で見学できます。</p>
     <button type="button" onclick="spCloseAccessScreen()" style="border:0;border-radius:8px;background:#f08300;color:#fff;padding:12px 22px;font:700 14px inherit;cursor:pointer">Emuを利用する</button>
   </div>
 </div>

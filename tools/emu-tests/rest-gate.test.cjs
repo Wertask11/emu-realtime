@@ -138,6 +138,19 @@ test('その日の読み取り枠を使い切ったと言われたら、10分待
   assert.equal(st.reason, 'quota', 'どちらの429なのかを覚えていない');
 });
 
+test('枠切れ（上限）のときは、どの画面でも「メンテナンス中」を出す。混んでいるだけのときは出さない（11/20）', () => {
+  const body = '{"error":{"code":429,"message":"Quota exceeded","status":"RESOURCE_EXHAUSTED"}}';
+  const { ctx } = gate();
+  const shown = [];
+  vm.runInContext('window.emuShowMaintenance = function (at) { window.__shown.push(at); }; window.__shown = [];', ctx);
+  ctx._spRestBlock({ headers: { get: () => null } }, '{"error":{"code":429,"status":"UNAVAILABLE"}}');
+  assert.equal(vm.runInContext('window.__shown.length', ctx), 0, '混んでいるだけなのにメンテナンス中にした');
+  ctx._spRestBlock({ headers: { get: () => null } }, body);
+  const at = vm.runInContext('window.__shown[0]', ctx);
+  assert.ok(at > Date.now() && at <= Date.now() + 25 * 3600000, '再開の時刻が渡っていない');
+  shown.push(at);
+});
+
 test('枠切れのときは、返ってきた文面を控えに残す', () => {
   const { ctx } = gate();
   ctx._spRestBlock({ headers: { get: () => null } },
