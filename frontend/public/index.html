@@ -22397,19 +22397,30 @@ async function openSpPassport() {
 
   body.innerHTML =
     _sppNoticeHtml()
+    /* しおり（11/20 絵本版）。押すとそのページへ。いまのページは aria-selected（_sppSyncNav が合わせる） */
+    + '<div class="spp-tabs" role="tablist" aria-label="パスポートのページ">'
+    + SPP_PAGES.map(function (d, i) {
+        return '<button type="button" class="spp-tab" role="tab" id="sppTab' + (i + 1) + '" aria-controls="' + d.id + '"'
+          + ' aria-selected="' + (i === 0) + '" data-spp-go="' + (i + 1) + '" onclick="spPassportGoPage(' + (i + 1) + ')">'
+          + '<b>' + (i + 1) + '</b><span>' + d.label + '</span></button>';
+      }).join('')
+    + '</div>'
     + '<div class="spp-pages">'
 
     /* ───── 1ページ目：私は誰なのか ─────
        パソコンでは左右2枚の見開きになる（.spp-spread）。
        左の紙に「あなたの番号と届け出」、右の紙に「本人であること」。
        スマホでは上下に続く1枚として、今までどおり縦に読める。 */
-    + '<div class="spp-page" id="sppPage1">'
+    + '<div class="spp-page" id="sppPage1" role="tabpanel" aria-labelledby="sppTab1">'
     + '<p class="spp-page-label">PAGE 1 · IDENTITY</p>'
     + '<div class="spp-page-title">私は誰なのか</div>'
     + '<div class="spp-spread">'
     + '<div class="spp-leaf spp-leaf-a">'
     + '<p class="spp-leaf-head">Holder</p>'
     + '<div class="spp-num" data-tour="pp-id">'
+    /* 証明写真（11/20 絵本版）。プロフィールの写真があればそれ、無ければ冷蔵庫くん（下で入れる） */
+    + '<div class="spp-photo" id="sppPhoto" aria-hidden="true"></div>'
+    + '<div class="spp-num-main">'
     /* SchoolPark ID。ログイン方法が変わっても、この番号は変わらない。
        ウォレットアドレスや Firebase の uid は、ここには出さない。 */
     + '<div class="spp-num-label">SCHOOLPARK ID</div>'
@@ -22417,6 +22428,8 @@ async function openSpPassport() {
     + (p.spid
         ? '<button type="button" class="spp-copy" id="sppCopyBtn" onclick="sppCopyAddress(\'' + escapeHtml(p.spid) + '\')">番号をコピー</button>'
         : '<p class="spp-note" style="margin:6px 0 0">いま確認できませんでした。通信が戻ると出ます。</p>')
+    + '</div>'
+    + '<div class="spp-stamp" aria-hidden="true">School<br>Park<br>入門</div>'
     + '</div>'
     + _sppRow('名前', p.name)
     + _sppRow('入った日', _sppDate(p.createdAt))
@@ -22464,7 +22477,7 @@ async function openSpPassport() {
     + '</div>'
 
     /* ───── 2ページ目：私は何をしてきたのか ───── */
-    + '<div class="spp-page" id="sppPage2" hidden>'
+    + '<div class="spp-page" id="sppPage2" role="tabpanel" aria-labelledby="sppTab2" hidden>'
     + '<p class="spp-page-label">PAGE 2 · JOURNEY</p>'
     + '<div class="spp-page-title">私は何をしてきたのか</div>'
     + '<div class="spp-spread">'
@@ -22473,15 +22486,15 @@ async function openSpPassport() {
     + '<p class="spp-note" style="margin:0 0 12px">SchoolPark で歩いてきた記録は、星空に残っています。'
     + 'ひとつの行動が、ひとつの星になります。</p>'
     + '<button type="button" class="spp-star" data-tour="pp-starfield" onclick="spPassportOpenStar()">'
-    + '🌌　星空を見る<small>Quest・探究・制作・貢献・実績。これまでの記録を見る</small></button>'
+    + '星空を見る<small>Quest・探究・制作・貢献・実績。これまでの記録を見る</small></button>'
     /* 何色の星が何を指すのか。星空の中で使っている呼び名とそろえてある。 */
     + '<ul class="spp-legend">'
-    + '<li><b>⚪ 知識星</b>誰かの役に立った</li>'
-    + '<li><b>🔵 体験星</b>いま持っている体験チケット</li>'
-    + '<li><b>🟡 議論星</b>議論の結論を残した日数</li>'
-    + '<li><b>🔴 学び星</b>受け取った学び</li>'
-    + '<li><b>🟣 改善星</b>誰かの知識を良くした</li>'
-    + '<li><b>⭐ クエスト星</b>完走したクエスト（ギルドの色）</li>'
+    + '<li><i class="spp-dot" style="background:#fffaf0"></i><b>知識星</b>誰かの役に立った</li>'
+    + '<li><i class="spp-dot" style="background:#3b58a3"></i><b>体験星</b>いま持っている体験チケット</li>'
+    + '<li><i class="spp-dot" style="background:#f2c35a"></i><b>議論星</b>議論の結論を残した日数</li>'
+    + '<li><i class="spp-dot" style="background:#c4532a"></i><b>学び星</b>受け取った学び</li>'
+    + '<li><i class="spp-dot" style="background:#7a5aa6"></i><b>改善星</b>誰かの知識を良くした</li>'
+    + '<li><img src="/ehon/common/deco-star.webp" alt="" width="18" height="18"><b>クエスト星</b>完走したクエスト（ギルドの色）</li>'
     + '</ul>'
     + '</div>'
     + '<div class="spp-seam"></div>'
@@ -22496,7 +22509,7 @@ async function openSpPassport() {
     /* ───── 3ページ目：私はどんな価値を渡してきたのか ─────
        価値プロフィールは Emu にあるものが正本。ここでは持たず、入口だけ置く。
        同じ数を2か所で数えると、必ずどこかで食い違う。 */
-    + '<div class="spp-page" id="sppPage3" hidden>'
+    + '<div class="spp-page" id="sppPage3" role="tabpanel" aria-labelledby="sppTab3" hidden>'
     + '<p class="spp-page-label">PAGE 3 · VALUE PROFILE</p>'
     + '<div class="spp-page-title">私はどんな価値を渡してきたのか</div>'
     + '<div class="spp-spread">'
@@ -22506,7 +22519,8 @@ async function openSpPassport() {
     + '「その行動が、誰にどう届いたか」です。<br>'
     + '投稿の数ではなく、誰かの役に立ち、改善され、学びになった分だけが残ります。</p>'
     + '<button type="button" class="spp-star spp-value" data-tour="pp-value" onclick="spPassportOpenValue()">'
-    + '💠　価値プロフィールを見る<small>Emu に積み上がっている、あなたが渡した価値を見る</small></button>'
+    + '価値プロフィールを見る<small>Emu に積み上がっている、あなたが渡した価値を見る</small>'
+    + '<img class="spp-door-reizo" src="/ehon/common/reizo-happy.webp" alt="" width="118" height="118"></button>'
     + '</div>'
     + '<div class="spp-seam"></div>'
     + '<div class="spp-leaf spp-leaf-b">'
@@ -22534,6 +22548,18 @@ async function openSpPassport() {
     + '</div>';
 
   if (card) card.classList.remove('spp-lite');   /* ここから本の大きさ */
+  /* 証明写真。プロフィールで選んだ写真（user_profiles の avatar。emuProfileOf が形を確かめた data URL だけ）。
+     無い・読めないときは、枠の地の冷蔵庫くんのまま。img の src に入れるだけで、HTML としては混ぜない。 */
+  try {
+    const photo = document.getElementById('sppPhoto');
+    if (photo && typeof emuProfileOf === 'function') Promise.resolve(emuProfileOf(p.addr)).then(function (v) {
+      const a = v && v.avatar;
+      if (!a || !photo.isConnected || photo.querySelector('img')) return;
+      const img = document.createElement('img');
+      img.alt = ''; img.src = a;
+      photo.appendChild(img);
+    }).catch(function () {});
+  } catch (e) {}
   _sppSyncNav(1);
   _sppBindSwipe();
   _sppUpdateMore();
@@ -22635,17 +22661,18 @@ async function openSpPassport() {
          書かないと「1回しか認められていない」ように見える。 */
       const rounds = Math.max(1, Number(q.rounds) || 0);
       const roundTag = (!q.isFounder && rounds > 1)
-        ? '<span style="display:inline-block;border:1px solid rgba(244,241,234,.35);'
-          + 'color:rgba(244,241,234,.75);font-size:10px;font-weight:700;'
+        ? '<span style="display:inline-block;border:1px solid currentColor;'
+          + 'opacity:.75;font-size:10px;font-weight:700;'
           + 'padding:1px 6px;border-radius:999px;margin-left:6px;vertical-align:1px">'
           + rounds + '周</span>'
         : '';
+      /* 11/20 絵本版：完走した1本ずつを紙のカードにする（spp-done-row）。中身は今までどおり */
       doneHtml += _sppRowHtml('　' + escapeHtml(_sppDate(q.at)),
-        tag + escapeHtml(name) + roundTag + certificate);
+        tag + escapeHtml(name) + roundTag + certificate).replace('<div class="spp-row">', '<div class="spp-row spp-done-row">');
       /* 11件目からは畳んでおく（「残りを見る」で開く）。 */
       if (doneIndex >= DONE_FIRST)
         doneHtml = doneHtml.slice(0, rowStart)
-          + doneHtml.slice(rowStart).replace('<div class="spp-row">', '<div class="spp-row" data-done-more hidden>');
+          + doneHtml.slice(rowStart).replace('<div class="spp-row spp-done-row">', '<div class="spp-row spp-done-row" data-done-more hidden>');
     });
     if (done.length > DONE_FIRST)
       doneHtml += _sppRowHtml('', '<button type="button" class="spp-star-claim" data-done-more-open>'
@@ -23114,6 +23141,10 @@ function _sppSyncNav(n) {
     const i = dots.querySelectorAll('i');
     for (let k = 0; k < i.length; k++) i[k].classList.toggle('on', k === (n - 1));
   }
+  /* しおり（11/20 絵本版） */
+  document.querySelectorAll('#spPassport .spp-tab').forEach(function (t) {
+    t.setAttribute('aria-selected', String(Number(t.getAttribute('data-spp-go')) === n));
+  });
 }
 
 /* いまのページから、前後へ1枚めくる。ボタンはこちらを呼ぶ。 */
@@ -23150,7 +23181,8 @@ function spPassportGoPage(n) {
     SPP_TURN_CLASSES.forEach(function (c) { e.classList.remove(c); });
   });
 
-  if (_sppReducedMotion()) { swap(); _sppUpdateMore(); return; }
+  /* 絵本版（11/20）は、めくりの動きを出さない。動くのは冷蔵庫くんのぞきだけ */
+  if (_sppReducedMotion() || document.querySelector('#spPassport.spp-ehon')) { swap(); _sppUpdateMore(); return; }
 
   _sppTurning = true;
   /* 前半：いまの紙が離れていく */
@@ -31442,15 +31474,19 @@ async function sendEmuFeedback() {
 </div>
 
 <!-- SchoolPark パスポート -->
-<div id="spPassport" role="dialog" aria-modal="true" aria-labelledby="sppTitle">
+<!-- 11/20 オーナー：パスポートを絵本『とびらのむこう』の見た目に（Claude Design のハンドオフ handoff-passport）。
+     見た目は /emu-theme/passport-ehon.css（.spp-ehon の中だけ）。id・data 属性・JS・中身は今までどおり -->
+<div id="spPassport" class="spp-ehon" role="dialog" aria-modal="true" aria-labelledby="sppTitle">
   <div class="spp-veil" onclick="closeSpPassport()"></div>
   <div class="spp-card">
     <div class="spp-head">
+      <div class="spp-crest" aria-hidden="true">SP</div>
       <div class="spp-head-text">
         <div class="spp-kicker">SCHOOLPARK PASSPORT</div>
         <div class="spp-title" id="sppTitle">SchoolPark パスポート</div>
       </div>
-      <button type="button" class="spp-close" onclick="closeSpPassport()" aria-label="閉じる">✕</button>
+      <button type="button" class="spp-close" onclick="closeSpPassport()" aria-label="閉じる">×</button>
+      <img class="spp-peek" src="/ehon/common/reizo-wave.webp" alt="" width="240" height="240" loading="lazy">
     </div>
     <div id="sppBody"></div>
   </div>
@@ -31554,6 +31590,8 @@ window.emuInAppRefresh = async function (source) {
 <script src="/emu-pull-refresh.js" defer></script>
 <!-- 11/19 オーナー：画面全体を絵本『とびらのむこう』の見た目にそろえる（Claude Design。いまの CSS のあとに読む） -->
 <link rel="stylesheet" href="/emu-theme/emu-ehon.css">
+<!-- 11/20 オーナー：パスポートを絵本の見た目に（handoff-passport）。emu-ehon.css のあとに読む -->
+<link rel="stylesheet" href="/emu-theme/passport-ehon.css">
 <script src="/emu-theme/emu-ehon.js" defer></script>
 <script>
 /* 知識を読む（knowledge.html・iframe）にも同じ絵本の見た目を付ける。

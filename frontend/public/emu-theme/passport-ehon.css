@@ -1,0 +1,276 @@
+/* SchoolPark パスポートを絵本『とびらのむこう』の見た目にする（11/20 オーナー：Claude Design のハンドオフ handoff-passport）。
+
+   いまのパスポートの id・data 属性・JS・中身はそのまま。見た目だけをこの紙の本に当てはめる。
+   #spPassport.spp-ehon の中だけに効く（議題・クエスト・知恵・報告・スマホメニューも .spp-card を
+   使っているが、そちらは変えない）。index.html の emu-ehon.css のあとに読む。
+   動くのは「冷蔵庫くんのぞき」だけ。動きを減らす設定のときは止める。 */
+#spPassport.spp-ehon {
+  --pp-cream:#f8eed6; --pp-card:#fffaf0; --pp-ink:#3a2a20; --pp-ink2:#5a4636; --pp-muted:#6f5a46; --pp-line:#d9c7a4;
+  --pp-shu:#c4532a; --pp-shu-dark:#a8441f; --pp-shu-soft:#fbe7d2; --pp-gunjo:#3b58a3; --pp-karashi:#f2c35a;
+  --pp-navy:#2b3566; --pp-learn:#3f7d4a; --pp-work:#3b58a3;
+  --pp-r:14px 18px 13px 17px / 17px 13px 18px 14px;
+  --pp-r-sm:10px 13px 9px 12px / 12px 9px 13px 10px;
+  --pp-r-pill:999px 960px 999px 940px / 960px 999px 940px 999px;
+  --pp-head:'Kiwi Maru',"Hiragino Maru Gothic ProN","Yu Gothic",sans-serif;
+  --pp-body:'Klee One',"Hiragino Mincho ProN","Yu Mincho",serif;
+  --pp-mono:ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+}
+#spPassport.spp-ehon *, #spPassport.spp-ehon *::before, #spPassport.spp-ehon *::after { box-sizing:border-box; }
+#spPassport.spp-ehon .spp-veil { background:rgba(58,42,32,.42); }
+#spPassport.spp-ehon button { font-family:inherit; }
+#spPassport.spp-ehon button:focus-visible,
+#spPassport.spp-ehon a:focus-visible { outline:3px solid var(--pp-gunjo); outline-offset:2px; }
+
+/* 本（モーダル）。冷蔵庫くんが上の縁からのぞくので、外枠は切らない。スクロールはページの中だけ */
+#spPassport.spp-ehon .spp-card {
+  width:min(1000px, calc(100vw - 64px));
+  height:min(760px, 86vh, calc(100vh - 44px));
+  max-height:calc(100vh - 44px);
+  padding:0; overflow:visible; display:flex; flex-direction:column;
+  background:var(--pp-card) url("/ehon/common/paper-grain.webp") center/cover;
+  color:var(--pp-ink); font-family:var(--pp-body);
+  border:2.5px solid var(--pp-ink); border-radius:var(--pp-r);
+  box-shadow:6px 8px 0 rgba(58,42,32,.22);
+}
+#spPassport.spp-ehon .spp-card.spp-lite { height:auto; display:block; overflow:visible; }
+
+/* 表紙の帯（紺の表紙＋WEB3 の夜空の絵） */
+#spPassport.spp-ehon .spp-head {
+  position:relative; flex:0 0 auto; display:flex; align-items:center; gap:16px; margin:0;
+  padding:18px 24px 16px; color:#fbf3df;
+  background:linear-gradient(90deg,var(--pp-navy) 0 42%,rgba(43,53,102,0) 70%) 0 0/100% 100% no-repeat,
+             var(--pp-navy) url("/ehon/headers/header-guild-web3.webp") right 30% / auto 240% no-repeat;
+  border-bottom:2.5px solid var(--pp-ink); border-radius:12px 16px 0 0 / 15px 11px 0 0;
+}
+#spPassport.spp-ehon .spp-crest {
+  flex:none; width:46px; height:46px; border-radius:50%; border:2px solid var(--pp-karashi);
+  display:grid; place-items:center; font:500 15px/1 var(--pp-head); color:var(--pp-karashi); letter-spacing:.02em;
+}
+#spPassport.spp-ehon .spp-kicker { font:600 .72rem/1.2 var(--pp-body); letter-spacing:.24em; color:var(--pp-karashi); margin:0; }
+#spPassport.spp-ehon .spp-title { margin-top:4px; font:500 1.4rem/1.3 var(--pp-head); letter-spacing:.04em; color:#fbf3df; }
+#spPassport.spp-ehon .spp-close {
+  position:relative; z-index:2; margin-left:auto; flex:none; width:44px; height:44px; display:grid; place-items:center;
+  background:var(--pp-card); color:var(--pp-ink); border:2px solid var(--pp-ink); border-radius:var(--pp-r-sm);
+  font:500 22px/1 var(--pp-head); box-shadow:2px 3px 0 rgba(0,0,0,.25); cursor:pointer;
+}
+#spPassport.spp-ehon .spp-close:hover { background:var(--pp-shu-soft); }
+#spPassport.spp-ehon .spp-peek {
+  position:absolute; right:76px; top:-58px; width:88px; height:88px; pointer-events:none;
+  transform:rotate(6deg); animation:sppPeek 7s ease-in-out infinite;
+}
+@keyframes sppPeek { 0%,82%,100% { transform:translateY(0) rotate(6deg); } 88%,94% { transform:translateY(-8px) rotate(3deg); } }
+
+/* 中身（しおり・ページ・めくり） */
+#spPassport.spp-ehon #sppBody { flex:1 1 auto; min-height:0; display:flex; flex-direction:column; }
+#spPassport.spp-ehon #sppBody > .spp-note,
+#spPassport.spp-ehon #sppBody > .spp-cta { margin:16px 24px; }
+#spPassport.spp-ehon .spp-card.spp-lite #sppBody > .spp-cta { width:calc(100% - 48px); margin-bottom:22px; }
+
+/* しおり */
+#spPassport.spp-ehon .spp-tabs { flex:0 0 auto; display:flex; gap:6px; padding:14px 24px 0; border-bottom:2px solid var(--pp-ink); }
+#spPassport.spp-ehon .spp-tab {
+  display:flex; align-items:center; gap:8px; min-height:44px; padding:8px 14px 8px 10px; margin-bottom:-2px;
+  background:var(--pp-cream); border:2px solid var(--pp-ink); border-radius:10px 12px 0 0 / 12px 10px 0 0;
+  font:500 .9rem/1.3 var(--pp-head); color:var(--pp-ink2); text-align:left; cursor:pointer;
+}
+#spPassport.spp-ehon .spp-tab b {
+  flex:none; width:24px; height:24px; display:grid; place-items:center; border-radius:50%;
+  border:1.5px solid currentColor; font:500 .78rem/1 var(--pp-head);
+}
+#spPassport.spp-ehon .spp-tab[aria-selected="true"] { position:relative; background:var(--pp-card); color:var(--pp-ink); border-bottom-color:var(--pp-card); }
+#spPassport.spp-ehon .spp-tab[aria-selected="true"] b { background:var(--pp-shu); border-color:var(--pp-shu); color:#fff; }
+
+/* ページ。めくりの動きは出さない（動くのは のぞき だけ） */
+#spPassport.spp-ehon .spp-pages { flex:1 1 auto; min-height:0; perspective:none; }
+#spPassport.spp-ehon .spp-page { padding:24px 24px 8px; animation:none !important; transform:none !important; opacity:1 !important; }
+#spPassport.spp-ehon .spp-page::before,
+#spPassport.spp-ehon .spp-page .spp-leaf::after { display:none !important; }
+#spPassport.spp-ehon .spp-page .spp-leaf,
+#spPassport.spp-ehon .spp-page .spp-seam { animation:none !important; transform:none !important; opacity:1 !important; }
+#spPassport.spp-ehon .spp-pages::after { background:linear-gradient(180deg, rgba(255,250,240,0), var(--pp-card)); }
+#spPassport.spp-ehon .spp-page-label { display:inline-block; margin:0 12px 0 0; font:600 .74rem/1 var(--pp-body); letter-spacing:.2em; color:var(--pp-shu-dark); }
+#spPassport.spp-ehon .spp-page > .spp-page-title { display:inline-block; margin:0 0 18px; font:500 1.35rem/1.4 var(--pp-head); letter-spacing:.04em; color:var(--pp-ink); }
+#spPassport.spp-ehon .spp-leaf .spp-page-title { font:500 1.06rem/1.4 var(--pp-head) !important; margin:0 0 10px !important; color:var(--pp-ink); }
+
+/* 見開き。左右の紙のあいだは点線 */
+#spPassport.spp-ehon .spp-spread { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:0; align-items:start; }
+#spPassport.spp-ehon .spp-seam { display:none; }
+#spPassport.spp-ehon .spp-leaf { min-width:0; margin:0; padding:0 24px 16px 0; }
+#spPassport.spp-ehon .spp-leaf-b { padding:0 0 16px 24px; border-left:2px dashed var(--pp-line); align-self:stretch; }
+#spPassport.spp-ehon .spp-leaf-head { font:600 .72rem/1 var(--pp-body); letter-spacing:.2em; color:var(--pp-muted); margin:0 0 12px; }
+#spPassport.spp-ehon .spp-note { font-size:.82rem; line-height:1.75; color:var(--pp-muted); }
+#spPassport.spp-ehon .spp-page .spp-note { margin-top:10px; line-height:1.75; }
+
+/* ID カード（証明写真・番号・はんこ） */
+#spPassport.spp-ehon .spp-num {
+  position:relative; display:grid; grid-template-columns:76px minmax(0,1fr); gap:16px; align-items:center;
+  padding:16px 18px; margin-bottom:12px; background:var(--pp-cream);
+  border:2px solid var(--pp-ink); border-radius:var(--pp-r-sm); box-shadow:3px 4px 0 rgba(58,42,32,.16);
+}
+#spPassport.spp-ehon .spp-photo {
+  width:76px; height:92px; border:2px solid var(--pp-ink); border-radius:6px 8px 6px 7px; overflow:hidden;
+  background:#fff url("/ehon/common/reizo-happy.webp") center 60%/130% no-repeat;
+}
+#spPassport.spp-ehon .spp-photo img { width:100%; height:100%; object-fit:cover; display:block; background:#fff; }
+#spPassport.spp-ehon .spp-num-main { min-width:0; padding-right:70px; }
+#spPassport.spp-ehon .spp-num-label { font:600 .72rem/1 var(--pp-body); letter-spacing:.2em; color:var(--pp-muted); margin:0; }
+#spPassport.spp-ehon .spp-num-val { margin:6px 0 10px; font:600 1rem/1.3 var(--pp-mono); letter-spacing:.04em; color:var(--pp-ink); word-break:break-all; }
+#spPassport.spp-ehon .spp-stamp {
+  position:absolute; right:14px; top:12px; width:62px; height:62px; border-radius:50%;
+  border:2px solid var(--pp-shu); color:var(--pp-shu); display:grid; place-items:center; text-align:center;
+  font:500 .66rem/1.25 var(--pp-head); transform:rotate(-12deg); opacity:.85; pointer-events:none;
+}
+
+/* 表（名前・入った日 など） */
+#spPassport.spp-ehon .spp-row {
+  display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:48px;
+  padding:8px 2px; border-bottom:1.5px dashed var(--pp-line);
+}
+#spPassport.spp-ehon .spp-row:last-of-type { border-bottom:1.5px dashed var(--pp-line); }
+#spPassport.spp-ehon .spp-row dt { font-size:.88rem; line-height:1.5; color:var(--pp-muted); flex:none; margin:0; }
+#spPassport.spp-ehon .spp-row dd { font:500 .95rem/1.5 var(--pp-head); color:var(--pp-ink); text-align:right; min-width:0; word-break:break-word; margin:0; }
+#spPassport.spp-ehon .spp-row[hidden] { display:none; }
+
+/* 札・ボタン */
+#spPassport.spp-ehon .spp-state {
+  display:inline-flex; align-items:center; padding:2px 10px; min-height:24px; border:1.5px solid var(--pp-ink);
+  border-radius:var(--pp-r-pill); background:var(--pp-card); font:500 .76rem/1.3 var(--pp-head); color:var(--pp-ink); white-space:nowrap;
+}
+#spPassport.spp-ehon .spp-state.ok { background:#e6f0d6; border-color:var(--pp-learn); color:#2f6139; }
+#spPassport.spp-ehon .spp-state.off { background:var(--pp-cream); border-color:var(--pp-line); color:var(--pp-muted); }
+#spPassport.spp-ehon .spp-state.soon { background:#fff3cf; border-color:#c99a2e; color:#7a5a12; }
+#spPassport.spp-ehon .spp-copy,
+#spPassport.spp-ehon .spp-star-claim,
+#spPassport.spp-ehon .spp-nav-btn {
+  display:inline-flex; align-items:center; justify-content:center; gap:6px; margin:0;
+  background:var(--pp-card); border:2px solid var(--pp-ink); border-radius:var(--pp-r-pill);
+  box-shadow:2px 3px 0 rgba(58,42,32,.18); color:var(--pp-ink); font:500 .8rem/1.3 var(--pp-head);
+  min-height:36px; padding:4px 12px; cursor:pointer; text-decoration:none; transition:transform .12s, box-shadow .12s;
+}
+#spPassport.spp-ehon .spp-copy:hover,
+#spPassport.spp-ehon .spp-star-claim:hover,
+#spPassport.spp-ehon .spp-nav-btn:hover { background:var(--pp-shu-soft); }
+#spPassport.spp-ehon .spp-copy:active,
+#spPassport.spp-ehon .spp-star-claim:active,
+#spPassport.spp-ehon .spp-nav-btn:active { transform:translate(1px,2px); box-shadow:1px 1px 0 rgba(58,42,32,.18); }
+#spPassport.spp-ehon .spp-star-claim:disabled { opacity:.6; cursor:default; transform:none; }
+#spPassport.spp-ehon .spp-cta {
+  background:var(--pp-shu); color:#fff; border:2px solid var(--pp-ink); border-radius:var(--pp-r-pill);
+  box-shadow:2px 3px 0 rgba(58,42,32,.18); font:500 .95rem/1.3 var(--pp-head); min-height:44px;
+}
+#spPassport.spp-ehon .spp-cta:hover { background:var(--pp-shu-dark); }
+
+/* 大きい入口（星空・価値プロフィール） */
+#spPassport.spp-ehon .spp-star {
+  position:relative; display:flex; flex-direction:column; justify-content:flex-end; gap:4px;
+  width:100%; min-height:132px; padding:16px 18px; margin:0 0 18px; overflow:hidden; text-align:left;
+  border:2.5px solid var(--pp-ink); border-radius:var(--pp-r); box-shadow:4px 5px 0 rgba(58,42,32,.2);
+  font:500 1.15rem/1.3 var(--pp-head); cursor:pointer; transition:transform .15s, box-shadow .15s;
+  color:#fbf3df; text-shadow:0 1px 0 #2b3566;
+  background:linear-gradient(90deg,var(--pp-navy) 0 46%,rgba(43,53,102,0) 78%) 0 0/100% 100% no-repeat,
+             var(--pp-navy) url("/ehon/headers/header-guild-web3.webp") 108% 34% / auto 150% no-repeat;
+}
+#spPassport.spp-ehon .spp-star:hover { transform:translate(-1px,-2px); box-shadow:5px 7px 0 rgba(58,42,32,.22); border-color:var(--pp-ink); }
+/* emu-ehon.css が small 全体の色を !important で決めているので、ここも !important で上書きする */
+#spPassport.spp-ehon .spp-star small { display:block; max-width:62%; margin:0; font:400 .84rem/1.6 var(--pp-body); color:#e9dfc6 !important; }
+#spPassport.spp-ehon .spp-star.spp-value { background:var(--pp-shu-soft); color:var(--pp-ink); text-shadow:none; border-color:var(--pp-ink); }
+#spPassport.spp-ehon .spp-star.spp-value small { max-width:calc(100% - 110px); color:var(--pp-ink2) !important; }
+#spPassport.spp-ehon .spp-door-reizo { position:absolute; right:6px; bottom:-6px; width:118px; height:118px; pointer-events:none; }
+
+/* 星の凡例 */
+#spPassport.spp-ehon .spp-legend { margin:0; }
+#spPassport.spp-ehon .spp-legend li {
+  display:flex; align-items:center; gap:10px; min-height:42px; padding:6px 2px;
+  border-bottom:1.5px dashed var(--pp-line); font-size:.88rem; line-height:1.5; color:var(--pp-ink2);
+}
+#spPassport.spp-ehon .spp-legend li:last-child { border-bottom:1.5px dashed var(--pp-line); }
+#spPassport.spp-ehon .spp-legend b { font:500 .9rem/1 var(--pp-head); color:var(--pp-ink); min-width:5.2em; }
+#spPassport.spp-ehon .spp-dot { flex:none; width:14px; height:14px; border-radius:50%; border:1.5px solid var(--pp-ink); }
+#spPassport.spp-ehon .spp-legend img { flex:none; width:18px; height:18px; margin:-2px; }
+
+/* 記録：完走したクエストは紙のカードにする */
+#spPassport.spp-ehon .spp-row.spp-done-row {
+  display:block; min-height:0; padding:14px 14px 12px; margin-top:12px; background:var(--pp-card);
+  border:2px solid var(--pp-ink); border-radius:var(--pp-r-sm); box-shadow:3px 4px 0 rgba(58,42,32,.14);
+}
+#spPassport.spp-ehon .spp-row.spp-done-row[hidden] { display:none; }
+#spPassport.spp-ehon .spp-done-row dt { font-size:.8rem; color:var(--pp-muted); margin-bottom:6px; }
+#spPassport.spp-ehon .spp-done-row dd { text-align:left; font:500 .98rem/1.55 var(--pp-head); }
+#spPassport.spp-ehon .spp-done-row dd > span:first-child { margin-right:8px !important; }
+#spPassport.spp-ehon .spp-done-row .spp-star-claim { margin-top:10px; }
+#spPassport.spp-ehon .spp-minted { color:#2f6139 !important; font:400 .8rem/1.6 var(--pp-body); }
+
+/* 道すじ（飛び石の番号） */
+#spPassport.spp-ehon .spp-chain { position:relative; margin:4px 0 14px; }
+#spPassport.spp-ehon .spp-chain::before { content:""; position:absolute; left:17px; top:22px; bottom:22px; border-left:2.5px dashed var(--pp-line); }
+#spPassport.spp-ehon .spp-chain li,
+#spPassport.spp-ehon .spp-page .spp-chain li {
+  position:relative; padding:10px 0 10px 50px; min-height:56px; border:0;
+  font-size:.86rem; line-height:1.6; color:var(--pp-muted);
+}
+#spPassport.spp-ehon .spp-chain li::before,
+#spPassport.spp-ehon .spp-page .spp-chain li::before {
+  top:10px; left:0; width:36px; height:36px; line-height:32px; border-radius:50%; text-align:center;
+  background:var(--pp-card); border:2px solid var(--pp-ink); color:var(--pp-ink); box-sizing:border-box;
+  font:500 .95rem/32px var(--pp-head); box-shadow:2px 2px 0 rgba(58,42,32,.15);
+}
+#spPassport.spp-ehon .spp-chain li:nth-child(1)::before { background:#fff3cf; }
+#spPassport.spp-ehon .spp-chain li:nth-child(2)::before { background:#e6f0d6; }
+#spPassport.spp-ehon .spp-chain li:nth-child(3)::before { background:#e3e9f6; }
+#spPassport.spp-ehon .spp-chain li:nth-child(4)::before { background:var(--pp-shu-soft); }
+#spPassport.spp-ehon .spp-chain b { display:block; margin-top:6px; font:500 1rem/1.4 var(--pp-head); color:var(--pp-ink); }
+
+/* 下の帯（前へ・点・次へ）。端のページでは、ボタンの場所だけ残して隠す */
+#spPassport.spp-ehon .spp-nav {
+  flex:0 0 auto; display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:12px;
+  margin:0; padding:14px 24px 18px; border-top:2px solid var(--pp-ink);
+}
+#spPassport.spp-ehon .spp-dots { order:0; display:flex; gap:8px; }
+#spPassport.spp-ehon .spp-dots i { width:10px; height:10px; border-radius:50%; border:1.5px solid var(--pp-ink); background:transparent; }
+#spPassport.spp-ehon .spp-dots i.on { background:var(--pp-shu); border-color:var(--pp-shu); }
+#spPassport.spp-ehon .spp-nav-btn { min-height:44px; padding:8px 16px; font-size:.86rem; max-width:100%; flex:none; }
+#spPassport.spp-ehon .spp-nav-btn#sppPrev { justify-self:start; }
+#spPassport.spp-ehon .spp-nav-btn#sppNext { justify-self:end; background:var(--pp-shu); color:#fff; }
+#spPassport.spp-ehon .spp-nav-btn#sppNext:hover { background:var(--pp-shu-dark); }
+#spPassport.spp-ehon .spp-nav-btn[hidden] { display:inline-flex !important; visibility:hidden; pointer-events:none; }
+
+/* スマホ（760px 以下）：全画面のシート。しおりは番号だけ＋いまのページ名 */
+@media (max-width:760px) {
+  #spPassport.spp-ehon { align-items:stretch; }
+  #spPassport.spp-ehon .spp-card {
+    width:100vw; height:100vh; height:100dvh; max-height:none; border-radius:0; border-width:0; box-shadow:none; overflow:hidden;
+  }
+  #spPassport.spp-ehon .spp-card.spp-lite { height:auto; align-self:center; width:calc(100vw - 28px); border-width:2.5px; border-radius:var(--pp-r); }
+  #spPassport.spp-ehon .spp-head {
+    border-radius:0; padding:14px 16px; padding-top:calc(14px + env(safe-area-inset-top));
+    background-size:100% 100%, auto 150%; background-position:0 0, left 150px top 30%;
+  }
+  #spPassport.spp-ehon .spp-crest { width:38px; height:38px; font-size:13px; }
+  #spPassport.spp-ehon .spp-title { font-size:1.18rem; }
+  #spPassport.spp-ehon .spp-peek,
+  #spPassport.spp-ehon .spp-stamp { display:none; }
+  #spPassport.spp-ehon .spp-num { grid-template-columns:64px minmax(0,1fr); gap:12px; padding:14px; }
+  #spPassport.spp-ehon .spp-num-main { padding-right:0; }
+  #spPassport.spp-ehon .spp-photo { width:64px; height:78px; }
+  #spPassport.spp-ehon .spp-num-val { font-size:.9rem; }
+  #spPassport.spp-ehon .spp-tabs { padding:10px 12px 0; gap:4px; }
+  #spPassport.spp-ehon .spp-tab { flex:1; flex-direction:column; justify-content:center; gap:3px; padding:6px 4px; font-size:.78rem; text-align:center; }
+  #spPassport.spp-ehon .spp-tab span { display:none; }
+  #spPassport.spp-ehon .spp-tab[aria-selected="true"] span { display:inline; }
+  #spPassport.spp-ehon .spp-tab:not([aria-selected="true"]) { flex:0 0 52px; }
+  #spPassport.spp-ehon .spp-page { padding:18px 16px 4px; }
+  #spPassport.spp-ehon .spp-spread { grid-template-columns:minmax(0,1fr); }
+  #spPassport.spp-ehon .spp-leaf,
+  #spPassport.spp-ehon .spp-leaf-b { padding:0 0 18px; border-left:0; }
+  #spPassport.spp-ehon .spp-leaf-b { padding-top:18px; border-top:2px dashed var(--pp-line); }
+  #spPassport.spp-ehon .spp-nav {
+    grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); gap:8px;
+    padding:10px 12px calc(12px + env(safe-area-inset-bottom));
+  }
+  #spPassport.spp-ehon .spp-nav-btn { display:block; max-width:100%; font-size:.78rem; padding:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  #spPassport.spp-ehon .spp-star small { max-width:70%; }
+}
+
+@media (prefers-reduced-motion:reduce) {
+  #spPassport.spp-ehon *, #spPassport.spp-ehon *::before, #spPassport.spp-ehon *::after { animation:none !important; transition:none !important; }
+}
