@@ -30,9 +30,9 @@ const discussionStreaks = {};
 let bgStars = [];      // 瞬く明るい星（天の北極からの距離と角度で持つ）
 let gradLayer = null, starLayer = null, horizonLayer = null, starLayerSize = 0;
 const REDUCED_MOTION = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
-/* ひと回り 8 分。本物（約24時間）だと止まって見えるので、動いているのが分かる速さにする。
-   前の「左へ流れる」動き（毎秒 4〜7px ほど）と、記録の星のあたりで同じくらいの速さ */
-const SKY_TURN_MS = 8 * 60 * 1000;
+/* ひと回り 60 分。本物（約24時間）だと止まって見えるが、8分では速すぎて気持ち悪かった（11/20 オーナー）。
+   じっと見ていると、ようやく動いているのが分かるくらい（記録の星のあたりで毎秒 0.5px ほど） */
+const SKY_TURN_MS = 60 * 60 * 1000;
 const POLE = { x: 0, y: 0 };
 let skyAngle = 0;
 function skyAngleAt(time) { return REDUCED_MOTION ? 0 : -(time / SKY_TURN_MS) * Math.PI * 2; }
