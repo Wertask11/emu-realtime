@@ -1,4 +1,6 @@
 "use strict";
+/* 書き手アイコン（端末の写真を 256px の JPEG に縮めたもの）の上限。256px の JPEG はふつう 20〜40KB */
+const WRITER_ICON_MAX = 90000;
 const m = require("./model");
 const seed = require("./taxonomy.json");
 const membershipPolicy = require("../membership-policy");
@@ -1098,8 +1100,16 @@ function createService({
     if (published && input.consent !== true)
       m.fail("PUBLIC_PROFILE_CONSENT_REQUIRED");
     const icon = input.icon || "";
-    if (icon && !/^https:\/\//.test(icon)) m.fail("INVALID_ICON");
-    m.text(icon, 500);
+    /* 11/20 オーナー：アイコンはリンクではなく、端末の写真から選ぶ（プロフィール写真と同じ）。
+       画面で 256px の JPEG に縮めた data URL を受け取る。前からの https のリンクもそのまま通す。 */
+    if (typeof icon !== "string") m.fail("INVALID_ICON");
+    if (/^data:/.test(icon)) {
+      if (!/^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(icon)) m.fail("INVALID_ICON");
+      if (icon.length > WRITER_ICON_MAX) m.fail("ICON_TOO_LARGE");
+    } else {
+      if (icon && !/^https:\/\//.test(icon)) m.fail("INVALID_ICON");
+      m.text(icon, 500);
+    }
     const result = await db.runTransaction(async (tx) => {
       const r = ref("writers", a.spid),
         s = await tx.get(r),

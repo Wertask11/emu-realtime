@@ -544,13 +544,9 @@ function createQuestCompletionRouter({ db, requireOwner, requireFirebaseUser, en
     const caption = ("SchoolPark " + label + (guild ? " " + guild : "")).trim() + roundLabel;
     const esc = t => String(t).replace(/[&<>"']/g, c =>
       ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-    const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="640" viewBox="0 0 640 640">'
-      + '<rect width="640" height="640" fill="#141310"/><circle cx="320" cy="280" r="170" fill="' + esc(color)
-      + '" opacity=".35"/><path d="M320 115l42 124 130 2-105 78 39 125-106-75-106 75 39-125-105-78 130-2z" fill="#D0E2BE"/>'
-      + '<text x="320" y="520" text-anchor="middle" fill="#F4F1EA" font-size="30" font-family="sans-serif">'
-      + esc(caption) + '</text>'
-      + '<text x="320" y="562" text-anchor="middle" fill="#D0E2BE" font-size="18" font-family="sans-serif">'
-      + esc(title) + '</text></svg>';
+    /* 11/20 オーナー：「証明NFT全部同じなのも嫌」。ギルドの色・クエストの番号・その完走だけの星座で描き分ける */
+    const svg = require("./quest-certificate-art").certificateSvg({ key, guildId, guild, label, title: String(row.questTitle || ""),
+      round, completedAt: row.completedAt });
     res.set("Cache-Control", "public, max-age=3600");
     const attributes = [{ trait_type: "Quest", value: label || String(row.questId || "") },
       { trait_type: "Completed", value: new Date(row.completedAt).toISOString().slice(0, 10) }];

@@ -35,6 +35,8 @@
   function addFriend(){
     document.querySelectorAll('[style*="background:#141310"],section[style*="background:var(--emu-brand-strong)"]').forEach(function(hero,i){
       if(hero.querySelector(':scope > .ehon-friend'))return;
+      /* 札・ボタンのような小さいもの（色がたまたま同じ）には仲間を入れない */
+      if(hero.tagName==='SPAN'||hero.tagName==='BUTTON'||hero.offsetWidth<240)return;
       var f=keep('hero'+i,function(){return pick(FRIENDS);});
       var im=document.createElement('img');im.className='ehon-friend';im.alt='';im.setAttribute('aria-hidden','true');im.decoding='async';im.draggable=false;
       im.src=A+'friends/friend-'+f+'.webp';hero.appendChild(im);
