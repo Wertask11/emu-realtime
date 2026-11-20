@@ -82,7 +82,12 @@ export function sceneSvg(layout, catalog, { selected = null } = {}) {
       } else if (i.art.startsWith("chair")) {
         for (const k of [1, 2, 3]) art += line(top[k], base[k]);
         art += polygon(top, i.art === "chair-cushion" ? "#dbb4a6" : "#d8b375");
-        const k = [0, 90].includes(p.rotation) ? [0, 1] : [2, 3],
+        const k = [
+            [0, 1],
+            [1, 2],
+            [2, 3],
+            [3, 0],
+          ][p.rotation / 90] || [0, 1],
           b1 = { ...top[k[0]], y: top[k[0]].y - 37 },
           b2 = { ...top[k[1]], y: top[k[1]].y - 37 };
         art += polygon([top[k[0]], top[k[1]], b2, b1], "#e0c397");

@@ -253,6 +253,7 @@ for (const width of [390, 1440])
           exact: true,
         })
         .waitFor();
+      await page.locator('[data-room-action="rotate"]').click();
       await page.locator('[data-room-instance="start-reizo"]').click();
       await page.locator('[data-room-action="x+"]').click();
       await page.locator('[data-room-action="save"]').click();
@@ -269,6 +270,11 @@ for (const width of [390, 1440])
         original.layout.placements.find((p) => p.id === "start-chair").x,
         3,
         "pointer drag updates the grid, not only selection",
+      );
+      assert.equal(
+        original.layout.placements.find((p) => p.id === "start-chair").rotation,
+        90,
+        "rotation persists with a distinct chair back edge",
       );
       await page.screenshot({ path: path.join(qa, `placed-${width}.png`) });
       await page.locator('[data-room-action="publication"]').click();
