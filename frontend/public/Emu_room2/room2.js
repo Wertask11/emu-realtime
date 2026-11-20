@@ -30,9 +30,9 @@ const discussionStreaks = {};
 let bgStars = [];      // 瞬く明るい星（天の北極からの距離と角度で持つ）
 let gradLayer = null, starLayer = null, horizonLayer = null, starLayerSize = 0;
 const REDUCED_MOTION = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
-/* ひと回り 8 分。本物（約24時間）だと止まって見えるので、動いているのが分かる速さにする。
-   前の「左へ流れる」動き（毎秒 4〜7px ほど）と、記録の星のあたりで同じくらいの速さ */
-const SKY_TURN_MS = 8 * 60 * 1000;
+/* ひと回り 90 分。本物（約24時間）だと止まって見えるが、8分では速すぎて気持ち悪かった（11/20 オーナー：
+   「星空モードのとき今よりゆっくり流れるように」）。じっと見ていると、ようやく動いているのが分かるくらい */
+const SKY_TURN_MS = 90 * 60 * 1000;
 const POLE = { x: 0, y: 0 };
 let skyAngle = 0;
 function skyAngleAt(time) { return REDUCED_MOTION ? 0 : -(time / SKY_TURN_MS) * Math.PI * 2; }
@@ -152,7 +152,8 @@ function initBgStars() {
   g.lineTo(W, H); g.closePath(); g.fill();
 
   /* 大きさが変わったら、記録の星は新しい天の北極のまわりで角度を取り直す */
-  stars.forEach(st => { st.r0 = undefined; });
+  if (window.Zodiac && stars.length) window.Zodiac.assign(stars);
+  else stars.forEach(st => { st.r0 = undefined; });
 }
 
 /* 記録の星を、空と一緒に回す。初めて見る星は、いまの位置から天の北極までの距離と角度を覚える */
@@ -381,6 +382,8 @@ function applyRealStarCounts(counts) {
   /* ここは「足す」ではなく「置き換える」。上で stars を空にしてから
      受け取った数だけ作り直しているので、同じ数を二度受け取っても
      星が2倍になることはない。 */
+  /* 11/20：星を黄道12星座の点へ置く（zodiac.js）。置き場所だけを決め直す。数は変えない */
+  if (window.Zodiac) window.Zodiac.assign(stars);
   starCountsState = "ready";
   try { updateStarList(); } catch (e) {}
 }
@@ -714,7 +717,7 @@ function render(time = 0) {
 
   // 4. 星座線（これまでの線と、同じ種類の星をつなぐ星座）
   drawLinks();
-  drawConstellations(time);
+  if (window.Zodiac) window.Zodiac.draw(ctx, time); else drawConstellations(time);
 
   // 5. 動的な星（アクション記録）
   stars.forEach(star => {
@@ -965,6 +968,10 @@ window.addEventListener('message', (event) => {
          URLのクエリは配信サーバーに落とされることがあるので、
          こちらの合図を正とする。 */
       try { openStarMode(); } catch (e) {}
+      break;
+    case "EMU_STAR_LAYOUT":
+      /* 親が読んだ、星座の並び（星の入れ替え・自分だけの星座・完成した日）。親からのものだけ受け取る */
+      if (event.source === window.parent && event.origin === window.location.origin && window.Zodiac) window.Zodiac.receive(action);
       break;
     case "EMU_STAR_COUNTS":
       /* 親（新Emu）が数えた実データ。固定値の代わりにこれを映す。 */

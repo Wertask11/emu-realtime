@@ -1655,6 +1655,20 @@ service cloud.firestore {
       allow read, write: if labCollection.matches('knowledge_lab_.*') && false;
     }
 
+    /* 11/20 オーナー：星空の星座の並び（黄道12星座の星の入れ替え・自分だけの星座・完成した日）。
+       本人（ログインの uid）だけが読み書きする。星の数はここに置かない（数は実データから数える）。
+       置けるのは決まった欄だけ。並びは600個まで・自分だけの星座は3つまで・完成した日は12星座ぶんまで。 */
+    match /sp_star_layouts/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow create, update: if signedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['slots', 'customs', 'completed', 'updatedAt'])
+        && request.resource.data.slots is list && request.resource.data.slots.size() <= 600
+        && request.resource.data.customs is list && request.resource.data.customs.size() <= 3
+        && request.resource.data.completed is map && request.resource.data.completed.size() <= 12
+        && request.resource.data.updatedAt is int;
+      allow delete: if false;
+    }
+
     /* いま開いている人の数（混雑の表示）。ログインしていない人も自分の印を置く。
        前はいちばん下の受け皿で通っていた。受け皿を閉じたので、ここに書く（11/11）。
        置けるのは時刻（ts）だけ。文書のIDは画面が作る2つの形だけ。 */
