@@ -25463,63 +25463,58 @@ async function _emuSendStarCounts(frame) {
   send(counts);
 }
 
-/* 星空の星座の並び（11/20 オーナー：黄道12星座・星の入れ替え・自分だけの星座・完成した日）。
-   置き場所は sp_star_layouts/{ログインの uid}。本人だけが読み書きできる（firestore.rules）。
+/* 星空の星座の並び（11/20 オーナー：黄道12星座・星の配置を自由に・自分だけの星座・完成した日）。
+   読み書きはサーバー（/api/schoolpark/star-layout/me。backend/star-layout.js）を通す。置き場所は sp_star_layouts/{ログインの uid}。
+   はじめは画面から Firestore へ直に読み書きしていたが、ルールを本番へ反映するまで読めず、
+   「並びを読み込めなかった」と出て、入れ替え・自分だけの星座（つくる）が使えなかった（11/20 オーナー）。
    星の数はここに置かない（数は _emuSendStarCounts が実データから数える）。
    読めなかったときは ok:false を送る。星空はそのあいだ保存しない（前の並びを空で上書きしないため）。 */
+const EMU_STAR_LAYOUT_API = 'https://emu-realtime.onrender.com/api/schoolpark/star-layout/me';
 async function _emuSendStarLayout(frame) {
   const send = function (msg) {
     try { if (frame && frame.contentWindow) frame.contentWindow.postMessage(Object.assign({ type: 'EMU_STAR_LAYOUT' }, msg), window.location.origin); } catch (e) {}
   };
   const uid = window.auth && window.auth.currentUser && window.auth.currentUser.uid;
-  if (!uid || !window.db || !window.fbLib) { send({ ok: false }); return; }
-  try {
-    const fb = window.fbLib;
-    const snap = await fb.getDoc(fb.doc(window.db, 'sp_star_layouts', uid));
-    if (snap.metadata && snap.metadata.fromCache && !snap.exists()) { send({ ok: false }); return; }
-    send({ ok: true, layout: snap.exists() ? _emuStarLayoutForSky(snap.data()) : {} });
-  } catch (e) {
-    console.warn('星座の並びを読めませんでした:', e && e.message);
-    send({ ok: false });
+  if (!uid || typeof emuAuthHeaders !== 'function') { send({ ok: false }); return; }
+  /* サーバーが寝起きのときは少し待つ。1回目に失敗したら、もう1回だけ聞く */
+  for (let tryNo = 0; tryNo < 2; tryNo++) {
+    try {
+      const res = await fetch(EMU_STAR_LAYOUT_API, { headers: await emuAuthHeaders(false, { interactive: false }) });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const body = await res.json();
+      if (!body || body.ok !== true) throw new Error('BAD_BODY');
+      send({ ok: true, layout: body.layout || {} });
+      return;
+    } catch (e) {
+      if (tryNo === 1) { console.warn('星座の並びを読めませんでした:', e && e.message); send({ ok: false }); }
+      else await new Promise(function (r) { setTimeout(r, 1500); });
+    }
   }
 }
-/* 星空から「並びを残して」と頼まれたとき。星空の iframe から来たものだけ受け取り、形と大きさを確かめてから書く */
-function _emuStarLayoutClean(d) {
-  const str = function (v, n) { return typeof v === 'string' ? v.slice(0, n) : ''; };
-  const out = { slots: [], customs: [], completed: {}, updatedAt: Date.now() };
-  if (Array.isArray(d.slots)) out.slots = d.slots.slice(0, 600).map(function (t) { return str(t, 60); }).filter(Boolean);
-  if (Array.isArray(d.customs)) out.customs = d.customs.slice(0, 3).map(function (c) {
-    const points = (Array.isArray(c && c.points) ? c.points : []).slice(0, 12).map(function (p) {
-      return { x: Math.max(0, Math.min(4, Math.round(Number(p[0]) || 0))), y: Math.max(0, Math.min(4, Math.round(Number(p[1]) || 0))), t: str(p[2], 60) };
-    });
-    const lines = (Array.isArray(c && c.lines) ? c.lines : []).slice(0, 30).map(function (l) {
-      return { a: Math.max(0, Math.min(11, Math.round(Number(l[0]) || 0))), b: Math.max(0, Math.min(11, Math.round(Number(l[1]) || 0))) };
-    });
-    return { name: str(c && c.name, 12) || 'わたしの星座', points: points, lines: lines };
-  });
-  if (d.completed && typeof d.completed === 'object') Object.keys(d.completed).slice(0, 12).forEach(function (k) {
-    if (/^[a-z]{3,12}$/.test(k) && Number(d.completed[k]) > 0) out.completed[k] = Math.round(Number(d.completed[k]));
-  });
-  return out;
-}
-/* Firestore は「配列の中の配列」を置けないので、自分だけの星座の点と線は {x,y,t}・{a,b} の形で残し、星空へは配列に戻して渡す */
-function _emuStarLayoutForSky(d) {
-  const v = d || {};
-  return { slots: v.slots || [], completed: v.completed || {}, customs: (v.customs || []).map(function (c) {
-    return { name: c.name, points: (c.points || []).map(function (p) { return [p.x, p.y, p.t]; }), lines: (c.lines || []).map(function (l) { return [l.a, l.b]; }) };
-  }) };
-}
+/* 星空から「並びを残して」と頼まれたとき。星空の iframe から来たものだけ受け取る。形と大きさはサーバーが確かめる */
+/* 星空の「もう一度読み込む」 */
+window.addEventListener('message', function (event) {
+  const d = event.data;
+  if (!d || d.type !== 'EMU_STAR_LAYOUT_RELOAD' || event.origin !== window.location.origin) return;
+  const frame = document.getElementById('room2Frame');
+  if (frame && event.source === frame.contentWindow) _emuSendStarLayout(frame);
+});
 window.addEventListener('message', async function (event) {
   const d = event.data;
   if (!d || d.type !== 'EMU_STAR_LAYOUT_SAVE' || event.origin !== window.location.origin) return;
   const frame = document.getElementById('room2Frame');
   if (!frame || event.source !== frame.contentWindow) return;
   const uid = window.auth && window.auth.currentUser && window.auth.currentUser.uid;
-  if (!uid || !window.db || !window.fbLib) return;
+  if (!uid || typeof emuAuthHeaders !== 'function') return;
   try {
-    const fb = window.fbLib;
-    await fb.setDoc(fb.doc(window.db, 'sp_star_layouts', uid), _emuStarLayoutClean(d.layout || {}));
-  } catch (e) { console.warn('星座の並びを残せませんでした:', e && e.message); }
+    const headers = new Headers(await emuAuthHeaders(true, { interactive: false }));
+    headers.set('Content-Type', 'application/json');
+    const res = await fetch(EMU_STAR_LAYOUT_API, { method: 'PUT', headers: headers, body: JSON.stringify({ layout: d.layout || {} }) });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+  } catch (e) {
+    console.warn('星座の並びを残せませんでした:', e && e.message);
+    try { frame.contentWindow.postMessage({ type: 'EMU_STAR_LAYOUT_SAVED', ok: false }, window.location.origin); } catch (_) {}
+  }
 });
 
 function openRoom2() {
