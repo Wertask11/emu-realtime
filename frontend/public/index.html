@@ -16763,7 +16763,7 @@ async function spDaoRefreshNow(why) {
   const finished = pulled ? (await _spSoon(jobs, 15000)).ok : (await jobs, true);
   console.warn('SchoolPark を読み直しました（' + (why || '定期') + '）');
   /* 枠が戻って読めたら、上限のお知らせを消す */
-  _spQuotaShow(_spQuotaBlocked());
+  if (typeof window._spQuotaShow === 'function') window._spQuotaShow(window._spQuotaBlocked());
   if (!pulled) return true;
   let guilds = 0;
   try { guilds = ((app.state && app.state.guilds) || []).length; } catch (e) {}
@@ -18845,7 +18845,7 @@ function _spRestBlock(res, body) {
   st.blockedUntil = Date.now() + wait;
   st.reason = kind;
   st.message = text.slice(0, 400);
-  if (kind === 'quota') _spQuotaShow(true);
+  if (kind === 'quota' && typeof window._spQuotaShow === 'function') window._spQuotaShow(true);
   if (kind === 'quota') {
     console.warn('今日のぶんの読み取り枠を使い切ったと言われました。'
       + Math.round(wait / 60000) + '分ほど待ってから1回だけ試します。'
@@ -18882,6 +18882,8 @@ function _spQuotaShow(on) {
 }
 window._spQuotaBlocked = _spQuotaBlocked;
 window._spQuotaNote = _spQuotaNote;
+window._spQuotaShow = _spQuotaShow;
+window._spQuotaResetLabel = _spQuotaResetLabel;
 
 async function _spRestGetOnce(path, needAuth, post) {
   let opt = {};
@@ -31033,7 +31035,7 @@ window.emuInAppRefresh = async function (source) {
     if (typeof window.spDaoRefreshNow === 'function') {
       const ok = await window.spDaoRefreshNow('引っぱって読み直し', { frame: frameOf('spDaoFrame') || frameOf('spRoomFrame') });
       /* 11/20：無料枠を使い切っているときは、そう伝える（引っぱった画面に「何時ごろに戻ります」と出る） */
-      if (ok === false && _spQuotaBlocked()) { _spQuotaShow(true); throw new Error('QUOTA:' + _spQuotaResetLabel()); }
+      if (ok === false && window._spQuotaBlocked?.()) { window._spQuotaShow(true); throw new Error('QUOTA:' + window._spQuotaResetLabel()); }
       if (ok === false) throw new Error('REFRESH_FAILED');
     }
     return 'schoolpark';
@@ -31049,7 +31051,7 @@ window.emuInAppRefresh = async function (source) {
   }
   if (b.contains('sp-dao-open') && typeof window.spDaoRefreshNow === 'function') {
     if (await window.spDaoRefreshNow('引っぱって読み直し') === false) {
-      if (_spQuotaBlocked()) { _spQuotaShow(true); throw new Error('QUOTA:' + _spQuotaResetLabel()); }
+      if (window._spQuotaBlocked?.()) { window._spQuotaShow(true); throw new Error('QUOTA:' + window._spQuotaResetLabel()); }
       throw new Error('REFRESH_FAILED');
     }
     return 'schoolpark';
