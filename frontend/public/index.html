@@ -19979,6 +19979,11 @@ async function _spShapeQuest(q, p, mine, gdefs, app) {
       }).concat([{ no: '5', head: '知恵カードを1枚置く', ask: g.wisdom || 'やってみて分かったことを、一文に削る。',
         mark: iWisdom ? '✓ 置いた' : '', markShow: iWisdom ? 'inline' : 'none' }]);
     })(),
+    /* やってみた記録（1枚）で出してよいクエストか（11/20）。
+       #001 LEARN（試す）と #002 WORK（提出もの）は、やったあとに一度で書ける。
+       #003 PLAY・#004・#005・特殊は「開始宣言 → 中間 → 最終」と日を分けて出す決まりなので、1枚では出させない
+       （始める前に「分かったこと」と知恵カードまで書かせることになる）。 */
+    oneSheet: spQuestReportGuide(q).kind !== 'listed',
     /* 報告欄の頭の一言。案件ものは、提出物をどこに出すかを先に言う。 */
     logLead: spQuestReportGuide(q).kind === 'case'
       ? '提出物は「やってみた」で出します'
@@ -20718,6 +20723,10 @@ window.openSpTryForm = async function (questId, app, pick) {
   }
   if (!q) { alert('クエストが見つかりませんでした。'); return; }
   const requiresPost = q.series === 'general' && Number(q.questNumber) === 1;
+  if (spQuestReportGuide(q).kind === 'listed') {
+    alert('このクエストは「開始宣言 → 中間 → 最終」と、日を分けて報告します。\n\nクエストの詳細の「やってみた／つまずいた／気づいた」から、その時々に出してください。');
+    return;
+  }
   _spTry = { quest: q, app: app || null, pick: pick && pick.id ? { id: String(pick.id), title: String(pick.title || '（Emuの投稿）') } : null, requiresPost: requiresPost };
 
   const set = function (id, v) { const el = document.getElementById(id); if (el) { el.value = v || ''; delete el.dataset.edited; } };
