@@ -140,9 +140,10 @@ with sync_playwright() as p:
     g.locator('.emu-practice-entry button').click();g.locator('#spLoadingOverlay').wait_for(state='hidden',timeout=30000)
     g.wait_for_function('document.getElementById("spDaoFrame").contentWindow.app?.tourRenderedScreen==="experiments"')
     # 761px 以上の「知識を読む」では右上の冷蔵庫くんは出さない（左の列にある）。右上に出ている拠点の画面で開く
-    g.locator('#emuHeaderReizo').click();g.locator('#rk-tour .rk-panel:not([hidden])').wait_for()
-    assert g.locator('#rk-tour .rk-panel:not([hidden])').count()==1
-    g.locator('#rk-tour .rk-close').click()
+    # 冷蔵庫くんは、まず「聞く」の窓を1つだけ開く（reizo/mode-switch.js）。チュートリアルの進み具合は変えない
+    g.locator('#emuHeaderReizo').click();g.locator('#spReizoPanel').wait_for(state='visible')
+    assert g.locator('#spReizoPanel:visible').count()==1
+    g.locator('#spReizoPanel .sp-reizo-close').first.click();g.locator('#spReizoPanel').wait_for(state='hidden')
     g.evaluate('showEmuFeed()')
     k=g.frame_locator('#emuKnowledgeFrame');k.get_by_role('button',name='新着',exact=True).first.click()
     progress=g.evaluate('JSON.parse(localStorage.getItem("rk-tour-v1"))')
