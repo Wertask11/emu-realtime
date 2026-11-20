@@ -22549,11 +22549,22 @@ async function openSpPassport() {
 
   if (card) card.classList.remove('spp-lite');   /* ここから本の大きさ */
   /* 証明写真。プロフィールで選んだ写真（user_profiles の avatar。emuProfileOf が形を確かめた data URL だけ）。
-     無い・読めないときは、枠の地の冷蔵庫くんのまま。img の src に入れるだけで、HTML としては混ぜない。 */
+     無い・読めないときは、枠の地の冷蔵庫くんのまま。img の src に入れるだけで、HTML としては混ぜない。
+     写真の置き場所は、名前と同じく「保存したときの名義」。ウォレットで入った人はウォレットのアドレス、
+     それ以外は CHES のアドレス。名前を探すときと同じ順（ウォレット → CHES → 右上の表示に使う名義）で探す。
+     （11/20 オーナー：内部アドレスだけを見ていたので、写真があるのに冷蔵庫くんになっていた） */
   try {
     const photo = document.getElementById('sppPhoto');
-    if (photo && typeof emuProfileOf === 'function') Promise.resolve(emuProfileOf(p.addr)).then(function (v) {
-      const a = v && v.avatar;
+    const keys = [];
+    [p.wallet, p.addr, typeof _emuAddress === 'function' ? _emuAddress() : ''].forEach(function (a) {
+      const k = String(a || '').toLowerCase();
+      if (/^0x[0-9a-f]{40}$/.test(k) && keys.indexOf(k) < 0) keys.push(k);
+    });
+    if (photo && keys.length && typeof emuProfileOf === 'function') Promise.all(keys.map(function (k) {
+      return Promise.resolve(emuProfileOf(k)).catch(function () { return null; });
+    })).then(function (list) {
+      let a = '';
+      for (let i = 0; i < list.length && !a; i++) a = (list[i] && list[i].avatar) || '';
       if (!a || !photo.isConnected || photo.querySelector('img')) return;
       const img = document.createElement('img');
       img.alt = ''; img.src = a;
@@ -23181,8 +23192,7 @@ function spPassportGoPage(n) {
     SPP_TURN_CLASSES.forEach(function (c) { e.classList.remove(c); });
   });
 
-  /* 絵本版（11/20）は、めくりの動きを出さない。動くのは冷蔵庫くんのぞきだけ */
-  if (_sppReducedMotion() || document.querySelector('#spPassport.spp-ehon')) { swap(); _sppUpdateMore(); return; }
+  if (_sppReducedMotion()) { swap(); _sppUpdateMore(); return; }
 
   _sppTurning = true;
   /* 前半：いまの紙が離れていく */

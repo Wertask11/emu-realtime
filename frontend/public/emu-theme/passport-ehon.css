@@ -3,7 +3,7 @@
    いまのパスポートの id・data 属性・JS・中身はそのまま。見た目だけをこの紙の本に当てはめる。
    #spPassport.spp-ehon の中だけに効く（議題・クエスト・知恵・報告・スマホメニューも .spp-card を
    使っているが、そちらは変えない）。index.html の emu-ehon.css のあとに読む。
-   動くのは「冷蔵庫くんのぞき」だけ。動きを減らす設定のときは止める。 */
+   動くのは「冷蔵庫くんのぞき」と、ページをめくるときの紙。動きを減らす設定のときはどちらも止める。 */
 #spPassport.spp-ehon {
   --pp-cream:#f8eed6; --pp-card:#fffaf0; --pp-ink:#3a2a20; --pp-ink2:#5a4636; --pp-muted:#6f5a46; --pp-line:#d9c7a4;
   --pp-shu:#c4532a; --pp-shu-dark:#a8441f; --pp-shu-soft:#fbe7d2; --pp-gunjo:#3b58a3; --pp-karashi:#f2c35a;
@@ -80,13 +80,26 @@
 #spPassport.spp-ehon .spp-tab[aria-selected="true"] { position:relative; background:var(--pp-card); color:var(--pp-ink); border-bottom-color:var(--pp-card); }
 #spPassport.spp-ehon .spp-tab[aria-selected="true"] b { background:var(--pp-shu); border-color:var(--pp-shu); color:#fff; }
 
-/* ページ。めくりの動きは出さない（動くのは のぞき だけ） */
-#spPassport.spp-ehon .spp-pages { flex:1 1 auto; min-height:0; perspective:none; }
-#spPassport.spp-ehon .spp-page { padding:24px 24px 8px; animation:none !important; transform:none !important; opacity:1 !important; }
-#spPassport.spp-ehon .spp-page::before,
-#spPassport.spp-ehon .spp-page .spp-leaf::after { display:none !important; }
-#spPassport.spp-ehon .spp-page .spp-leaf,
-#spPassport.spp-ehon .spp-page .spp-seam { animation:none !important; transform:none !important; opacity:1 !important; }
+/* ページ。めくりの動き（紙が綴じ目を軸に倒れて、次の紙が降りてくる）は index.html のまま使う（11/20 オーナー：めくるのは残す）。
+   めくっているあいだだけ、紙に地の色を付けて「1枚の紙」に見せる。紙の影は墨の色にする */
+#spPassport.spp-ehon .spp-pages { flex:1 1 auto; min-height:0; }
+#spPassport.spp-ehon .spp-page { padding:24px 24px 8px; }
+#spPassport.spp-ehon .spp-page.spp-out, #spPassport.spp-ehon .spp-page.spp-out-back,
+#spPassport.spp-ehon .spp-page.spp-in, #spPassport.spp-ehon .spp-page.spp-in-back { background:var(--pp-card); }
+#spPassport.spp-ehon .spp-page::before { background:linear-gradient(90deg, rgba(58,42,32,.45), rgba(58,42,32,0) 62%); }
+#spPassport.spp-ehon .spp-page.spp-out-back::before,
+#spPassport.spp-ehon .spp-page.spp-in-back::before { background:linear-gradient(270deg, rgba(58,42,32,.45), rgba(58,42,32,0) 62%); }
+@media (min-width:900px) {
+  /* パソコンは見開きの片側の紙が返る。返っている紙にだけ地の色を付ける */
+  #spPassport.spp-ehon .spp-page.spp-out, #spPassport.spp-ehon .spp-page.spp-out-back,
+  #spPassport.spp-ehon .spp-page.spp-in, #spPassport.spp-ehon .spp-page.spp-in-back { background:transparent; }
+  #spPassport.spp-ehon .spp-page.spp-out .spp-leaf-b, #spPassport.spp-ehon .spp-page.spp-in .spp-leaf-a,
+  #spPassport.spp-ehon .spp-page.spp-out-back .spp-leaf-a, #spPassport.spp-ehon .spp-page.spp-in-back .spp-leaf-b { background:var(--pp-card); }
+  #spPassport.spp-ehon .spp-page.spp-out .spp-leaf-b::after,
+  #spPassport.spp-ehon .spp-page.spp-in-back .spp-leaf-b::after { background:linear-gradient(90deg, rgba(58,42,32,.4), rgba(58,42,32,0) 70%); }
+  #spPassport.spp-ehon .spp-page.spp-in .spp-leaf-a::after,
+  #spPassport.spp-ehon .spp-page.spp-out-back .spp-leaf-a::after { background:linear-gradient(270deg, rgba(58,42,32,.4), rgba(58,42,32,0) 70%); }
+}
 #spPassport.spp-ehon .spp-pages::after { background:linear-gradient(180deg, rgba(255,250,240,0), var(--pp-card)); }
 #spPassport.spp-ehon .spp-page-label { display:inline-block; margin:0 12px 0 0; font:600 .74rem/1 var(--pp-body); letter-spacing:.2em; color:var(--pp-shu-dark); }
 #spPassport.spp-ehon .spp-page > .spp-page-title { display:inline-block; margin:0 0 18px; font:500 1.35rem/1.4 var(--pp-head); letter-spacing:.04em; color:var(--pp-ink); }
