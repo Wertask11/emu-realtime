@@ -207,8 +207,14 @@ test('画面が低くても、右の列の中で「受けている人」まで�
     await measure(frame, 600);
     const r = await frame.evaluate(async () => {
       const side = document.querySelector('.sp-quest-side');
-      side.scrollTop = side.scrollHeight;
-      await new Promise(res => setTimeout(res, 60));
+      /* いちばん下まで送る。字や絵があとから読み込まれて列が伸びることがあるので、止まるまで送り直す（重いときにだけ落ちていた） */
+      let last = -1;
+      for (let i = 0; i < 20; i++) {
+        side.scrollTop = side.scrollHeight;
+        await new Promise(res => setTimeout(res, 60));
+        if (side.scrollTop === last) break;
+        last = side.scrollTop;
+      }
       const people = [...side.querySelectorAll('div')].find(x => /^受けている人/.test(x.textContent.trim()));
       return { bottom: people.closest('div[style*="border-radius:12px"]').getBoundingClientRect().bottom, vh: window.innerHeight };
     });
