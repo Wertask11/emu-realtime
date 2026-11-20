@@ -98,6 +98,8 @@
       "k.action.change": "↻ 改善案を届ける",
       "k.action.propose": "議題にする",
       "k.action.proposeHint": "この知識をもとに、SchoolParkのギルドで議題を立てます",
+      "k.action.try": "🧪 これを試す",
+      "k.action.tryHint": "この知識を、クエスト #001 で実際に試して記録します（やったこと・分かったことを1枚に書くだけ）",
       "k.action.voices": "届いた声",
       "k.action.history": "変更履歴",
       "k.action.share": "シェア",

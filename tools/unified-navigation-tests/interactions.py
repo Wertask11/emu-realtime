@@ -4,7 +4,12 @@ import json,pathlib,urllib.parse,urllib.request,os
 BASE=os.environ.get('UNIFIED_BASE','http://127.0.0.1:4220');OUT=pathlib.Path(os.environ.get('UNIFIED_OUTPUT','/workspace/outputs/unified-emu-20261102'))
 assert urllib.parse.urlparse(BASE).hostname in ['127.0.0.1','localhost'], 'Local emulator only'
 with urllib.request.urlopen(urllib.request.Request(BASE+'/test/unified-scenario',method='POST')) as r: scenario=json.load(r)
-Q=scenario['questId'];W=scenario['wisdomId']
+Q=scenario['questId'];W=scenario['wisdomId'];TQ=scenario['tryQuestId']
+TRY_ROWS='''(async(id)=>{const p=await spPassportLoad();const fb=fbLib;
+ const took=(await fb.getDoc(fb.doc(db,"sp_quests",id,"commits",p.addr))).exists();
+ const logs=[];(await fb.getDocs(fb.collection(db,"sp_quests",id,"logs"))).forEach(d=>logs.push(d.data()));
+ const w=[];(await fb.getDocs(fb.collection(db,"sp_wisdom"))).forEach(d=>{const x=d.data();if(x.questId===id)w.push(x)});
+ return {took,logs:logs.map(l=>({kind:l.kind,body:l.body,from:l.fromPostId,author:l.author===p.addr})),wisdom:w.map(x=>({insight:x.insight,from:x.fromPostId,knowledge:x.knowledge,experiment:x.experiment}))}})'''
 RESULTS=[];errors=[];dialogs=[]
 with sync_playwright() as p:
  b=p.chromium.launch(executable_path='/usr/bin/chromium',args=['--no-sandbox']);c=b.new_context(viewport={'width':1280,'height':950})
@@ -62,6 +67,31 @@ with sync_playwright() as p:
   g.evaluate('(id)=>spWisdomCite(id,document.getElementById("spDaoFrame").contentWindow.app)',W)
   assert g.evaluate('(async(id)=>{const p=await spPassportLoad();return (await fbLib.getDoc(fbLib.doc(db,"sp_wisdom",id,"cites",p.addr))).exists()})',W)
   RESULTS.append({'quest':'joined, 3 real reports saved, wisdom endpoint returned 200, new card shown','citation':'original shared function persisted existing card citation','payments_rewards':'chain and approval intentionally disabled in fixture; covered separately by backend tests'})
+  # 11/20 知識の投稿の「これを試す」→ やってみた記録（1枚）。受ける・3つの報告・知恵カードまでが1回で残る
+  g.evaluate('closeSpWisdomCelebrate(false)');g.locator('#spWisdomCelebrate').wait_for(state='hidden')
+  g.locator('#esnFeed').click();kf=g.frame_locator('#emuKnowledgeFrame')
+  card=kf.locator('article.card',has_text='LOCAL 導線検証の知識').first;card.wait_for()
+  card.locator('.try-btn').click();g.locator('#spTrySheet').wait_for(state='visible')
+  assert 'LOCAL 導線検証の知識' in g.locator('#stPicked').inner_text(),g.locator('#stPicked').inner_text()
+  assert 'やってみる' in g.locator('#stQuest').inner_text(),g.locator('#stQuest').inner_text()
+  g.screenshot(path=str(OUT/'INTERACTION-try-open.png'))
+  g.locator('#stDid').fill('LOCAL 試した。投稿の方法を1回だけやってみた。現実の活動ではありません。')
+  g.locator('#stFound').fill('LOCAL 先に決めておくと迷わない。やる前より短い時間で終わった。')
+  assert g.locator('#stInsight').input_value()=='LOCAL 先に決めておくと迷わない。',g.locator('#stInsight').input_value()
+  assert g.locator('#stExperiment').input_value()=='LOCAL 試した。',g.locator('#stExperiment').input_value()
+  g.locator('#stInsight').fill('LOCAL 1枚の記録から知恵カードまで残せた。')
+  with g.expect_response(lambda r:'/quest-completions/'+TQ+'/wisdom' in r.url) as tried:g.locator('#stSubmit').click()
+  assert tried.value.status==200,tried.value.text()
+  g.wait_for_function('!document.body.classList.contains("sp-try-open")');g.locator('#spWisdomCelebrate').wait_for(state='visible')
+  assert 'LOCAL 1枚の記録から知恵カードまで残せた。' in g.locator('#spWisdomCelebrateQuote').inner_text()
+  rows=g.evaluate(TRY_ROWS,TQ)
+  assert rows['took'],rows
+  assert sorted(l['kind'] for l in rows['logs'])==sorted(['やってみた','つまずいた','気づいた']),rows
+  assert all(l['from']=='unified-source' and l['author'] for l in rows['logs']),rows
+  assert [l['body'] for l in rows['logs'] if l['kind']=='つまずいた']==['（特になし）'],rows
+  assert rows['wisdom']==[{'insight':'LOCAL 1枚の記録から知恵カードまで残せた。','from':'unified-source','knowledge':'LOCAL 導線検証の知識','experiment':'LOCAL 試した。'}],rows
+  g.screenshot(path=str(OUT/'INTERACTION-try-done.png'))
+  RESULTS.append({'try':'post → これを試す → one sheet: joined #001, 3 reports (empty stuck saved as 特になし) and a wisdom card saved in one submit'})
   assert not errors,errors
   print(json.dumps(RESULTS,ensure_ascii=False,indent=2),flush=True)
  except Exception:

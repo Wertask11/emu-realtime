@@ -3213,12 +3213,13 @@ body.emu-profile-open #emuValueProfile { display:grid; }
 /* ── SchoolPark パスポート ──
    ログインすると作られる CHESアドレスに、名前と居場所を与えたもの。
    SchoolPark からも Emu からも開くので、どちらの色にも寄せず暗い札にする。 */
-#spPassport, #spVoteSheet, #spQuestSheet, #spWisdomSheet, #spLogSheet, #spMobileMenu { display:none; position:fixed; inset:0; z-index:1800; }
+#spPassport, #spVoteSheet, #spQuestSheet, #spWisdomSheet, #spLogSheet, #spTrySheet, #spMobileMenu { display:none; position:fixed; inset:0; z-index:1800; }
 body.sp-passport-open #spPassport,
 body.sp-vote-open #spVoteSheet,
 body.sp-quest-open #spQuestSheet,
 body.sp-wisdom-open #spWisdomSheet,
 body.sp-log-open #spLogSheet,
+body.sp-try-open #spTrySheet,
 body.sp-menu-open #spMobileMenu { display:flex; align-items:center; justify-content:center; }
 .spp-veil { position:absolute; inset:0; background:rgba(10,9,7,.62); }
 /* 議題を出す入力欄。札と同じ見た目にそろえる */
@@ -3242,7 +3243,7 @@ body.sp-menu-open #spMobileMenu { display:flex; align-items:center; justify-cont
 .smm-row:hover { background:rgba(244,241,234,.1); }
 .smm-go { font-size:12px; font-weight:400; color:rgba(244,241,234,.5); }
 .smm-label { font-size:11px; letter-spacing:.06em; color:rgba(244,241,234,.5); margin:16px 0 2px; }
-#spPassport .spp-card, #spVoteSheet .spp-card, #spQuestSheet .spp-card, #spWisdomSheet .spp-card, #spLogSheet .spp-card, #spMobileMenu .spp-card {
+#spPassport .spp-card, #spVoteSheet .spp-card, #spQuestSheet .spp-card, #spWisdomSheet .spp-card, #spLogSheet .spp-card, #spTrySheet .spp-card, #spMobileMenu .spp-card {
   position:relative; width:min(420px, calc(100vw - 32px)); max-height:calc(100vh - 48px);
   overflow-y:auto; background:#141310; color:#F4F1EA; border-radius:16px;
   padding:26px 24px 22px; box-shadow:0 30px 70px -20px rgba(0,0,0,.7);
@@ -3255,7 +3256,7 @@ body.sp-menu-open #spMobileMenu { display:flex; align-items:center; justify-cont
    この指定は広い画面のときだけ効くので、スマホの見え方は変わらない。 */
 @media (min-width:900px) {
   #spQuestSheet .spp-card, #spVoteSheet .spp-card,
-  #spWisdomSheet .spp-card, #spLogSheet .spp-card {
+  #spWisdomSheet .spp-card, #spLogSheet .spp-card, #spTrySheet .spp-card {
     width:min(720px, calc(100vw - 80px));
     max-height:calc(100vh - 64px);
     padding:32px 34px 28px;
@@ -3654,6 +3655,10 @@ body.sp-star-open #room3Overlay { z-index:1900; }
   font-weight:700; padding:13px; cursor:pointer;
 }
 .spp-cta:hover { background:#d97600; }
+/* やってみた記録（1枚）の知恵カードの枠。自動で入る欄を、まとまりとして見せる */
+.st-wisdom { margin:16px 0 4px; padding:4px 14px 10px; border:1px dashed rgba(208,226,190,.45); border-radius:10px; }
+.st-wisdom-head { margin:10px 0 0; font-size:13px; font-weight:800; color:#D0E2BE; }
+.st-wisdom-head span { font-size:11px; font-weight:400; color:rgba(244,241,234,.55); margin-left:6px; }
 /* 報告の札。元になった Emu の投稿を探して選ぶところ。 */
 .sl-results { max-height:230px; overflow-y:auto; border:1px solid rgba(244,241,234,.12); border-radius:8px; }
 .sl-results:empty { display:none; }
@@ -20611,6 +20616,285 @@ async function spLogSubmit() {
 }
 window.spLogSubmit = spLogSubmit;
 
+/* ───────── やってみた記録（1枚）（11/20 オーナー） ─────────
+
+   前の流れ：知識を読む → 知識を試す → 拠点 → ギルド → #001 の詳細 → 受ける →
+   「やってみた」（読んだ投稿を検索して選び直す）→「つまずいた」→「気づいた」→ 知恵カード（3欄）。
+   ここでは「やったこと・つまずいたこと（任意）・分かったこと」の3つを書くだけにする。
+
+   残す記録は今までとまったく同じ（受けた記録・3種類の報告・知恵カード）。サーバーも決まり（Rules）も変えない。
+     ・受けていなければ、出すときに受ける（読みに来ただけの人を参加者にしない）
+     ・つまずいたことが空なら「（特になし）」として残す（完走には3種類そろっていることが要るため）
+     ・知恵カードは、①やったこと→通した経験、③分かったこと→残った一文、試した投稿→元の知識 で自動で入れる
+   画像を添えたいとき・1つずつ書きたいときは、今までの「やってみた／つまずいた／気づいた」も残してある。 */
+let _spTry = null;   /* { quest, app, pick, requiresPost } */
+let _spTrySubmitting = false;
+
+function _spTryFirstSentence(text, max) {
+  const t = String(text || '').replace(/\s+/g, ' ').trim();
+  const m = t.match(/^[\s\S]*?[。．！？!?](?=\s|$|[^」』）)])/);
+  const one = (m && m[0].length >= 8 ? m[0] : t).trim();
+  return one.length > max ? one.slice(0, max - 1) + '…' : one;
+}
+function _spTryAutofill() {
+  const did = document.getElementById('stDid'), found = document.getElementById('stFound');
+  const ex = document.getElementById('stExperiment'), ins = document.getElementById('stInsight');
+  if (ex && !ex.dataset.edited) ex.value = _spTryFirstSentence(did ? did.value : '', 200);
+  if (ins && !ins.dataset.edited) ins.value = _spTryFirstSentence(found ? found.value : '', 200);
+}
+window._spTryAutofill = _spTryAutofill;
+
+function _spTryRenderPick() {
+  const picked = document.getElementById('stPicked');
+  const wrap = document.getElementById('stPickWrap');
+  if (!picked || !wrap || !_spTry) return;
+  if (_spTry.pick) {
+    picked.innerHTML = '<span class="sl-pick-t">' + _emuEsc(_spTry.pick.title) + '</span>'
+      + '<button type="button" class="sl-pick-x" onclick="_spTryClearPick()">変える</button>';
+    picked.hidden = false;
+    wrap.hidden = true;
+  } else {
+    picked.hidden = true;
+    wrap.hidden = false;
+    _spTryLoadPosts();
+  }
+}
+function _spTryClearPick() { if (!_spTry) return; _spTry.pick = null; _spTryRenderPick(); }
+window._spTryClearPick = _spTryClearPick;
+
+async function _spTryLoadPosts() {
+  const box = document.getElementById('stResults');
+  if (!_spLogPosts) {
+    if (box) box.innerHTML = '<div class="sl-msg">投稿を読み込んでいます...</div>';
+    try {
+      const rows = await _spLogFetchPosts();
+      if (rows) { rows.sort(function (a, b) { return b.at - a.at; }); _spLogPosts = rows; }
+    } catch (e) { console.warn('投稿を読めませんでした:', e && (e.message || e)); }
+  }
+  if (!_spLogPosts) {
+    if (box) box.innerHTML = '<div class="sl-msg">投稿を読み込めませんでした。時間をおいて開き直してください。</div>';
+    return;
+  }
+  const s = document.getElementById('stSearch');
+  _spTrySearch(s ? s.value : '');
+}
+function _spTrySearch(word) {
+  const box = document.getElementById('stResults');
+  if (!box || !_spLogPosts) return;
+  const w = String(word || '').trim().toLowerCase();
+  const hit = _spLogPosts.filter(function (x) {
+    return !w || (x.title + ' ' + x.tags + ' ' + x.name + ' ' + x.body).toLowerCase().indexOf(w) >= 0;
+  }).slice(0, 200);
+  box.innerHTML = hit.length ? hit.map(function (x) {
+    return '<button type="button" class="sl-hit" data-pid="' + _emuEsc(x.id) + '">'
+      + '<span class="sl-hit-t">' + _emuEsc(x.title) + '</span>'
+      + '<span class="sl-hit-m">' + _emuEsc(x.name) + '</span></button>';
+  }).join('') : '<div class="sl-msg">見つかりませんでした。ほかの言葉で探してください。</div>';
+  if (!box._bound) {
+    box._bound = true;
+    box.addEventListener('click', function (ev) {
+      const b = ev.target && ev.target.closest ? ev.target.closest('.sl-hit') : null;
+      if (!b || !_spTry) return;
+      const x = (_spLogPosts || []).filter(function (y) { return y.id === b.dataset.pid; })[0];
+      if (!x) return;
+      _spTry.pick = { id: x.id, title: x.title };
+      _spTryRenderPick();
+    });
+  }
+}
+window._spTrySearch = _spTrySearch;
+
+/* 1枚の記録を開く。questId のクエストで、pick（{id,title}）は試した投稿（無ければ選ぶ） */
+window.openSpTryForm = async function (questId, app, pick) {
+  if (!questId || questId === SpQuestStore.FOUNDER_ID) return;
+  const p = await spPassportLoad();
+  if (!p) { alert('記録するにはログインが必要です。'); return; }
+  let q = (((app && app.state) || {}).quests || []).filter(function (x) { return x.id === questId; })[0] || null;
+  if (!q || q.series === undefined) {
+    try {
+      const rest = await _spRestDoc('sp_quests/' + encodeURIComponent(questId), true);
+      if (rest) q = Object.assign({ id: questId }, q || {}, rest);
+    } catch (e) {}
+  }
+  if (!q) { alert('クエストが見つかりませんでした。'); return; }
+  const requiresPost = q.series === 'general' && Number(q.questNumber) === 1;
+  _spTry = { quest: q, app: app || null, pick: pick && pick.id ? { id: String(pick.id), title: String(pick.title || '（Emuの投稿）') } : null, requiresPost: requiresPost };
+
+  const set = function (id, v) { const el = document.getElementById(id); if (el) { el.value = v || ''; delete el.dataset.edited; } };
+  ['stDid', 'stStuck', 'stFound', 'stExperiment', 'stInsight', 'stSearch'].forEach(function (id) { set(id, ''); });
+  const qn = document.getElementById('stQuest');
+  if (qn) qn.textContent = 'クエスト：' + (q.fullTitle || q.title || '');
+  const pl = document.getElementById('stPostLabel');
+  if (pl) pl.textContent = '試した知識' + (requiresPost ? '（必須）' : '（任意）');
+
+  /* クエストごとの「報告」の意味（#002 WORK なら「やってみた」は提出物、など）を、ここでも案内する */
+  const rg = spQuestReportGuide(q);
+  const guide = function (id, text) { const el = document.getElementById(id); if (el) { el.textContent = text || ''; el.hidden = !text; } };
+  const label = function (id, text) { const el = document.getElementById(id); if (el) el.textContent = text; };
+  if (rg && rg.kind !== 'trial' && !requiresPost) {
+    label('stDidLabel', '① やったこと（' + rg.steps['やってみた'].as + '）');
+    label('stStuckLabel', '② つまずいたこと（' + rg.steps['つまずいた'].as + '・なければ空のままで大丈夫）');
+    label('stFoundLabel', '③ 分かったこと（' + rg.steps['気づいた'].as + '）');
+    guide('stDidGuide', rg.steps['やってみた'].ask);
+    guide('stStuckGuide', rg.steps['つまずいた'].ask);
+    guide('stFoundGuide', rg.steps['気づいた'].ask);
+  } else {
+    label('stDidLabel', '① やったこと');
+    label('stStuckLabel', '② つまずいたこと（なければ空のままで大丈夫）');
+    label('stFoundLabel', '③ 分かったこと');
+    ['stDidGuide', 'stStuckGuide', 'stFoundGuide'].forEach(function (id) { guide(id, ''); });
+  }
+  const ins = document.getElementById('stInsight');
+  if (ins) ins.placeholder = (rg && rg.wisdom) || 'やってみて分かったことを、一文に削る';
+  const btn = document.getElementById('stSubmit');
+  if (btn) { btn.disabled = false; btn.textContent = '記録する'; }
+  _spTryRenderPick();
+  document.body.classList.add('sp-try-open');
+  window.EmuAnalytics?.track('quest_try_open', { from: pick ? 'post' : 'quest' }, questId + ':' + Date.now());
+};
+function closeSpTryForm() { document.body.classList.remove('sp-try-open'); }
+window.closeSpTryForm = closeSpTryForm;
+
+/* 知識の投稿の「これを試す」。クエスト #001（Emu の知識を、やってみる）を探して、この投稿を選んだ状態で開く */
+window.spTryFromPost = async function (postId, postTitle) {
+  const p = await spPassportLoad();
+  if (!p) { alert('試して記録するにはログインが必要です。'); return; }
+  let quests = null;
+  try { quests = await _spReadAll('sp_quests'); } catch (e) {}
+  const q = (quests || []).filter(function (x) {
+    return x && x.series === 'general' && Number(x.questNumber) === 1 && !x.parentQuestId;
+  }).sort(function (a, b) {
+    /* 受付中を先に。同じなら新しい方 */
+    const open = function (x) { return String(x.status || '').toUpperCase() === 'CLOSED' ? 1 : 0; };
+    return open(a) - open(b) || (Number(b.createdAt) || 0) - (Number(a.createdAt) || 0);
+  })[0];
+  if (!q) { alert(quests ? '試すためのクエスト（#001）が見つかりませんでした。' : 'クエストを読み込めませんでした。時間をおいてお試しください。'); return; }
+  const app = document.getElementById('spDaoFrame')?.contentWindow?.app || null;
+  await window.openSpTryForm(q.id, app, { id: postId, title: postTitle });
+};
+
+async function spTrySubmit() {
+  if (_spTrySubmitting || !_spTry) return;
+  const val = function (id) { const el = document.getElementById(id); return el ? el.value.trim() : ''; };
+  const did = val('stDid'), stuck = val('stStuck'), found = val('stFound');
+  if (_spTry.requiresPost && !_spTry.pick) { alert('試した知識（Emuの投稿）を選んでください。'); return; }
+  if (!did) { alert('① やったことを書いてください。'); return; }
+  if (!found) { alert('③ 分かったことを書いてください。'); return; }
+  _spTryAutofill();
+  const experiment = val('stExperiment') || _spTryFirstSentence(did, 200);
+  const insight = val('stInsight') || _spTryFirstSentence(found, 200);
+  const p = await spPassportLoad();
+  if (!p) { alert('記録するにはログインが必要です。'); return; }
+  /* 知恵カードにはパスポートの番号が要る。報告だけ残って知恵カードで止まらないよう、先に確かめる */
+  if (!p.spid) { alert('知恵カードを置くには、SchoolParkパスポートが必要です。\n\n右上のアカウントからパスポートを開いて番号ができているか確かめてから、もう一度お試しください。'); return; }
+  const q = _spTry.quest, questId = q.id, app = _spTry.app, pick = _spTry.pick;
+  const commitPath = 'sp_quests/' + encodeURIComponent(questId) + '/commits/' + encodeURIComponent(p.addr);
+  const btn = document.getElementById('stSubmit');
+  const step = function (t) { if (btn) btn.textContent = t; };
+  _spTrySubmitting = true;
+  if (btn) btn.disabled = true;
+  const done = function () { _spTrySubmitting = false; if (btn) { btn.disabled = false; btn.textContent = '記録する'; } };
+  try {
+    /* 1) 受けているか。前の周がまだ認められていないなら、ここで止める（報告だけ残って知恵カードで断られないように） */
+    step('確かめています…');
+    let cur = null;
+    try { cur = await _spRestDoc(commitPath, true, true); }
+    catch (e) { alert('受けているかを確かめられませんでした。通信を確かめて、もう一度お試しください。'); return done(); }
+    if (cur) {
+      const approved = cur.approved === true ? Math.max(0, Number(cur.approvedRounds) || 0) : 0;
+      let placed = 0;
+      try {
+        const all = await _spAllWisdom(true);
+        (all || []).forEach(function (w) {
+          if (w.questId === questId && String(w.author || '').toLowerCase() === String(p.addr).toLowerCase()) placed++;
+        });
+      } catch (e) {}
+      if (placed > approved) {
+        alert('このクエストは、前の記録を運営が確かめているところです。\n\n確かめ終わる（完走として認められる）と、次の記録を出せます。');
+        return done();
+      }
+    } else {
+      step('クエストを受けています…');
+      const fb = window.fbLib;
+      const ref = fb.doc(window.db, 'sp_quests', questId, 'commits', p.addr);
+      await _spSoon(fb.setDoc(ref, { name: p.name, tookAt: Date.now() }), 8000);
+      const saved = await _spRestDoc(commitPath, true, true);
+      if (!saved) throw Object.assign(new Error('受けた記録を確認できませんでした'), { stage: 'commit' });
+      window.EmuAnalytics?.track('quest_join', {}, questId + ':' + saved.tookAt);
+    }
+
+    /* 2) 3つの報告。新しい順に並べたとき「分かったこと」が上に来るよう、時刻を1ずつずらす */
+    const at = Date.now();
+    const base = { author: p.addr, authorName: p.name,
+      fromPostId: pick ? String(pick.id).slice(0, 80) : '', fromPostTitle: pick ? String(pick.title).slice(0, 120) : '' };
+    const rows = [
+      { kind: 'やってみた', body: did },
+      { kind: 'つまずいた', body: stuck || '（特になし）' },
+      { kind: '気づいた', body: found }
+    ];
+    const created = [];
+    for (let i = 0; i < rows.length; i++) {
+      step('記録しています…（' + (i + 1) + '/4）');
+      const data = Object.assign({}, base, { kind: rows[i].kind, body: rows[i].body.slice(0, 2000), at: at + i,
+        sourceLogId: created.length ? created[0].id : '' });
+      try {
+        const s = await _spLogSave(questId, data);
+        created.push(Object.assign({ id: s.id }, data));
+      } catch (e) {
+        e.stage = 'log'; e.kind = rows[i].kind; e.created = created.length;
+        throw e;
+      }
+    }
+    try { _spMemoDrop('readall:sp_quests/' + encodeURIComponent(questId) + '/logs'); } catch (e) {}
+    const pending = _spPendingQuestLogs.get(questId) || [];
+    created.forEach(function (c) { pending.push(c); });
+    _spPendingQuestLogs.set(questId, pending);
+
+    /* 3) 知恵カード（置くのはサーバー。3種類そろっているかをそこで確かめる） */
+    step('知恵カードを置いています…（4/4）');
+    const r = await fetch('https://emu-realtime.onrender.com/api/schoolpark/quest-completions/'
+      + encodeURIComponent(questId) + '/wisdom',
+      { method: 'POST', headers: await emuAuthHeaders(true), body: JSON.stringify({
+        fromPostId: pick ? String(pick.id).slice(0, 80) : '',
+        fromPostTitle: pick ? String(pick.title).slice(0, 120) : '',
+        knowledge: String((pick && pick.title) || q.knowledge || '').slice(0, 200),
+        experiment: experiment.slice(0, 200),
+        insight: insight.slice(0, 200),
+        authorName: p.name
+      }) });
+    const data = await r.json().catch(function () { return {}; });
+    if (!r.ok) {
+      const err = new Error(_spWisdomErrorText(data)); err.stage = 'wisdom'; throw err;
+    }
+  } catch (e) {
+    const stage = e && e.stage;
+    if (stage === 'wisdom') {
+      alert('報告は3つとも残しました。\n\n知恵カードは置けませんでした：\n' + e.message
+        + '\n\nクエストの詳細の「知恵カードを置く」から、あとで置けます。');
+      closeSpTryForm();
+    } else if (stage === 'log') {
+      alert((e.created ? '報告を' + e.created + 'つ残したところで止まりました（「' + e.kind + '」を残せませんでした）。\n\n残りは、クエストの詳細の「1つずつ書く」から出してください。'
+        : '記録を残せませんでした。もう一度お試しください。'));
+      if (e.created) closeSpTryForm();
+    } else {
+      alert('クエストを受けられませんでした。通信を確かめて、もう一度お試しください。');
+    }
+    done();
+    if (app) window.spDaoLoadQuests(app).catch(function () {});
+    return;
+  }
+  done();
+  closeSpTryForm();
+  try { _spMemoDrop('readall:sp_wisdom'); } catch (e) {}
+  window.EmuAnalytics?.track('quest_try_done', { from: pick ? 'post' : 'quest' }, questId + ':' + Date.now());
+  spWisdomCelebrate(insight, app);
+  if (app) {
+    window.spDaoLoadQuests(app).catch(function () {});
+    window.spDaoLoadWisdom(app).catch(function () {});
+  }
+}
+window.spTrySubmit = spTrySubmit;
+
 /* クエストを出す。
    道は2つある。どちらも残す。
      A  ギルド → 議題 → 投票 → 採択 → 「クエストにする」
@@ -30513,6 +30797,12 @@ async function sendEmuFeedback() {
           await spOpenProposalFromPost(snap.id, String(d.title || ''));
           return;
         }
+        /* 11/20 オーナー：「これを試す」。この投稿を選んだ状態で、クエスト #001 の記録（1枚）を開く。 */
+        if (message.action === 'try') {
+          const d = snap.data() || {};
+          await window.spTryFromPost(snap.id, String(d.title || ''));
+          return;
+        }
         const holder = createPostElementFromData({ id:snap.id, ...snap.data() });
         holder.style.display = 'none';
         document.body.appendChild(holder);
@@ -30984,6 +31274,53 @@ async function sendEmuFeedback() {
     <p class="spp-note" id="slPostGuide"></p>
     <button type="button" class="spp-cta" id="slSubmit" onclick="spLogSubmit()">報告を出す</button>
     <p class="spp-note">いちど出した報告は、書き換えも削除もできません。</p>
+  </div>
+</div>
+
+<!-- 11/20 オーナー：やってみた記録（1枚）。
+     前は「受ける」→「やってみた」→「つまずいた」→「気づいた」→「知恵カード（3欄）」と、別々に5回開いて6つ書いていた。
+     ここでは3つ書くだけ。出すと、受けていなければ受けて、3つの報告と知恵カードを順に残す（中身は今までと同じ記録）。
+     知恵カードの欄は書いたものから自動で入る。本人は直すだけ。 -->
+<div id="spTrySheet" role="dialog" aria-modal="true" aria-labelledby="stTitleLabel">
+  <div class="spp-veil" onclick="closeSpTryForm()"></div>
+  <div class="spp-card">
+    <div class="spp-head">
+      <div class="spp-head-text">
+        <div class="spp-kicker">TRY</div>
+        <div class="spp-title" id="stTitleLabel">やってみた記録</div>
+      </div>
+      <button type="button" class="spp-close" onclick="closeSpTryForm()" aria-label="閉じる">✕</button>
+    </div>
+    <p class="spp-note" id="stQuest" style="margin:0"></p>
+    <p class="spp-note" style="margin:6px 0 0">3つ書いて出すと、報告と知恵カードが1回で残ります。運営が確かめると完走です。</p>
+
+    <label class="spv-label" id="stPostLabel">試した知識</label>
+    <div id="stPicked" class="sl-pick" hidden></div>
+    <div id="stPickWrap">
+      <input class="spv-in" id="stSearch" maxlength="40" placeholder="全投稿から題名・タグ・名前で絞り込む" oninput="_spTrySearch(this.value)">
+      <div id="stResults" class="sl-results"></div>
+    </div>
+
+    <label class="spv-label" for="stDid" id="stDidLabel">① やったこと</label>
+    <p class="spp-note" id="stDidGuide" hidden style="margin:0 0 6px"></p>
+    <textarea class="spv-in spv-area" id="stDid" maxlength="2000" placeholder="実際に何をやったか。うまくいったこと、いかなかったこと。" oninput="_spTryAutofill()"></textarea>
+    <label class="spv-label" for="stStuck" id="stStuckLabel">② つまずいたこと（なければ空のままで大丈夫）</label>
+    <p class="spp-note" id="stStuckGuide" hidden style="margin:0 0 6px"></p>
+    <textarea class="spv-in spv-area" id="stStuck" maxlength="2000" placeholder="何をしようとして、どこで止まったか。"></textarea>
+    <label class="spv-label" for="stFound" id="stFoundLabel">③ 分かったこと</label>
+    <p class="spp-note" id="stFoundGuide" hidden style="margin:0 0 6px"></p>
+    <textarea class="spv-in spv-area" id="stFound" maxlength="2000" placeholder="やる前と、やったあとで変わったこと。" oninput="_spTryAutofill()"></textarea>
+
+    <div class="st-wisdom">
+      <div class="st-wisdom-head">知恵カード <span>上の①③から自動で入ります。直せます。</span></div>
+      <label class="spv-label" for="stExperiment">通した経験</label>
+      <input class="spv-in" id="stExperiment" maxlength="200" placeholder="何を、どれだけやったか" oninput="this.dataset.edited='1'">
+      <label class="spv-label" for="stInsight">残った一文</label>
+      <textarea class="spv-in spv-area" id="stInsight" maxlength="200" placeholder="やってみて分かったことを、一文に削る" oninput="this.dataset.edited='1'"></textarea>
+    </div>
+
+    <button type="button" class="spp-cta" id="stSubmit" onclick="spTrySubmit()">記録する</button>
+    <p class="spp-note">出すと、このクエストを受けたことになります。出した記録は書き換えも削除もできません。<br>画像を添えたいときは、クエストの詳細の「1つずつ書く」から出せます。</p>
   </div>
 </div>
 
