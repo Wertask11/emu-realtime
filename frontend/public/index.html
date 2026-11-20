@@ -16732,6 +16732,7 @@ async function spDaoRefreshNow(why) {
     if (st && st.reason === 'quota' && Date.now() < st.blockedUntil) {
       console.warn('今日のぶんの読み取り枠を使い切っています。'
         + '読み直しを見合わせます（' + Math.ceil((st.blockedUntil - Date.now()) / 60000) + '分後にもう一度）。');
+      _spQuotaShow(true);
       return false;
     }
   } catch (e) {}
@@ -16762,6 +16763,8 @@ async function spDaoRefreshNow(why) {
   /* 引っぱったときは、待つのを15秒で見切る（返ってこない読み込みで「読み直しています…」のまま止めない） */
   const finished = pulled ? (await _spSoon(jobs, 15000)).ok : (await jobs, true);
   console.warn('SchoolPark を読み直しました（' + (why || '定期') + '）');
+  /* 枠が戻って読めたら、上限のお知らせを消す */
+  _spQuotaShow(_spQuotaBlocked());
   if (!pulled) return true;
   let guilds = 0;
   try { guilds = ((app.state && app.state.guilds) || []).length; } catch (e) {}
@@ -18843,6 +18846,7 @@ function _spRestBlock(res, body) {
   st.blockedUntil = Date.now() + wait;
   st.reason = kind;
   st.message = text.slice(0, 400);
+  if (kind === 'quota') _spQuotaShow(true);
   if (kind === 'quota') {
     console.warn('今日のぶんの読み取り枠を使い切ったと言われました。'
       + Math.round(wait / 60000) + '分ほど待ってから1回だけ試します。'
@@ -18853,6 +18857,32 @@ function _spRestBlock(res, body) {
       + '秒ほど待ってから読み直します。');
   }
 }
+
+/* 11/20 オーナー「引っぱっても読み直せない」：Firebase の1日の読み取り枠（無料枠）を使い切ると、何も読めず 0 件に見える。
+   黙って 0 件にしない。いつ戻るか（アメリカ西海岸の0時＝日本の夕方）を添えて、画面と「引っぱって読み直す」に出す。 */
+function _spQuotaBlocked() {
+  try { const st = _spRestState(); return !!(st && st.reason === 'quota' && Date.now() < st.blockedUntil); } catch (e) { return false; }
+}
+function _spQuotaResetLabel() {
+  try {
+    const now = new Date();
+    const la = new Date(now.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
+    const next = new Date(la.getTime()); next.setHours(24, 0, 0, 0);
+    const at = new Date(now.getTime() + (next.getTime() - la.getTime()));
+    return at.getHours() + '時' + (at.getMinutes() ? at.getMinutes() + '分' : '') + 'ごろ';
+  } catch (e) { return '夕方'; }
+}
+function _spQuotaNote() {
+  return '今日のぶんの読み込みの上限（無料枠）に達したため、いまは読み込めません。' + _spQuotaResetLabel() + 'に戻ります。書いたものや記録は消えていません。';
+}
+function _spQuotaShow(on) {
+  try {
+    const app = document.getElementById('spDaoFrame')?.contentWindow?.app;
+    if (app && typeof app.setState === 'function') app.setState({ quotaNote: on ? _spQuotaNote() : '' });
+  } catch (e) {}
+}
+window._spQuotaBlocked = _spQuotaBlocked;
+window._spQuotaNote = _spQuotaNote;
 
 async function _spRestGetOnce(path, needAuth, post) {
   let opt = {};
@@ -31003,7 +31033,8 @@ window.emuInAppRefresh = async function (source) {
     /* 11/18：読み直せなかったときは失敗を返す（引っぱった画面に「読み直せませんでした」と出る） */
     if (typeof window.spDaoRefreshNow === 'function') {
       const ok = await window.spDaoRefreshNow('引っぱって読み直し', { frame: frameOf('spDaoFrame') || frameOf('spRoomFrame') });
-      if (ok === false) throw new Error('REFRESH_FAILED');
+      /* 11/20：無料枠を使い切っているときは、そう伝える（引っぱった画面に「何時ごろに戻ります」と出る） */
+      if (ok === false) throw new Error(_spQuotaBlocked() ? 'QUOTA:' + _spQuotaResetLabel() : 'REFRESH_FAILED');
     }
     return 'schoolpark';
   }
@@ -31017,7 +31048,7 @@ window.emuInAppRefresh = async function (source) {
     return 'profile';
   }
   if (b.contains('sp-dao-open') && typeof window.spDaoRefreshNow === 'function') {
-    if (await window.spDaoRefreshNow('引っぱって読み直し') === false) throw new Error('REFRESH_FAILED');
+    if (await window.spDaoRefreshNow('引っぱって読み直し') === false) throw new Error(_spQuotaBlocked() ? 'QUOTA:' + _spQuotaResetLabel() : 'REFRESH_FAILED');
     return 'schoolpark';
   }
   /* 知識を探す・知識を試すは読み込むデータが無いので、画面を出し直すだけ */

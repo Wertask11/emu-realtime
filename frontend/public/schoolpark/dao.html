@@ -329,6 +329,8 @@ if (window.top === window.self) window.location.replace('/');
           <button type="button" onClick="{{ goCity }}" style="align-self:flex-start; min-height:44px; padding:10px 16px; border:1px solid var(--emu-brand-strong); border-radius:7px; background:transparent; color:var(--emu-brand-strong); font:inherit; cursor:pointer">← Cityへ戻る</button>
         </sc-if>
         <sc-if value="{{ isCity }}"><div data-city-slot=""></div></sc-if>
+        <!-- 11/20：読み込みの上限（無料枠）に達したとき。黙って 0 件に見せず、いつ戻るかを出す（親の _spQuotaShow が入れる） -->
+        <sc-if value="{{ hasQuotaNote }}"><div class="sp-ux-note" role="status" style="border-color:#a85a33!important; color:#7a3b1d">{{ quotaNote }}</div></sc-if>
 
 
         <!-- 11/19 オーナー：#000（恒久の原点）と年内目標の大きなカード2枚は、クエストの拠点の見出しの中の小さな入口にした（下の isExperiments）。
@@ -2435,6 +2437,7 @@ class Component extends DCLogic {
       noWisdom:s.noWisdom,
       head: {kicker: (heads[s.screen] || heads.experiments)[0], title: (heads[s.screen] || heads.experiments)[1]},
       headScreen: String(s.screen || ''),
+      hasQuotaNote: !!s.quotaNote, quotaNote: s.quotaNote || '',
       isCity:s.screen==='city', goCity:this.go('city'),
       showCityReturn:!!this.cityReturn && ['experiments','detail','guild'].includes(s.screen),
       isExperiments:s.screen==='experiments', isDetail:s.screen==='detail' && !cur.isFounder,
