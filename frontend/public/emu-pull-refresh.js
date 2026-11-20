@@ -135,14 +135,18 @@
     if (e.origin !== location.origin || !e.data) return;
     if (e.data.type === 'emu-pull-refresh-done' && waiting[e.data.id]) {
       var w = waiting[e.data.id]; delete waiting[e.data.id];
-      if (e.data.ok === false) w.reject(new Error('REFRESH_FAILED')); else w.resolve(e.data.result);
+      if (e.data.ok === false) w.reject(new Error(e.data.reason || 'REFRESH_FAILED')); else w.resolve(e.data.result);
     }
     /* Emu 本体：中の枠からの「読み直して」を受けて、読み直したら返事をする */
     if (e.data.type === 'emu-pull-refresh' && !inFrame && typeof window.emuInAppRefresh === 'function' && e.source) {
       var src = e.source, id = e.data.id;
       Promise.resolve().then(function () { return window.emuInAppRefresh(src); })
         .then(function (r) { src.postMessage({ type: 'emu-pull-refresh-done', id: id, ok: true, result: r || null }, location.origin); },
-              function () { src.postMessage({ type: 'emu-pull-refresh-done', id: id, ok: false }, location.origin); });
+              function (err) {
+                /* 11/20：読み込みの上限（無料枠）のときだけ、理由（QUOTA:戻る時刻）を返す。ほかは今までどおり理由なし */
+                var reason = err && /^QUOTA:/.test(String(err.message || '')) ? String(err.message).slice(0, 40) : undefined;
+                src.postMessage({ type: 'emu-pull-refresh-done', id: id, ok: false, reason: reason }, location.origin);
+              });
     }
   });
 
@@ -154,8 +158,10 @@
     Promise.race([ask(), limit]).then(function () {
       busy = false; clearTimeout(timer);
       show('読み直しました', THRESHOLD, 'done'); hide(900);
-    }, function () {
+    }, function (err) {
       busy = false; clearTimeout(timer);
+      var m = /^QUOTA:(.*)$/.exec(String(err && err.message || ''));
+      if (m) { show('今日の読み込みの上限です。' + m[1] + 'に戻ります', THRESHOLD, 'fail'); hide(4500); return; }
       show('読み直せませんでした。少し待って、もう一度引っぱってね', THRESHOLD, 'fail'); hide(2600);
     });
   }

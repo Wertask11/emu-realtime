@@ -138,6 +138,19 @@ test('その日の読み取り枠を使い切ったと言われたら、10分待
   assert.equal(st.reason, 'quota', 'どちらの429なのかを覚えていない');
 });
 
+test('枠切れ（上限）のときは、どの画面でも「メンテナンス中」を出す。混んでいるだけのときは出さない（11/20）', () => {
+  const body = '{"error":{"code":429,"message":"Quota exceeded","status":"RESOURCE_EXHAUSTED"}}';
+  const { ctx } = gate();
+  const shown = [];
+  vm.runInContext('window.emuShowMaintenance = function (at) { window.__shown.push(at); }; window.__shown = [];', ctx);
+  ctx._spRestBlock({ headers: { get: () => null } }, '{"error":{"code":429,"status":"UNAVAILABLE"}}');
+  assert.equal(vm.runInContext('window.__shown.length', ctx), 0, '混んでいるだけなのにメンテナンス中にした');
+  ctx._spRestBlock({ headers: { get: () => null } }, body);
+  const at = vm.runInContext('window.__shown[0]', ctx);
+  assert.ok(at > Date.now() && at <= Date.now() + 25 * 3600000, '再開の時刻が渡っていない');
+  shown.push(at);
+});
+
 test('枠切れのときは、返ってきた文面を控えに残す', () => {
   const { ctx } = gate();
   ctx._spRestBlock({ headers: { get: () => null } },
@@ -226,4 +239,40 @@ test('429 を見分けて、関門を閉じている', () => {
   const at404 = once.indexOf('r.status === 404');
   const at429 = once.indexOf('r.status === 429');
   assert.ok(at404 > 0 && at404 < at429, '404 の判定が 429 より後ろにある');
+});
+
+/* 11/20 オーナー：「開けませんでした」の画面。知恵ライブラリ・City・クエストのどれから入っても同じ関数を通る。
+   上限（無料枠）のせいなら「メンテナンス中」を出し、そうでなければ「Emu for SchoolPark」の名前で出す。 */
+function unavailableScreen(quota) {
+  const src = INDEX.slice(INDEX.indexOf('async function spShowSchoolParkUnavailable(access) {'),
+                          INDEX.indexOf('function spCloseAccessScreen() {'));
+  const els = {};
+  ['spAccessScreen', 'spAccessLead', 'spAccessTitle', 'spAccessEyebrow'].forEach(id => { els[id] = { style: {}, textContent: '' }; });
+  const calls = [];
+  const ctx = vm.createContext({
+    document: { getElementById: id => els[id] || null },
+    window: {
+      emuCheckMaintenance: async () => false,
+      _spQuotaProbe: async () => quota,
+      _spQuotaMaintenance: () => { calls.push('maintenance'); return true; }
+    }
+  });
+  vm.runInContext(src, ctx);
+  return { ctx, els, calls };
+}
+
+test('知恵ライブラリなどで開けなかったとき：上限のせいなら「メンテナンス中」、ちがえば「Emu for SchoolParkを開けませんでした」', async () => {
+  const q = unavailableScreen(true);
+  await q.ctx.spShowSchoolParkUnavailable({ allowed: false, unavailable: true });
+  assert.deepEqual(q.calls, ['maintenance']);
+  assert.notEqual(q.els.spAccessScreen.style.display, 'flex', '上限なのに「開けませんでした」を出した');
+
+  const n = unavailableScreen(false);
+  await n.ctx.spShowSchoolParkUnavailable({ allowed: false, unavailable: true });
+  assert.deepEqual(n.calls, []);
+  assert.equal(n.els.spAccessScreen.style.display, 'flex');
+  assert.equal(n.els.spAccessTitle.textContent, 'Emu for SchoolParkを開けませんでした');
+  assert.equal(n.els.spAccessEyebrow.textContent, 'EMU FOR SCHOOLPARK');
+  assert.ok(INDEX.indexOf('Emu for SchoolParkは一般公開中です。') > 0);
+  assert.ok(INDEX.indexOf('>SchoolParkは一般公開中です。') < 0);
 });

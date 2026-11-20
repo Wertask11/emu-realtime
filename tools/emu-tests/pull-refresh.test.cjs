@@ -28,7 +28,7 @@ window.failNext = false;
 window.emuInAppRefresh = async (source) => {
   window.calls.push(source === null ? 'self' : source === document.getElementById('k').contentWindow ? 'knowledge' : 'other');
   await new Promise(r => setTimeout(r, 60));
-  if (window.failNext) { window.failNext = false; throw new Error('down'); }
+  if (window.failNext) { const m = window.failMsg || 'down'; window.failNext = false; window.failMsg = ''; throw new Error(m); }
   return 'ok';
 };
 </script><script src="/emu-pull-refresh.js"></script></body>`;
@@ -128,6 +128,24 @@ test('Emu 本体の画面で引っぱると本体を読み直す。読み直せ�
     await w.page.waitForFunction(() => /読み直しました/.test(document.getElementById('emuPtr')?.innerText || ''));
     assert.deepEqual(await w.page.evaluate(() => window.calls), ['self', 'self']);
     // 中の枠からの読み直しが失敗したときも、枠の中で「読み直せませんでした」
+    await w.page.evaluate(() => { window.failNext = true; });
+    await pull(w.frame, '#posts', 220);
+    await w.frame.waitForFunction(() => /読み直せませんでした/.test(document.getElementById('emuPtr')?.innerText || ''));
+  } finally { await w.close(); }
+});
+
+test('読み込みの上限（無料枠）のときは「何時ごろに戻ります」と出す。中の枠でも本体でも（11/20）', async () => {
+  const w = await open();
+  try {
+    await w.page.evaluate(() => { window.failNext = true; window.failMsg = 'QUOTA:17時ごろ'; });
+    await pull(w.frame, '#posts', 220);
+    await w.frame.waitForFunction(() => /今日の読み込みの上限です。17時ごろに戻ります/.test(document.getElementById('emuPtr')?.innerText || ''));
+    await w.page.waitForTimeout(4800);
+    await w.page.evaluate(() => { window.failNext = true; window.failMsg = 'QUOTA:17時ごろ'; });
+    await pull(w.page, '#top', 220);
+    await w.page.waitForFunction(() => /今日の読み込みの上限です。17時ごろに戻ります/.test(document.getElementById('emuPtr')?.innerText || ''));
+    /* ほかの失敗では、理由を中の枠に渡さない（今までどおりの文） */
+    await w.page.waitForTimeout(4800);
     await w.page.evaluate(() => { window.failNext = true; });
     await pull(w.frame, '#posts', 220);
     await w.frame.waitForFunction(() => /読み直せませんでした/.test(document.getElementById('emuPtr')?.innerText || ''));

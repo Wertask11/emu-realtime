@@ -79,9 +79,15 @@ test('ガイドはページを移らずに窓で開き、閉じたら Knowledge 
     const url = w.page.url();
     await w.page.locator('#openGuide').click();
     await w.page.locator('#guideDialog[open]').waitFor();
-    const frame = w.page.frames().find(f => f.url().includes('knowledge-lab-guide.html?embed=1'));
+    /* 窓が開いた直後は、中のページがまだ付いていないことがある（重いときにだけ落ちていた）。付くまで待つ */
+    let frame = null;
+    for (let i = 0; i < 100 && !frame; i++) {
+      frame = w.page.frames().find(f => f.url().includes('knowledge-lab-guide.html?embed=1'));
+      if (!frame) await w.page.waitForTimeout(100);
+    }
     assert.ok(frame, 'ガイドは窓の中で開く');
     await frame.waitForLoadState();
+    await frame.locator('.lab-header').waitFor({ state: 'attached' });
     assert.equal(await frame.evaluate(() => getComputedStyle(document.querySelector('.lab-header')).display), 'none', '窓の中ではガイドの上の帯を出さない');
     await frame.locator('#participate').click();
     await w.page.waitForFunction(() => !document.getElementById('guideDialog').open);

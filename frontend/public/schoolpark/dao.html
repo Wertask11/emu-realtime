@@ -328,6 +328,9 @@ if (window.top === window.self) window.location.replace('/');
         <sc-if value="{{ showCityReturn }}">
           <button type="button" onClick="{{ goCity }}" style="align-self:flex-start; min-height:44px; padding:10px 16px; border:1px solid var(--emu-brand-strong); border-radius:7px; background:transparent; color:var(--emu-brand-strong); font:inherit; cursor:pointer">← Cityへ戻る</button>
         </sc-if>
+        <!-- 11/20：読み込みの上限（無料枠）に達したとき。黙って 0 件に見せず、いつ戻るかを出す（親の _spQuotaShow が入れる）。
+             クエスト・知恵ライブラリ・City など、どの画面でもいちばん上に出す -->
+        <sc-if value="{{ hasQuotaNote }}"><div class="sp-ux-note sp-quota-note" role="status" style="border-color:#a85a33!important; color:#7a3b1d">{{ quotaNote }}</div></sc-if>
         <sc-if value="{{ isCity }}"><div data-city-slot=""></div></sc-if>
 
 
@@ -1896,7 +1899,7 @@ class Component extends DCLogic {
       wSorts: [['new', '新しい順'], ['cited', '引用が多い順']].map(([id, label]) => ({ label, on: sort === id ? 'true' : 'false', go: () => this.setState({ wsort: id }) })),
       wMineOn: s.wmine ? 'true' : 'false',
       toggleWMine: () => this.setState({ wmine: !s.wmine, wlimit: 30 }),
-      wCountLabel: narrowed ? (all.length + '枚中 ' + list.length + '枚') : ('全部で ' + all.length + '枚'),
+      wCountLabel: (s.quotaNote && !all.length) ? '' : narrowed ? (all.length + '枚中 ' + list.length + '枚') : ('全部で ' + all.length + '枚'),
       wHasMore: list.length > shown.length,
       wMoreLabel: 'もっと見る（残り ' + (list.length - shown.length) + '枚）',
       wMore: () => this.setState({ wlimit: limit + 30 })
@@ -2431,10 +2434,12 @@ class Component extends DCLogic {
       guildUnsorted:s.guildUnsorted || {label:'', open:function(){}},
       hasUnsorted:!!s.hasUnsorted, curGuild:s.curGuild || {}, ...this.guildSimpleVals(s),
       entryOnly:!!s.entryOnly, toggleEntryOnly:()=>this.setQuestFilter({entryOnly:!s.entryOnly}), noShownQuests:exps.length>0 && shownExps.length===0, resetQuestFilters:()=>this.setQuestFilter({entryOnly:false,filter:'すべて',qPick:'all',series:'general'}),
-      noQuests:exps.length === 0,
-      noWisdom:s.noWisdom,
+      /* 読み込みの上限（無料枠）のあいだは「まだ無い」「0枚」と言い切らない（読めていないだけ。11/20） */
+      noQuests:exps.length === 0 && !s.quotaNote,
+      noWisdom:s.noWisdom && !s.quotaNote,
       head: {kicker: (heads[s.screen] || heads.experiments)[0], title: (heads[s.screen] || heads.experiments)[1]},
       headScreen: String(s.screen || ''),
+      hasQuotaNote: !!s.quotaNote, quotaNote: s.quotaNote || '',
       isCity:s.screen==='city', goCity:this.go('city'),
       showCityReturn:!!this.cityReturn && ['experiments','detail','guild'].includes(s.screen),
       isExperiments:s.screen==='experiments', isDetail:s.screen==='detail' && !cur.isFounder,
