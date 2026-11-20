@@ -1,4 +1,5 @@
 import { createBridge } from './city-bridge.js';
+import { createRoomUI } from './city-room.js';
 
 const instances = new WeakMap();
 const escape = value => String(value ?? '').replace(/[&<>"']/g, c =>
@@ -74,7 +75,7 @@ export function createCity(host, app, bridge = createBridge(window.parent, app))
   let message = '', error = '', loading = false, recording = false, myLoading = false;
   let catalogAt = 0, myAt = 0, epoch = 0, myGeneration = 0, share = null, loadJob = null, myJob = null;
   const recorded = new Map();
-  let immersive = null, immersiveOpening = false;
+  let immersive = null, immersiveOpening = false, roomUI = null;
   host.className = 'sp-city';
   host.setAttribute('aria-label', 'SchoolPark City');
 
@@ -83,11 +84,12 @@ export function createCity(host, app, bridge = createBridge(window.parent, app))
   const empty = (title, note) => `<div class="city-empty"><strong>${escape(title)}</strong>${escape(note)}</div>`;
   const unavailable = label => `<p class="city-note">${escape(label)}を読み込めませんでした。0件という意味ではありません。時間をおいて更新してください。</p>`;
   function go(next, id = '') {
+    if (page === 'my' && next !== 'my' && roomUI && !roomUI.canLeave()) return;
     if (next === 'products') productShopId = id;
     page = next; selected = id; share = null; message = ''; error = '';
     render(); app.toTop();
     host.querySelector('[data-city-heading]')?.focus({ preventScroll: true });
-    if (page === 'my') loadMy();
+
     if (page === 'commerce') loadCommerce();
     if (page === 'partners') loadPartners();
     if (page === 'products') loadProducts(id);
@@ -355,41 +357,9 @@ export function createCity(host, app, bridge = createBridge(window.parent, app))
       ${button('quest',spot.questId ? '関連Questをひらく' : '既存のQuestを探す',spot.questId || '',true)}
       ${spot.guildId ? button('guild','関連Guildをひらく',spot.guildId,true) : ''}
       ${button('emu','Emuに残す','',true)}<p class="city-muted">Emuのトップへ移動します。投稿はEmuの既存画面で行います。自動投稿はしません。</p>
-      ${button('page','MY CITYで記録を見る','my',true)}</section></div>`;
+      ${button('passport','Passport・星空で記録を見る','',true)}</section></div>`;
   }
-  function myCity() {
-    if (myLoading && !history) return '<p role="status" class="city-note">自分のCity記録を読み込んでいます…</p>';
-    if (!history) return unavailable('MyCity') + button('refresh','もう一度読み込む','',true);
-    const visits = history.checkins || [];
-    const visited = (spots || []).filter(s => visits.some(v => v.spotId === s.spotId));
-    const quests = achievements?.quests?.filter(q => !q.isFounder) ?? null;
-    const stars = achievements?.stars, guilds = achievements?.guilds;
-    return `<section class="city-section"><div class="city-section-title"><h2 data-city-heading tabindex="-1">MY CITY</h2>${button('refresh','更新','',true,myLoading)}</div>
-      <p class="city-muted">このページの記録は非公開です。公開プロフィールURLはまだありません。</p>
-      <div class="city-card city-section"><p class="city-eyebrow">PASSPORT ID</p><p class="city-id">${escape(history.passportId)}</p>${button('passport','Passport / 星空をひらく','',true)}</div>
-      <div class="city-room"><p class="city-eyebrow">MY COLLECTION · 最近の訪問Spot</p>
-      ${visited.length ? `<div class="city-grid">${visited.map(card).join('')}</div>` : empty('まだCityの記録はありません','Cityを歩いて、最初の記録を残そう。')}
-      <p class="city-muted">DEMOの記録は、実店舗への訪問証明ではありません。</p></div>
-      <div class="city-detail"><section class="city-card"><h3>Quest実績</h3>
-      ${!achievements ? '<p>既存実績を確認しています…</p>' : quests === null ? unavailable('Quest実績') : quests?.length
-        ? `<ul class="city-list">${quests.map(q => `<li>${escape(q.label)} ${escape(q.title)}<small>承認済み ${escape(q.rounds)}周</small>${button('quest','既存Questを見る',q.id,true)}</li>`).join('')}</ul>`
-        : empty('まだ承認済みのQuestはありません','完了・報酬は既存Questの処理で確定します。')}
-      <p class="city-muted">Passport・星空と同じ完走の記録です。</p></section>
-      <section class="city-card"><h3>限定Star / 証明書</h3>
-      ${!achievements ? '<p>既存の星を確認しています…</p>' : stars === null ? unavailable('限定Star') : stars?.length
-        ? `<ul class="city-list">${stars.map(s => `<li>${escape(s.label)}<small>${s.minted ? 'NFT受取済み' : '星の記録あり · NFT未受取'}</small></li>`).join('')}</ul>`
-        : empty('限定Starの記録はありません','チェックインだけでは星やNFTは増えません。')}
-      <p class="city-muted">Quest星・証明書・その他のNFTは、Passportの既存表示で確認できます。</p>${button('passport','Passportで確認','',true)}</section></div>
-      <section class="city-card"><h3>Guild</h3>${!achievements ? '<p>確認しています…</p>' : guilds === null ? unavailable('Guildの参加表示') : guilds?.length
-        ? `<div class="city-row">${guilds.map(g => button('guild',g.name + ' · ' + g.label,g.id,true)).join('')}</div>`
-        : '<p>既存のGuild画面で確認できる参加・応援の記録はありません。</p>'}</section>
-      <section class="city-section"><h3>Cityの活動記録</h3><p class="city-muted">${history.hasMore ? '最新50件を表示しています。以前の記録も保存されています。' : '保存済みのチェックイン'} · 日本時間</p>
-      <ul class="city-list">${visits.map(v => `<li>${escape(spots?.find(s => s.spotId === v.spotId)?.name || v.spotId)} · ${escape(v.locationType)}${v.isDemo ? ' / DEMO' : ''}<small>${escape(date(v.occurredAt))} · ${v.verification === 'demo-only' ? '体験例の操作記録（現地未検証）' : 'Virtual Spotへの明示入場'}</small></li>`).join('')}</ul></section>
-      ${button('preview-share','MyCityをシェア','',true,visits.length === 0)}<p class="city-muted">共有前に内容を確認できます。Passport IDや非公開情報は共有しません。</p>
-      ${share ? `<section class="city-share" role="region" aria-label="共有内容の確認"><h3>この内容だけを共有します</h3><pre>${escape(share.text)}\n${escape(share.url)}</pre><div class="city-row">${button('share','共有する')}${button('cancel-share','キャンセル','',true)}</div></section>` : ''}
-      <div class="city-soon"><b>冷蔵庫くんに頼む</b><span>知識や実践候補の探索を依頼できます。受付状況・料金は冷蔵庫くんから確認してください。</span></div>
-      <p class="city-muted">公式ショップで交換したものは「交換履歴」で見られます。</p>${button('page','交換履歴を見る','orders',true)}</section>`;
-  }
+  function myCity() { return '<div data-city-room></div>'; }
   /* トップの「公式ショップの商品」。読めなかったら、ページ全体の失敗にはしない。 */
   function showcaseSection() {
     const items = (showcase || []).slice(0, 4);
@@ -408,6 +378,9 @@ export function createCity(host, app, bridge = createBridge(window.parent, app))
     ].map(([id,title,note]) => `<article class="city-card city-play-card"><span class="city-badge">遊び・探索</span><h3>${title}</h3><p>${note}</p>${button(id==='elevator'?'elevator':'play','開く →',id,true)}</article>`).join('')}</div><p class="city-note">これまでと同じゲーム・保存状態で開きます。利用条件と遊べる回数は現在のプランに従います。</p></section>`;
   }
   function render() {
+    // Unrelated City reads must not erase unsaved room edits or start another inventory query.
+    if (page === 'my' && roomUI && host.querySelector('[data-city-room]')) return;
+    if (roomUI) { roomUI.destroy(); roomUI = null; }
     const focus = host.contains(document.activeElement) ? document.activeElement : null;
     const focusAction = focus?.dataset.action, focusValue = focus?.dataset.value;
     const focusField = focus?.dataset.shipField && focus.type !== 'radio' ? focus.dataset.shipField : '';
@@ -418,14 +391,15 @@ export function createCity(host, app, bridge = createBridge(window.parent, app))
         ['page','partners','🏪','街のお店','円・JPYCで使えるお店','city-partners'],
         ['walk','','🗺','3Dの街を歩く','お店に入って商品を見る','city-3d']
       ].map(([action,value,icon,label,note,tourId]) => `<button type="button" class="city-door" data-tour="${tourId}" data-action="${action}" data-value="${value}"${action === 'walk' && (loading || !spots) ? ' disabled' : ''}><span class="city-door-icon" aria-hidden="true">${icon}</span><b>${label}</b><span>${note}</span></button>`).join('')}</div>${showcaseSection()}${playSection()}` : ''}
-      <nav class="city-nav ${page === 'home' ? 'city-nav-sub' : 'city-nav-compact'}" aria-label="Cityのページ">${[...(page === 'home' ? [] : [['commerce','公式ショップ','EMUERで交換'],['partners','街のお店','円・JPYC']]),['orders','交換履歴','引換コード'],...(commerceMe?.isOwner?[['event-ops','イベント運営','商品QR・引渡し']]:[]),['real','REAL','街の体験スポット'],['virtual','VIRTUAL','仮想の入口'],['quest','QUEST','クエストへ'],['my','MY CITY','自分の記録']].map(([id,label,note]) => `<button type="button"${id === 'orders' ? ' data-tour="city-orders"' : ''} data-action="${id === 'quest' ? 'quest' : 'page'}" data-value="${id === 'quest' ? '' : id}"${page === id || (id === 'commerce' && ['products','product'].includes(page) && officialShop()?.id === productShopId) ? ' aria-current="page"' : ''}><b>${label}</b><span>${note}</span></button>`).join('')}</nav>
+      <nav class="city-nav ${page === 'home' ? 'city-nav-sub' : 'city-nav-compact'}" aria-label="Cityのページ">${[...(page === 'home' ? [] : [['commerce','公式ショップ','EMUERで交換'],['partners','街のお店','円・JPYC']]),['orders','交換履歴','引換コード'],...(commerceMe?.isOwner?[['event-ops','イベント運営','商品QR・引渡し']]:[]),['real','REAL','街の体験スポット'],['virtual','VIRTUAL','仮想の入口'],['quest','QUEST','クエストへ'],['my','MY CITY','自分の部屋']].map(([id,label,note]) => `<button type="button"${id === 'orders' ? ' data-tour="city-orders"' : ''} data-action="${id === 'quest' ? 'quest' : 'page'}" data-value="${id === 'quest' ? '' : id}"${page === id || (id === 'commerce' && ['products','product'].includes(page) && officialShop()?.id === productShopId) ? ' aria-current="page"' : ''}><b>${label}</b><span>${note}</span></button>`).join('')}</nav>
       ${page !== 'home' ? '<button type="button" class="city-link" data-action="page" data-value="home">← City HOME</button>' : ''}
       ${error ? `<div role="alert" class="city-status city-error">${escape(error)}</div>` : ''}
       ${message ? `<div role="status" class="city-status">${escape(message)}</div>` : ''}
       ${['commerce','partners','products','product','orders','event-ops'].includes(page) ? (page === 'commerce' ? officialPage() : page === 'partners' ? partnersPage() : page === 'products' ? productList() : page === 'product' ? productDetail() : page === 'orders' ? ordersPage() : eventOpsPage())
-        : loading ? '<p role="status" class="city-note">Cityの入口を確認しています…</p>' : !spots ? `${unavailable('City')}${button('retry','もう一度読み込む','',true)}`
-        : page === 'spot' ? detail() : page === 'my' ? myCity() : catalog()}
+        : page === 'my' ? myCity() : loading ? '<p role="status" class="city-note">Cityの入口を確認しています…</p>' : !spots ? `${unavailable('City')}${button('retry','もう一度読み込む','',true)}`
+        : page === 'spot' ? detail() : catalog()}
       ${page === 'home' ? `${joinCta()}<p class="city-muted">3Dの街のお店（THE FIELD STORE）は展示用です。展示品は購入できません。体験スポットの記録は、現地を訪れた証明にはなりません。</p>` : ''}`;
+    if (page === 'my') roomUI = createRoomUI(host.querySelector('[data-city-room]'), { onShop:()=>go('commerce'), onPassport:()=>bridge.openPassport(), track:(name,values)=>window.parent.EmuAnalytics?.track(name,values) });
     if (focusField) {
       const field = host.querySelector(`[data-ship-field="${focusField}"]`);
       field?.focus({ preventScroll:true });
@@ -453,26 +427,6 @@ export function createCity(host, app, bridge = createBridge(window.parent, app))
       finally { if (version === epoch) { loading = false; loadJob = null; render(); } }
     })();
     loadJob = job;
-    return job;
-  }
-  async function loadMy(force = false) {
-    if (myJob) return myJob;
-    if (!force && history && Date.now() - myAt < 60000) return;
-    const version = epoch, request = ++myGeneration;
-    const current = () => version === epoch && request === myGeneration;
-    myLoading = true; error = ''; render();
-    const job = (async () => {
-      try {
-        const result = await bridge.getMyCity();
-        if (!current()) return;
-        history = result; myAt = Date.now();
-        render();
-        const value = await bridge.achievements(result.passportId).catch(() => ({ quests:null, stars:null, guilds:null }));
-        if (current()) achievements = value;
-      } catch(e) { if (current()) fail(e); }
-      finally { if (current()) { myLoading = false; myJob = null; render(); } }
-    })();
-    myJob = job;
     return job;
   }
   async function loadCommerce() {
@@ -722,8 +676,7 @@ export function createCity(host, app, bridge = createBridge(window.parent, app))
         return;
       }
       if (action === 'spot') return go('spot',value);
-      if (action === 'retry') { await load(true); if(page === 'my') await loadMy(true); return; }
-      if (action === 'refresh') return loadMy(true);
+      if (action === 'retry') { await load(true); return; }
       if (action === 'quest') return await bridge.openQuest(value);
       if (action === 'guild') return await bridge.openGuild(value);
       if (action === 'emu') return await bridge.openEmu();
@@ -745,26 +698,8 @@ export function createCity(host, app, bridge = createBridge(window.parent, app))
             history = { ...history, checkins:rows.slice(0,50), hasMore:history.hasMore || rows.length > 50 };
           }
           myAt = 0;
-          message = result.alreadyRecorded ? '今日のチェックインは記録済みです。二重には増えません。' : 'PassportにCityのDEMO記録を残しました。MY CITYで確認できます。';
+          message = result.alreadyRecorded ? '今日のチェックインは記録済みです。二重には増えません。' : 'PassportにCityのDEMO記録を残しました。Passport・星空で確認できます。';
         } finally { if (version === epoch) recording = false; }
-      }
-      if (action === 'preview-share' && history?.checkins.length) {
-        // Only public catalogue labels of recorded demo Spots, not raw user/DB data.
-        const names = (spots || []).filter(s => history.checkins.some(v => v.spotId === s.spotId))
-          .map(s => `${s.name}（${s.locationType} / DEMO）`);
-        share = bridge.sharePayload(names);
-      }
-      if (action === 'cancel-share') share = null;
-      if (action === 'share' && share) {
-        try {
-          if (navigator.share) await navigator.share(share);
-          else if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(share.text + '\n' + share.url);
-          else { message = 'この端末では共有機能を利用できません。上の文章を選択してコピーしてください。'; render(); return; }
-          message = navigator.share ? '共有画面を閉じました。' : '共有文をコピーしました。'; share = null;
-        } catch (e) {
-          if (e.name === 'AbortError') { share = null; message = '共有をキャンセルしました。'; }
-          else message = '共有できませんでした。表示中の文章を選択してコピーできます。';
-        }
       }
     } catch(e) { if (version === epoch) fail(e); }
     if (version === epoch) render();
@@ -806,6 +741,7 @@ export function createCity(host, app, bridge = createBridge(window.parent, app))
     event.preventDefault(); act('lookup','');
   });
   bridge.onSessionChange(() => {
+    roomUI?.destroy(); roomUI = null;
     immersive?.destroy(); immersive=null; immersiveOpening=false;
     epoch++; myGeneration++; spots = null; history = null; achievements = null; share = null;
     recorded.clear(); catalogAt = 0; myAt = 0; loadJob = null; myJob = null;
@@ -829,6 +765,7 @@ export function createCity(host, app, bridge = createBridge(window.parent, app))
     });
   } else if (cityParams.get('cityView') === 'orders') go('orders');
   else if (cityParams.get('cityView') === 'commerce') go('commerce');
+  else if (cityParams.get('cityView') === 'my') go('my');
   else loadShowcase();
   return { resume() { app.cityReturn = false; load(); if (page === 'home') loadShowcase(); } };
 }

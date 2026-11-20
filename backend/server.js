@@ -368,6 +368,7 @@ app.use("/api/schoolpark/proofs", require("./public-proof").createPublicProofRou
   db, requireFirebaseUser, contract: String(process.env.SP_QUEST_STAR_CONTRACT || "") }));
 /* Quest #000 の論文を、リポジトリの新しい版へ差し替える（運営だけ） */
 app.use("/api/schoolpark/founder", require("./founder-paper").createFounderPaperRouter({ db, requireOwner }));
+app.use("/api/schoolpark/city/room", require("./city-room").createCityRoomRouter({ db, identity, entitlement, requireFirebaseUser, requireOwner, rateLimit, ownerAddresses: SP_OWNER_ADDRESSES }));
 app.use("/api/schoolpark/city", require("./city").createCityRouter({
   db, identity, entitlement, requireFirebaseUser, rateLimit, ownerAddresses: SP_OWNER_ADDRESSES
 }));

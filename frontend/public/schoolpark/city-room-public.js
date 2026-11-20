@@ -1,0 +1,57 @@
+import { readPublicRoom, publicAction } from "./city-room-bridge.js";
+import { sceneSvg, escape as e } from "./city-room-renderer.js";
+const host = document.querySelector("#room"),
+  id = new URLSearchParams(location.search).get("room");
+let current,
+  notice = "",
+  busy = false;
+function render() {
+  const d = current;
+  host.innerHTML = `<header class="room-public-title"><h1>SchoolPark Cityの部屋</h1><a class="room-button" href="/?view=city" target="_blank" rel="noopener">Cityへ</a></header><p>公開された部屋です。持ち主のPassport・会員情報は表示しません。</p><div class="room-scene">${sceneSvg(d.room.layout, d.catalog)}</div><p>${e(d.room.likeCount)} 人の「いいね」</p><button type="button" data-like${busy ? " disabled" : ""}>いいね</button><p class="room-caption">いいね・通報はログイン済みの方だけが利用できます。</p><details><summary>気になる内容を通報する</summary><div class="room-report"><select aria-label="通報理由"><option value="spam">迷惑行為</option><option value="harass">嫌がらせ</option><option value="personal">個人情報</option><option value="other">その他</option></select><button type="button" data-report${busy ? " disabled" : ""}>この理由で通報する</button></div></details><p role="status">${e(notice)}</p>`;
+  host.querySelector("[data-room-scene]").setAttribute("role", "img");
+  for (const n of host.querySelectorAll("[data-room-instance]")) {
+    n.removeAttribute("tabindex");
+    n.removeAttribute("role");
+  }
+}
+try {
+  current = await readPublicRoom(id);
+  render();
+} catch (err) {
+  host.innerHTML =
+    '<h1>この部屋は開けません</h1><p>非公開・公開停止中、または通信を確認できませんでした。公開URLをご確認ください。</p><a class="room-button" href="/?view=city">Cityへ</a>';
+}
+host.addEventListener("click", async (ev) => {
+  const action = ev.target.closest("[data-like]")
+    ? "like"
+    : ev.target.closest("[data-report]")
+      ? "report"
+      : null;
+  if (!action || busy || !current) return;
+  if (action === "report" && !confirm("選んだ理由で運営に通報しますか？"))
+    return;
+  const body =
+    action === "report" ? { reason: host.querySelector("select").value } : {};
+  busy = true;
+  render();
+  try {
+    const d = await publicAction(id, action, body);
+    if (action === "like") current.room.likeCount = d.likeCount;
+    notice =
+      action === "like"
+        ? d.already
+          ? "すでに「いいね」しています。"
+          : "「いいね」を記録しました。"
+        : "通報を受け付けました。";
+  } catch (err) {
+    notice =
+      err.message === "AUTH_REQUIRED"
+        ? "Cityでログインしてから、このページを開き直してください。"
+        : err.message === "ROOM_SELF_ACTION"
+          ? "自分の部屋にはこの操作を行えません。"
+          : "操作を確認できませんでした。時間をおいてお試しください。";
+  } finally {
+    busy = false;
+    render();
+  }
+});
