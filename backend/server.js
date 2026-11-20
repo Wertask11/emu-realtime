@@ -376,6 +376,8 @@ app.use("/api/schoolpark/city", require("./city").createCityRouter({
 app.use("/api/schoolpark/tamariba", require("./tamariba").createTamaribaRouter({
   db, identity, entitlement, requireFirebaseUser, rateLimit, ownerAddresses: SP_OWNER_ADDRESSES
 }));
+/* 星空の星座の並び（11/20）：本人の uid の書類だけを読み書きする（backend/star-layout.js） */
+app.use("/api/schoolpark/star-layout", require("./star-layout").createStarLayoutRouter({ db, requireFirebaseUser, rateLimit }).router);
 
 // 未処理のまま保持期限(30日)を過ぎた本人確認書類を毎日破棄する。
 cron.schedule("30 4 * * *", () => {
