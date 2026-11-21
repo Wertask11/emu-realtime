@@ -84,16 +84,18 @@ async function open(width = 390, { products = PRODUCTS, shopsFail = false, me = 
      ここでは dao.html の中で City の画面へ切り替える（11/3 点検 13：City のテストが止まっていた）。 */
   await frame.waitForFunction(() => window.app && typeof window.app.setState === 'function');
   await frame.evaluate(() => window.app.setState({ screen: 'city' }));
-  await frame.locator('.city-doors').waitFor();
+  await frame.locator('.city-showcase').waitFor();   // 11/21：トップの3つの入口は無くした。公式ショップの商品の欄を待つ
   const text = () => frame.locator('#sp-city').innerText();
   return { page, frame, calls, errors, posts, text, chain: () => page.evaluate(() => window.__chain || []), close: () => context.close() };
 }
 
-test('トップは3つの入口と、公式ショップの商品。残高（/me）は読まない', async () => {
+test('トップは公式ショップの商品。入口のボタン・遊びのカードは置かない。残高（/me）は読まない', async () => {
   const f = await open();
   try {
-    const doors = await f.frame.locator('.city-door b').allInnerTexts();
-    assert.deepEqual(doors, ['公式ショップ', '街のお店', '3Dの街を歩く']);
+    /* 11/21 オーナー：「トップのボタンもいらん。あの空間（3Dの街）が全て City」 */
+    assert.equal(await f.frame.locator('.city-door').count(), 0, '入口のボタンは置かない');
+    assert.equal(await f.frame.locator('.city-play-card').count(), 0, '遊びは 3D の City の「遊ぶ」から');
+    assert.equal(await f.frame.locator('.city-hero [data-action="walk"]').count(), 1, '3Dの街へ入るボタンはある');
     await f.frame.locator('.city-product').first().waitFor();
     assert.deepEqual(await f.frame.locator('.city-product b').allInnerTexts(), ['冷蔵庫くんステッカー', '探究ノート'], '公式ショップの商品だけを並べる');
     assert.equal(f.calls.some(p => p.endsWith('/me')), false, 'トップでは自分の記録を読まない');
@@ -132,7 +134,7 @@ test('トップの商品から開いて、交換できない理由を分かる�
 test('公式ショップ：残高、商品、使い方', async () => {
   const f = await open(1440);
   try {
-    await f.frame.locator('.city-door[data-value="commerce"]').click();
+    await f.frame.locator('.city-showcase [data-action="page"][data-value="commerce"]').click();
     await f.frame.locator('.city-wallet').waitFor();
     /* 残高と商品は別々に届く。残高の枠が出た直後に数えると、商品がまだ描かれていないことがあった（11/19：まとめて流すとときどき落ちていた）。
        商品2つと残高の数字が出るのを待ってから確かめる */
@@ -149,7 +151,9 @@ test('公式ショップ：残高、商品、使い方', async () => {
 test('街のお店：提携店と 3D の展示店と出店の案内。昔の店（legacy）は出さない', async () => {
   const f = await open();
   try {
-    await f.frame.locator('.city-door[data-value="partners"]').click();
+    /* 街のお店は、公式ショップのページの上のメニューから */
+    await f.frame.locator('.city-showcase [data-action="page"][data-value="commerce"]').click();
+    await f.frame.locator('.city-nav [data-value="partners"]').click();
     await f.frame.getByText('THE FIELD STORE').waitFor();
     const t = await f.text();
     assert.match(t, /カフェ 凪/); assert.match(t, /東京都渋谷区 1-2-3/);
@@ -193,7 +197,7 @@ const ME_OK = { ok: true, isOwner: false, wallet: WALLET, emuer: { ok: true, err
 test('公式ショップは、ウォレットのEMUERと、移す前のEMUERの両方を出す', async () => {
   const f = await open(1440, { me: ME_OK, wallet: { account: WALLET } });
   try {
-    await f.frame.locator('.city-door[data-value="commerce"]').click();
+    await f.frame.locator('.city-showcase [data-action="page"][data-value="commerce"]').click();
     await f.frame.getByText('1,852 EMUER').waitFor();
     assert.match(await f.text(), /ウォレットのEMUER\s*1,852 EMUER[\s\S]*ウォレットに移す前のEMUER\s*0 EMUER/);
     assert.ok((await f.chain()).includes('balanceOf:' + WALLET), '連携済みのウォレットの残高を読む');

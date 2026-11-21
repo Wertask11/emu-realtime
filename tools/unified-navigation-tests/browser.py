@@ -69,7 +69,7 @@ with sync_playwright() as p:
    if detail.count() and detail.first.is_visible():detail.first.click()
    g.screenshot(path=str(OUT/f'AFTER-{width}-wisdom.png'))
    go('city');g.wait_for_function('document.getElementById("spDaoFrame").contentWindow.app?.tourRenderedScreen==="city"')
-   f.locator('.city-play-card').nth(3).wait_for();fits();assert f.locator('.city-play-card').count()==4
+   f.locator('.city-hero [data-action="walk"]').wait_for();fits();assert f.locator('.city-play-card').count()==0
    assert g.evaluate('document.getElementById("spDaoFrame").contentDocument.querySelectorAll(".bottom-nav,.sidebar").length')==0
    assert state()==before,'Viewing Guild/Quest/Wisdom/City must not join, commit, publish, cite or reward'
    g.screenshot(path=str(OUT/f'AFTER-{width}-city.png'))

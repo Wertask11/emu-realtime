@@ -125,7 +125,7 @@ async function fixture(width=390, visits=[]) {
     await frame.evaluate(screen=>app.go(screen)(),screens[n]);
 
   }
-  async function city(){await nav('08');await frame.locator('.city-grid .city-card').first().waitFor();}
+  async function city(){await nav('08');await frame.locator('.city-hero [data-action="walk"]:not([disabled])').waitFor();}
   return {context,page,frame,nav,city,requests,modules,errors,control,close:()=>context.close()};
 }
 async function noOverflow(f) {
@@ -145,10 +145,10 @@ for(const width of [375,390,412,768,1440]) test(`City UI ${width}px: current rou
     await f.city();
     /* 11/21 オーナー：City のトップの「体験スポット」の一覧は消した（REAL・VIRTUAL のページからは今までどおり開ける）。
        /spots の答えが届いて「3Dの街へ入る」が押せるようになるのを待ってから数える */
-    await f.frame.locator('.city-door[data-action="walk"]:not([disabled])').waitFor();
+    await f.frame.locator('.city-hero [data-action="walk"]:not([disabled])').waitFor();
     assert.equal(await f.frame.locator('.city-card:not(.city-play-card)').count(),0,'トップに体験スポットの一覧は出さない');
     assert.equal(await f.frame.getByText(/展示用です。展示品は購入できません/).count(),0,'トップの注意書きは出さない');
-    assert.equal(await f.frame.locator('.city-play-card').count(),4);
+    assert.equal(await f.frame.locator('.city-play-card').count(),0,'遊びは 3D の City の「遊ぶ」から（11/21）');
     assert.equal(f.requests.filter(r=>r.path.endsWith('/spots')).length,1);
     assert.equal(f.requests.filter(r=>r.path.endsWith('/me')).length,0,'private history waits for MY CITY');
     await noOverflow(f);
@@ -220,7 +220,7 @@ test('City UI: logout clears private room; new account has no inherited layout; 
   await f.frame.locator('[data-room-instance="start-reizo"]').click();await f.frame.locator('[data-room-action="store"]').click();await f.frame.locator('[data-room-action="save"]').click();await f.frame.getByText('保存しました。 自分だけに見えます。',{exact:true}).waitFor();
   await f.page.evaluate(()=>__login(null));assert.equal(await f.frame.locator('[data-city-room]').count(),0);
   await f.frame.locator('[data-action="retry"]').click();await f.frame.getByText('ログインしてからCityを開いてください。',{exact:true}).waitFor();
-  for(const [uid,count] of [['bob',3],['alice',2]]){await f.page.evaluate(uid=>{_spIdentity={schoolParkId:uid==='bob'?'SP-BBBB-BBBB-BBBB-BBBB':'SP-AAAA-AAAA-AAAA-AAAA'};__login(uid);},uid);await f.frame.locator('[data-action="retry"]').click();await f.frame.locator('.city-grid .city-card').first().waitFor();await f.frame.locator('.city-nav [data-value="my"]').click();await f.frame.getByText('保存済みの部屋を開きました。',{exact:true}).waitFor();assert.equal(await f.frame.locator('[data-room-instance]').count(),count);}
+  for(const [uid,count] of [['bob',3],['alice',2]]){await f.page.evaluate(uid=>{_spIdentity={schoolParkId:uid==='bob'?'SP-BBBB-BBBB-BBBB-BBBB':'SP-AAAA-AAAA-AAAA-AAAA'};__login(uid);},uid);await f.frame.locator('[data-action="retry"]').click();await f.frame.locator('.city-hero [data-action="walk"]:not([disabled])').waitFor();await f.frame.locator('.city-nav [data-value="my"]').click();await f.frame.getByText('保存済みの部屋を開きました。',{exact:true}).waitFor();assert.equal(await f.frame.locator('[data-room-instance]').count(),count);}
   assert.equal((await db.collection('sp_identities/'+SPID+'/city_checkins').get()).docs.length,2);assert.deepEqual(f.errors,[]);
  }finally{await f.close();}
 });
@@ -228,7 +228,7 @@ test('City UI: failed room read is not empty inventory; old-account late respons
  const f=await fixture();let release;try{
   await f.city();f.control.historyFailure=true;await f.frame.locator('.city-nav [data-value="my"]').click();await f.frame.getByRole('button',{name:'もう一度読み込む',exact:true}).waitFor();assert.equal(await f.frame.locator('[data-room-instance]').count(),0);
   f.control.historyFailure=false;f.control.historyGate=new Promise(r=>release=r);await f.frame.locator('[data-room-action="reload"]').click();await f.page.evaluate(()=>{_spIdentity={schoolParkId:'SP-BBBB-BBBB-BBBB-BBBB'};__login('bob');});release();f.control.historyGate=null;
-  await f.frame.locator('[data-action="retry"]').click();await f.frame.locator('.city-grid .city-card').first().waitFor();await f.frame.locator('.city-nav [data-value="my"]').click();await f.frame.getByText('保存済みの部屋を開きました。',{exact:true}).waitFor();assert.equal(await f.frame.locator('[data-room-instance]').count(),3);assert.deepEqual(f.errors,[]);
+  await f.frame.locator('[data-action="retry"]').click();await f.frame.locator('.city-hero [data-action="walk"]:not([disabled])').waitFor();await f.frame.locator('.city-nav [data-value="my"]').click();await f.frame.getByText('保存済みの部屋を開きました。',{exact:true}).waitFor();assert.equal(await f.frame.locator('[data-room-instance]').count(),3);assert.deepEqual(f.errors,[]);
  }finally{release?.();await f.close();}
 });
 test('City UI: in-flight room read cannot erase a later check-in; MyCity no longer requests achievements',async()=>{

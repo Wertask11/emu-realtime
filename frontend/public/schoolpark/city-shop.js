@@ -4,9 +4,9 @@ const money = product => Number.isSafeInteger(product.priceJPY) ? '¥'+product.p
 const glyph = kind => ({notebook:'01',mug:'02',tote:'03',coffee:'04'}[kind] || '—');
 
 /* 11/21 オーナー：公式店舗と THE FIELD STORE は切り替えずに1つの街にまとめる。
-   手前の建物が SchoolPark 公式店舗（公式ショップの品）、そのとなりの建物が THE FIELD STORE（展示品は店先の台）。
+   手前の建物が SchoolPark 公式店舗（公式ショップの品）、右どなりに同じ大きさの THE FIELD STORE（展示品は店の中の台）。
    商品の一覧も、店ごとに分けて1つにまとめて出す（店の切り替えボタンは置かない）。
-   City の「遊ぶ・探索する」も、店の中の「遊ぶ」から開ける（onPlay）。 */
+   この3Dの空間そのものが City。遊び（ECHO FIELD など）も、上の「遊ぶ」から開ける（onPlay）。City のトップには置かない。 */
 const PLAYS=[['echo','ECHO FIELD','記憶・配置戦略・心理戦で遊ぶ。'],['ringo','林檎の方程式','手札のカードを使い、交渉を進める。'],['gods','日常の神々','神々のカードをCPUと同時に公開して勝負。'],['elevator','エレベーター','階を巡り、これまでの発見を続ける。']];
 export function openShopWorld({bridge,spots,wantedShop='',preview=false,onClose=()=>{},onMyCity=()=>{},onRecord=()=>{},onPlay=null}) {
   if(!document.querySelector('link[data-city-shop-style]')){
@@ -72,14 +72,14 @@ export function openShopWorld({bridge,spots,wantedShop='',preview=false,onClose=
     selected=null;request++;
     const others=(catalog.shops||[]).filter(s=>s!==main&&s!==side&&s.products?.length);
     showPanel(`<p class="cs-kicker">COLLECTION / ${main.products.length} ITEMS</p><h3>${esc(main.name)}の商品</h3><p>棚やテーブルの商品を、直接選ぶこともできます。</p>${productRows(main)}
-      ${side?`<h3>となりのお店：${esc(side.name)}</h3><p>${esc(side.subtitle||'')}</p>${productRows(side)}<button type="button" class="cs-secondary" data-shop="waypoint" data-value="neighbor">店先へ行く</button>`:''}
+      ${side?`<h3>となりのお店：${esc(side.name)}</h3><p>${esc(side.subtitle||'')}</p>${productRows(side)}<button type="button" class="cs-secondary" data-shop="waypoint" data-value="neighbor">${esc(side.name)}に入る</button>`:''}
       ${others.map(o=>`<h3>${esc(o.name)}</h3>${productRows(o)}`).join('')}
       <p class="cs-caption">${esc(catalog.goal)}</p><div class="cs-partners">${catalog.partnerSlots.map(p=>`<div><span>${esc(p.name)}</span><b>${p.status==='live'?'連携店舗':'出店準備中'}</b></div>`).join('')}</div>${preview?'':'<button type="button" class="cs-secondary" data-shop="mycity">MY CITYで記録を見る</button>'}`);
   }
   /* 遊ぶ・探索する（City のトップと同じゲーム・保存状態で開く） */
   function playsPanel(){
     selected=null;request++;
-    showPanel(`<p class="cs-kicker">PLAY / 遊ぶ・探索する</p><h3>お店で遊ぶ</h3><p>これまでと同じゲーム・保存状態で開きます。利用条件と遊べる回数は現在のプランに従います。</p>
+    showPanel(`<p class="cs-kicker">PLAY / 遊ぶ・探索する</p><h3>Cityで遊ぶ</h3><p>これまでと同じゲーム・保存状態で開きます。利用条件と遊べる回数は現在のプランに従います。</p>
       <div class="cs-products">${PLAYS.map(([id,title,note],i)=>`<button type="button" data-shop="play" data-value="${id}"><span class="cs-product-number">${String(i+1).padStart(2,'0')}</span><span><b>${esc(title)}</b><small>${esc(note)}</small></span><span>↗</span></button>`).join('')}</div>`);
   }
   function help(){showPanel('<p class="cs-kicker">HOW TO EXPLORE</p><h3>行きたい場所を、選ぶだけ。</h3><dl class="cs-help"><dt>移動する</dt><dd>PCは床をクリックまたはダブルクリック。スマートフォンは床をタップすると、そこまで歩きます。</dd><dt>周囲を見る</dt><dd>画面をドラッグ／スワイプします。スワイプしただけでは移動しません。</dd><dt>商品を見る</dt><dd>商品を直接クリック／タップします。</dd><dt>迷ったら</dt><dd>「入店する」「商品棚」「カウンター」から場所を選べます。PCではWASDも補助操作として使えます。</dd></dl><button type="button" class="cs-primary" data-shop="panel-close">歩いてみる</button>');}
@@ -166,14 +166,15 @@ export function openShopWorld({bridge,spots,wantedShop='',preview=false,onClose=
     main=catalog.shops.find(s=>s.storeType==='schoolpark_virtual')||catalog.shops.find(s=>s.id===wantedShop)||catalog.shops[0];
     side=main.id!=='field-store'?catalog.shops.find(s=>s.id==='field-store')||null:null;
     shop=main;
-    root.querySelector('.cs-place h2').textContent=main.name;
-    root.querySelector('.cs-place p').textContent=main.subtitle+(side?` となりは ${side.name}。`:'');
-    root.querySelector('.cs-demo').textContent=preview?'操作プレビュー · 記録・購入なし':main.storeType==='schoolpark_virtual'?'3D SHOP · SchoolPark 公式':main.status==='live'?'3D SHOP · 出店店舗':'3D SHOWROOM · 展示用店舗';
+    /* この空間そのものが City（11/21 オーナー）。題名は店の名前ではなく「SchoolPark City」にして、並んでいるお店を添える */
+    root.querySelector('.cs-place h2').textContent=side?'SchoolPark City':main.name;
+    root.querySelector('.cs-place p').textContent=side?`${main.name}と${side.name}が並ぶ街。`:main.subtitle;
+    root.querySelector('.cs-demo').textContent=preview?'操作プレビュー · 記録・購入なし':side?'3D CITY':main.storeType==='schoolpark_virtual'?'3D SHOP · SchoolPark 公式':main.status==='live'?'3D SHOP · 出店店舗':'3D SHOWROOM · 展示用店舗';
     if(preview){const b=root.querySelector('[data-shop="checkin"]');b.disabled=true;b.innerHTML='操作プレビュー<br><b>記録・購入なし</b>';}
     try{
       if(module.status!=='fulfilled')throw module.reason;
       world=module.value.createWorld(canvas,{products:main.products,sideProducts:side?.products||[],
-        mainSign:main.storeType==='schoolpark_virtual'?'SCHOOLPARK OFFICIAL STORE':main.name,sideSign:side?.name||'',sideNote:'NEXT DOOR',
+        mainSign:main.storeType==='schoolpark_virtual'?'SCHOOLPARK OFFICIAL STORE':main.name,sideSign:side?.name||'',
         time,onSelect:productPanel,onFocus:id=>{
         focusedProduct=id;const p=ownerOf(id)?.products.find(p=>p.id===id);pick.hidden=!p||!panel.hidden;if(p)pick.textContent=p.name+' を見る ↗';
       },onLost:()=>{load.hidden=false;load.innerHTML='3D描画が中断しました。<button type="button" data-shop="retry">再開する</button>';}});
