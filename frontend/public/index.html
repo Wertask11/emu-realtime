@@ -24414,6 +24414,18 @@ async function spShowSchoolParkUnavailable(access) {
   if (unavailable && typeof window._spQuotaProbe === 'function') {
     try { if (await window._spQuotaProbe() && window._spQuotaMaintenance()) return; } catch (e) {}
   }
+  /* 11/21 オーナー（「これをなおして」）：確認できなかった理由が「ログインの証明（Firebase のトークン）を付けられなかった」
+     だけのことがある（ログインの復元が間に合わない・トークンの更新に失敗した）。そのときはサーバーに聞く前に失敗していた。
+     いまは一般公開中で、サーバーはログインしていない人にも「入れる」と答える。ログインなしでもう一度聞いて、
+     公開中（phase:'public'・allowed:true）なら、そのまま SchoolPark を開く。判定はサーバーの答えのまま（広げない） */
+  if (unavailable) {
+    const pub = await _spPublicEntryStatus();
+    if (pub) {
+      try { _spAccess = pub; } catch (e) {}
+      if (typeof spDaoOpenWhenReady === 'function') spDaoOpenWhenReady();
+      return;
+    }
+  }
   const screen = document.getElementById('spAccessScreen');
   const lead = document.getElementById('spAccessLead');
   const title = document.getElementById('spAccessTitle');
@@ -24440,13 +24452,30 @@ async function spShowSchoolParkUnavailable(access) {
    3秒後に1回、そのあと10秒ごとに3分まで。つながったら画面を閉じて、そのまま SchoolPark を開く。
    「もう一度つなぐ」を押せば、すぐ聞き直す。 */
 let _spAccessRetryTimer = null, _spAccessRetryUntil = 0, _spAccessRetrying = false;
+/* ログインの証明を付けずに公開状態を聞く。公開中（誰でも入れる）と答えたときだけ、その答えを返す */
+async function _spPublicEntryStatus() {
+  if (typeof fetch !== 'function' || typeof SCHOOLPARK_ACCESS_API !== 'string') return null;
+  try {
+    let signal;
+    try { if (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) signal = AbortSignal.timeout(12000); } catch (e) {}
+    const r = await fetch(SCHOOLPARK_ACCESS_API, { cache:'no-store', signal });
+    if (!r || !r.ok) return null;
+    const a = await r.json();
+    return a && a.allowed === true && a.phase === 'public' ? a : null;
+  } catch (e) { return null; }
+}
 async function spAccessRetryNow() {
   if (_spAccessRetrying) return;
   _spAccessRetrying = true;
   const note = document.getElementById('spAccessRetryNote');
   if (note) note.textContent = 'つなぎ直しています…';
   try {
-    const access = await spEnsureSchoolParkAccess(true);
+    let access = await spEnsureSchoolParkAccess(true);
+    /* ログインの証明を付けられずに確認できなかっただけなら、ログインなしで聞き直す（公開中なら入れる） */
+    if (access && !access.allowed && access.unavailable) {
+      const pub = await _spPublicEntryStatus();
+      if (pub) { access = pub; try { _spAccess = pub; } catch (e) {} }
+    }
     const screen = document.getElementById('spAccessScreen');
     if (access && access.allowed) {
       spAccessStopRetry();
