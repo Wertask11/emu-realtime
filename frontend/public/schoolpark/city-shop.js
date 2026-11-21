@@ -3,18 +3,25 @@ const esc = value => String(value ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<'
 const money = product => Number.isSafeInteger(product.priceJPY) ? '¥'+product.priceJPY.toLocaleString('ja-JP') : '価格は店舗でご確認ください';
 const glyph = kind => ({notebook:'01',mug:'02',tote:'03',coffee:'04'}[kind] || '—');
 
-export function openShopWorld({bridge,spots,wantedShop='',preview=false,onClose=()=>{},onMyCity=()=>{},onRecord=()=>{}}) {
+/* 11/21 オーナー：公式店舗と THE FIELD STORE は切り替えずに1つの街にまとめる。
+   手前の建物が SchoolPark 公式店舗（公式ショップの品）、そのとなりの建物が THE FIELD STORE（展示品は店先の台）。
+   商品の一覧も、店ごとに分けて1つにまとめて出す（店の切り替えボタンは置かない）。
+   City の「遊ぶ・探索する」も、店の中の「遊ぶ」から開ける（onPlay）。 */
+const PLAYS=[['echo','ECHO FIELD','記憶・配置戦略・心理戦で遊ぶ。'],['ringo','林檎の方程式','手札のカードを使い、交渉を進める。'],['gods','日常の神々','神々のカードをCPUと同時に公開して勝負。'],['elevator','エレベーター','階を巡り、これまでの発見を続ける。']];
+export function openShopWorld({bridge,spots,wantedShop='',preview=false,onClose=()=>{},onMyCity=()=>{},onRecord=()=>{},onPlay=null}) {
   if(!document.querySelector('link[data-city-shop-style]')){
     const css=document.createElement('link');css.rel='stylesheet';css.href='/schoolpark/city-shop.css';css.dataset.cityShopStyle='';document.head.appendChild(css);
   }
   const priorFocus=document.activeElement,abort=new AbortController(),root=document.createElement('section');
   const listener={signal:abort.signal};
-  let world=null,shop=null,catalog=null,selected=null,closed=false,busy=false,request=0,loadNumber=0;
+  let world=null,shop=null,main=null,side=null,catalog=null,selected=null,closed=false,busy=false,request=0,loadNumber=0;
+  /* その品がどの店のものか（公式店舗・となりのお店・街のお店） */
+  function ownerOf(id){return (catalog?.shops||[]).find(s=>s.products?.some(p=>p.id===id))||null;}
   const time=cityTime(),timeLabel=CITY_TIME_LABEL[time];
   root.id='city-explorer';root.dataset.time=time;root.setAttribute('role','dialog');root.setAttribute('aria-modal','true');root.setAttribute('aria-label','SchoolPark City 3Dショールーム');
   root.innerHTML=`<canvas class="cs-canvas" tabindex="0" aria-label="3D店内。行きたい床をクリックまたはタップして移動し、ドラッグまたはスワイプで見回せます。"></canvas>
     <div class="cs-wash" aria-hidden="true"></div>
-    <header class="cs-top"><button type="button" data-shop="close" class="cs-exit">← City</button><div class="cs-brand">SchoolPark<span>CITY</span></div><div class="cs-top-actions"><button type="button" data-shop="products">商品を見る</button><button type="button" data-shop="help" aria-label="歩き方">?</button></div></header>
+    <header class="cs-top"><button type="button" data-shop="close" class="cs-exit">← City</button><div class="cs-brand">SchoolPark<span>CITY</span></div><div class="cs-top-actions">${onPlay&&!preview?'<button type="button" data-shop="plays">遊ぶ</button>':''}<button type="button" data-shop="products">商品を見る</button><button type="button" data-shop="help" aria-label="歩き方">?</button></div></header>
     <div class="cs-place"><span class="cs-kicker">A SMALL STORE. A BIG WORLD.</span><h2>THE FIELD STORE</h2><p>学びと暮らしの、小さなお店。</p><span class="cs-demo">3D SHOWROOM · 展示用店舗</span></div>
     <div class="cs-load" role="status"><span class="cs-spinner"></span>Cityの扉を開いています…</div>
     <button type="button" class="cs-plaza" data-shop="waypoint" data-value="plaza">${timeLabel.plaza}</button>
@@ -33,6 +40,7 @@ export function openShopWorld({bridge,spots,wantedShop='',preview=false,onClose=
   function closePanel(){request++;busy=false;panel.hidden=true;panel.innerHTML='';selected=null;world?.pause(false);world?.focus();}
   function destroy(){if(closed)return;closed=true;request++;loadNumber++;abort.abort();clearTimeout(toastTimer);world?.destroy();world=null;root.remove();priorFocus?.isConnected&&priorFocus.focus?.({preventScroll:true});onClose();}
   function productPanel(id){
+    const owner=ownerOf(id);if(owner)shop=owner;
     const product=shop?.products.find(p=>p.id===id);if(!product)return;request++;busy=false;selected=product;world?.focusProduct(id);
     if(shop.storeType==='schoolpark_virtual'){
       const canExchange=product.methods?.includes('emuer_ledger')&&product.remaining!==0;
@@ -56,10 +64,23 @@ export function openShopWorld({bridge,spots,wantedShop='',preview=false,onClose=
       ${product.checkoutEnabled?`<p class="cs-caption">支払い方法：${product.paymentMethods.map(esc).join(' / ')}</p><button type="button" class="cs-primary" data-shop="checkout">購入手続きへ</button><p class="cs-caption">販売・決済・受取は出店店舗が担当します。</p>`:`<button type="button" class="cs-primary" disabled>販売準備中</button><p class="cs-caption">${shop.status==='demo'?'これは展示品です。実際の注文・支払いは発生しません。':'店舗の決済準備が整い次第、購入できます。'}</p>`}
       <button type="button" class="cs-secondary" data-shop="products">ほかの商品を見る</button>`);
   }
+  function productRows(store){
+    return `<div class="cs-products">${store.products.map((p,i)=>`<button type="button" data-shop="product" data-value="${esc(p.id)}"><span class="cs-product-number">${store.storeType==='schoolpark_virtual'?String(i+1).padStart(2,'0'):glyph(p.kind)}</span><span><b>${esc(p.name)}</b><small>${esc(store.storeType==='schoolpark_virtual'?(p.priceLabel||money(p)):money(p))}${store.status==='demo'?' / 参考価格':''}</small></span><span>↗</span></button>`).join('')}</div>`;
+  }
   function productsPanel(){
-    if(!shop){say('店舗の読み込みをお待ちください。');return;}
+    if(!main){say('店舗の読み込みをお待ちください。');return;}
     selected=null;request++;
-    showPanel(`<p class="cs-kicker">COLLECTION / ${shop.products.length} ITEMS</p><h3>店内の商品</h3><p>棚やテーブルの商品を、直接選ぶこともできます。</p><div class="cs-products">${shop.products.map((p,i)=>`<button type="button" data-shop="product" data-value="${esc(p.id)}"><span class="cs-product-number">${shop.storeType==='schoolpark_virtual'?String(i+1).padStart(2,'0'):glyph(p.kind)}</span><span><b>${esc(p.name)}</b><small>${esc(shop.storeType==='schoolpark_virtual'?(p.priceLabel||money(p)):money(p))}${shop.status==='demo'?' / 参考価格':''}</small></span><span>↗</span></button>`).join('')}</div>${catalog.shops.length>1?`<h3>Cityのお店</h3>${catalog.shops.map(s=>`<button type="button" class="cs-secondary" data-shop="shop" data-value="${esc(s.id)}">${esc(s.name)}</button>`).join('')}`:''}<p class="cs-caption">${esc(catalog.goal)}</p><div class="cs-partners">${catalog.partnerSlots.map(p=>`<div><span>${esc(p.name)}</span><b>${p.status==='live'?'連携店舗':'出店準備中'}</b></div>`).join('')}</div>${preview?'':'<button type="button" class="cs-secondary" data-shop="mycity">MY CITYで記録を見る</button>'}`);
+    const others=(catalog.shops||[]).filter(s=>s!==main&&s!==side&&s.products?.length);
+    showPanel(`<p class="cs-kicker">COLLECTION / ${main.products.length} ITEMS</p><h3>${esc(main.name)}の商品</h3><p>棚やテーブルの商品を、直接選ぶこともできます。</p>${productRows(main)}
+      ${side?`<h3>となりのお店：${esc(side.name)}</h3><p>${esc(side.subtitle||'')}</p>${productRows(side)}<button type="button" class="cs-secondary" data-shop="waypoint" data-value="neighbor">店先へ行く</button>`:''}
+      ${others.map(o=>`<h3>${esc(o.name)}</h3>${productRows(o)}`).join('')}
+      <p class="cs-caption">${esc(catalog.goal)}</p><div class="cs-partners">${catalog.partnerSlots.map(p=>`<div><span>${esc(p.name)}</span><b>${p.status==='live'?'連携店舗':'出店準備中'}</b></div>`).join('')}</div>${preview?'':'<button type="button" class="cs-secondary" data-shop="mycity">MY CITYで記録を見る</button>'}`);
+  }
+  /* 遊ぶ・探索する（City のトップと同じゲーム・保存状態で開く） */
+  function playsPanel(){
+    selected=null;request++;
+    showPanel(`<p class="cs-kicker">PLAY / 遊ぶ・探索する</p><h3>お店で遊ぶ</h3><p>これまでと同じゲーム・保存状態で開きます。利用条件と遊べる回数は現在のプランに従います。</p>
+      <div class="cs-products">${PLAYS.map(([id,title,note],i)=>`<button type="button" data-shop="play" data-value="${id}"><span class="cs-product-number">${String(i+1).padStart(2,'0')}</span><span><b>${esc(title)}</b><small>${esc(note)}</small></span><span>↗</span></button>`).join('')}</div>`);
   }
   function help(){showPanel('<p class="cs-kicker">HOW TO EXPLORE</p><h3>行きたい場所を、選ぶだけ。</h3><dl class="cs-help"><dt>移動する</dt><dd>PCは床をクリックまたはダブルクリック。スマートフォンは床をタップすると、そこまで歩きます。</dd><dt>周囲を見る</dt><dd>画面をドラッグ／スワイプします。スワイプしただけでは移動しません。</dd><dt>商品を見る</dt><dd>商品を直接クリック／タップします。</dd><dt>迷ったら</dt><dd>「入店する」「商品棚」「カウンター」から場所を選べます。PCではWASDも補助操作として使えます。</dd></dl><button type="button" class="cs-primary" data-shop="panel-close">歩いてみる</button>');}
   async function checkout(){
@@ -90,7 +111,7 @@ export function openShopWorld({bridge,spots,wantedShop='',preview=false,onClose=
     finally{busy=false;}
   }
   async function checkin(){
-    const spot=spots.find(s=>s.spotId===shop?.checkinSpotId),button=root.querySelector('[data-shop="checkin"]');
+    const spot=spots.find(s=>s.spotId===(main?.checkinSpotId||side?.checkinSpotId)),button=root.querySelector('[data-shop="checkin"]');
     if(!spot||button.disabled)return;button.disabled=true;
     try{const result=await bridge.checkIn(spot);if(closed)return;onRecord(spot,result);say(result.alreadyRecorded?'今日のチェックインは記録済みです。':'Passportに3Dショールームの訪問を記録しました。');button.innerHTML='Passport<br><b>✓ 記録済み</b>';}
     catch(_){if(!closed)say('記録できませんでした。通信を確認して、もう一度お試しください。');}
@@ -100,6 +121,7 @@ export function openShopWorld({bridge,spots,wantedShop='',preview=false,onClose=
     const b=e.target.closest('[data-shop]');if(!b||b.disabled)return;
     const action=b.dataset.shop,value=b.dataset.value;
     if(action==='close')destroy();else if(action==='products')productsPanel();else if(action==='product')productPanel(value);
+    else if(action==='plays')playsPanel();else if(action==='play'&&onPlay)Promise.resolve().then(()=>onPlay(value)).catch(()=>say('開けませんでした。もう一度お試しください。'));
     else if(action==='panel-close')closePanel();else if(action==='help')help();else if(action==='checkout')checkout();
     else if(action==='exchange')exchange();
     else if(action==='waypoint'){closePanel();world?.waypoint(value);world?.focus();root.dataset.location=value;}
@@ -140,13 +162,20 @@ export function openShopWorld({bridge,spots,wantedShop='',preview=false,onClose=
         catalog.shops.push({...partner,status:'live',subtitle:partner.address||'リアル提携店舗',products:items,checkinSpotId:''});
       }
     }
-    shop=catalog.shops.find(s=>s.id===wantedShop)||catalog.shops[0];root.querySelector('.cs-place h2').textContent=shop.name;root.querySelector('.cs-place p').textContent=shop.subtitle;
-    root.querySelector('.cs-demo').textContent=preview?'操作プレビュー · 記録・購入なし':shop.status==='live'?'3D SHOP · 出店店舗':'3D SHOWROOM · 展示用店舗';
+    /* 手前は公式店舗（無ければ、頼まれた店か最初の店）。THE FIELD STORE は、そのとなりに並べる */
+    main=catalog.shops.find(s=>s.storeType==='schoolpark_virtual')||catalog.shops.find(s=>s.id===wantedShop)||catalog.shops[0];
+    side=main.id!=='field-store'?catalog.shops.find(s=>s.id==='field-store')||null:null;
+    shop=main;
+    root.querySelector('.cs-place h2').textContent=main.name;
+    root.querySelector('.cs-place p').textContent=main.subtitle+(side?` となりは ${side.name}。`:'');
+    root.querySelector('.cs-demo').textContent=preview?'操作プレビュー · 記録・購入なし':main.storeType==='schoolpark_virtual'?'3D SHOP · SchoolPark 公式':main.status==='live'?'3D SHOP · 出店店舗':'3D SHOWROOM · 展示用店舗';
     if(preview){const b=root.querySelector('[data-shop="checkin"]');b.disabled=true;b.innerHTML='操作プレビュー<br><b>記録・購入なし</b>';}
     try{
       if(module.status!=='fulfilled')throw module.reason;
-      world=module.value.createWorld(canvas,{products:shop.products,time,onSelect:productPanel,onFocus:id=>{
-        focusedProduct=id;const p=shop.products.find(p=>p.id===id);pick.hidden=!p||!panel.hidden;if(p)pick.textContent=p.name+' を見る ↗';
+      world=module.value.createWorld(canvas,{products:main.products,sideProducts:side?.products||[],
+        mainSign:main.storeType==='schoolpark_virtual'?'SCHOOLPARK OFFICIAL STORE':main.name,sideSign:side?.name||'',sideNote:'NEXT DOOR',
+        time,onSelect:productPanel,onFocus:id=>{
+        focusedProduct=id;const p=ownerOf(id)?.products.find(p=>p.id===id);pick.hidden=!p||!panel.hidden;if(p)pick.textContent=p.name+' を見る ↗';
       },onLost:()=>{load.hidden=false;load.innerHTML='3D描画が中断しました。<button type="button" data-shop="retry">再開する</button>';}});
       load.hidden=true;world.focus();
     }catch(_){load.innerHTML='この端末では3D表示を利用できません。<button type="button" data-shop="products">商品一覧をひらく</button><button type="button" data-shop="retry">3Dを再試行</button>';}

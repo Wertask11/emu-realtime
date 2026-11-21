@@ -130,3 +130,70 @@ test('スマホ：下のボタンが Passport の下にもぐらない。商品�
     } finally { await ctx.close(); }
   }
 });
+
+/* 11/21 オーナー：公式店舗と THE FIELD STORE は切り替えずに1つの街に。THE FIELD STORE は公式店舗のとなりに置く。
+   City の遊び（ECHO FIELD など）は、公式仮想店舗の中の「遊ぶ」からも開ける。 */
+const FIELD = [{ id: 'field-note', name: '探究ノート', description: 'のーと', kind: 'notebook', color: '#b3794f', priceJPY: 1200, priceLabel: '展示用の参考価格', checkoutEnabled: false, paymentMethods: [] },
+  { id: 'field-mug', name: 'ひと息のマグ', description: 'まぐ', kind: 'mug', color: '#355a48', priceJPY: 1800, priceLabel: '展示用の参考価格', checkoutEnabled: false, paymentMethods: [] }];
+const unifiedPage = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><body><script type="module">
+import { openShopWorld } from '/schoolpark/city-shop.js';
+window.played = [];
+openShopWorld({ spots: [], wantedShop: 'schoolpark-official', onPlay: id => { window.played.push(id); }, bridge: {
+  getShops: async () => ({ shops: [{ id: 'field-store', name: 'THE FIELD STORE', subtitle: '学びと暮らしの、小さなお店。', status: 'demo', products: ${JSON.stringify(FIELD)} }], partnerSlots: [], goal: '' }),
+  getCommerceShops: async () => ({ shops: [{ id: 'schoolpark-official', storeType: 'schoolpark_virtual', name: 'SchoolPark公式仮想店舗' }] }),
+  getCommerceProducts: async () => ({ products: ${JSON.stringify(SHOP_PRODUCTS)} })
+} });
+</script></body>`;
+
+test('公式店舗と THE FIELD STORE を1つにまとめる（切り替えなし・となりに並ぶ）。店の中から遊べる', async () => {
+  const origin = server.listeners('request')[0];
+  server.removeAllListeners('request');
+  server.on('request', (req, res) => (new URL(req.url, 'http://x').pathname === '/t/unified' ? res.end(unifiedPage) : origin(req, res)));
+  const pg = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+  const errors = []; pg.on('pageerror', e => errors.push(e.message));
+  try {
+    await pg.goto(base + '/t/unified');
+    await pg.waitForSelector('.cs-canvas[data-ready="true"]', { timeout: 60000 });
+    assert.equal(await pg.textContent('.cs-place h2'), 'SchoolPark公式仮想店舗', '手前は公式店舗');
+    assert.match(await pg.textContent('.cs-place p'), /となりは THE FIELD STORE/);
+    await pg.click('[data-shop="products"]');
+    const panel = await pg.textContent('.cs-panel');
+    assert.match(panel, /となりのお店：THE FIELD STORE/, '一覧に、となりのお店の品もまとめて出る');
+    assert.match(panel, /探究ノート/);
+    assert.equal(await pg.locator('.cs-panel [data-shop="shop"]').count(), 0, '店を切り替えるボタンは置かない');
+    /* となりのお店の品を開くと、その店の説明（展示品）になる。公式の品を開くと EMUER の交換になる */
+    await pg.click('.cs-panel [data-shop="product"][data-value="field-note"]');
+    assert.match(await pg.textContent('.cs-panel'), /THE FIELD STORE[\s\S]*これは展示品です/);
+    await pg.click('.cs-panel [data-shop="products"]');
+    await pg.click(`.cs-panel [data-shop="product"][data-value="${SHOP_PRODUCTS[1].id}"]`);
+    assert.match(await pg.textContent('.cs-panel'), /EMUERで交換する/);
+    /* 店先へ行くと、となりのお店の台の品を正面から選べる */
+    await pg.click('.cs-panel [data-shop="products"]');
+    await pg.click('.cs-panel [data-shop="waypoint"][data-value="neighbor"]');
+    assert.equal(await pg.locator('.cs-panel').isHidden(), true);
+    /* 遊ぶ：4つの遊びが出て、押すと City の遊びを開く */
+    await pg.click('[data-shop="plays"]');
+    assert.equal(await pg.locator('.cs-panel [data-shop="play"]').count(), 4);
+    await pg.click('.cs-panel [data-shop="play"][data-value="echo"]');
+    await pg.click('.cs-panel [data-shop="play"][data-value="elevator"]');
+    assert.deepEqual(await pg.evaluate(() => window.played), ['echo', 'elevator']);
+    assert.deepEqual(errors, []);
+  } finally { await pg.close(); server.removeAllListeners('request'); server.on('request', origin); }
+});
+
+test('3D：となりの建物の看板と、店先の台の品を正面から選べる', async () => {
+  const pg = await browser.newPage({ viewport: { width: 900, height: 700 } });
+  const errors = []; pg.on('pageerror', e => errors.push(e.message));
+  try {
+    await pg.goto(base + '/t/official');
+    await pg.waitForFunction(() => document.getElementById('c').dataset.ready === 'true', null, { timeout: 60000 });
+    await pg.evaluate(fields => { window.w.destroy(); window.selected = [];
+      /* 一度使った canvas は描けなくなる（WebGL を手放している）ので、新しい canvas にする */
+      const old = document.getElementById('c'), fresh = document.createElement('canvas'); fresh.id = 'c'; old.replaceWith(fresh);
+      return import('/schoolpark/city-world.js').then(m => { window.w = m.createWorld(fresh, {
+        products: [], sideProducts: fields, mainSign: 'SCHOOLPARK OFFICIAL STORE', sideSign: 'THE FIELD STORE', onSelect: id => window.selected.push(id) }); }); }, FIELD);
+    await pg.waitForFunction(() => document.getElementById('c').dataset.ready === 'true', null, { timeout: 60000 });
+    for (const p of FIELD) assert.deepEqual(await pg.evaluate(id => window.pickAfterFocus(id), p.id), [p.id], p.name + ' を店先の台で選べる');
+    assert.deepEqual(errors, []);
+  } finally { await pg.close(); }
+});

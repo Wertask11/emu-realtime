@@ -397,8 +397,8 @@ export function createCity(host, app, bridge = createBridge(window.parent, app))
       ${message ? `<div role="status" class="city-status">${escape(message)}</div>` : ''}
       ${['commerce','partners','products','product','orders','event-ops'].includes(page) ? (page === 'commerce' ? officialPage() : page === 'partners' ? partnersPage() : page === 'products' ? productList() : page === 'product' ? productDetail() : page === 'orders' ? ordersPage() : eventOpsPage())
         : page === 'my' ? myCity() : loading ? '<p role="status" class="city-note">Cityの入口を確認しています…</p>' : !spots ? `${unavailable('City')}${button('retry','もう一度読み込む','',true)}`
-        : page === 'spot' ? detail() : catalog()}
-      ${page === 'home' ? `${joinCta()}<p class="city-muted">3Dの街のお店（THE FIELD STORE）は展示用です。展示品は購入できません。体験スポットの記録は、現地を訪れた証明にはなりません。</p>` : ''}`;
+        : page === 'spot' ? detail() : page === 'home' ? '' : catalog()}
+      ${page === 'home' ? joinCta() : ''}`;
     if (page === 'my') roomUI = createRoomUI(host.querySelector('[data-city-room]'), { onShop:()=>go('commerce'), onPassport:()=>bridge.openPassport(), track:(name,values)=>window.parent.EmuAnalytics?.track(name,values) });
     if (focusField) {
       const field = host.querySelector(`[data-ship-field="${focusField}"]`);
@@ -541,6 +541,8 @@ export function createCity(host, app, bridge = createBridge(window.parent, app))
           const mod = await import('./city-shop.js');
           if(version !== epoch) return;
           immersive = mod.openShopWorld({bridge,spots:spots || [],wantedShop:value || 'schoolpark-official',onClose:()=>{immersive=null;},onMyCity:()=>go('my'),
+            /* 11/21 オーナー：遊び（ECHO FIELD・林檎の方程式・日常の神々・エレベーター）を、公式仮想店舗の中からも開ける */
+            onPlay:id=>id==='elevator'?bridge.openElevator():bridge.openPlay(id),
             onRecord:(spot,result)=>{recorded.set(spot.spotId,result.checkin);myGeneration++;myJob=null;myLoading=false;myAt=0;}});
         } finally { immersiveOpening=false; }
         return;

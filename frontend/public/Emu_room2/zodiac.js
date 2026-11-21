@@ -167,7 +167,7 @@
     const current = currentIndex();
     /* 画面の中で、上のボタン・左下の「星座記録」の札・右下の「星空の見方」・地平に重ならず、
        いちばん離れて見える角度を探す */
-    const avoid = ["starInfo", "detailBtn"].map(id => document.getElementById(id)).filter(Boolean)
+    const avoid = ["starInfo", "detailBtn", "skyDetailToggle"].map(id => document.getElementById(id)).filter(Boolean)
       .map(el => el.getBoundingClientRect()).filter(r => r.width && r.height);
     let best = Math.PI, bestScore = -Infinity;
     for (let a = 0; a < 360; a += 5) {

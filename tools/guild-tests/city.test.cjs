@@ -143,9 +143,11 @@ for(const width of [375,390,412,768,1440]) test(`City UI ${width}px: current rou
     const screens=['experiments','logs','experiments','library'];
     for(let i=0;i<screens.length;i++) {await f.nav('0'+(i+1));assert.equal(await f.frame.evaluate(()=>app.state.screen),screens[i]);await noOverflow(f);}
     await f.city();
-    /* 最初に出るカードは遊びのカードのことがある。場所のカード（/spots の答え）が描かれるのを待ってから数える（11/19：待たずに数えて、ときどき 0 になっていた） */
-    await f.frame.locator('.city-card:not(.city-play-card)').nth(2).waitFor();
-    assert.equal(await f.frame.locator('.city-card:not(.city-play-card)').count(),3);
+    /* 11/21 オーナー：City のトップの「体験スポット」の一覧は消した（REAL・VIRTUAL のページからは今までどおり開ける）。
+       /spots の答えが届いて「3Dの街へ入る」が押せるようになるのを待ってから数える */
+    await f.frame.locator('.city-door[data-action="walk"]:not([disabled])').waitFor();
+    assert.equal(await f.frame.locator('.city-card:not(.city-play-card)').count(),0,'トップに体験スポットの一覧は出さない');
+    assert.equal(await f.frame.getByText(/展示用です。展示品は購入できません/).count(),0,'トップの注意書きは出さない');
     assert.equal(await f.frame.locator('.city-play-card').count(),4);
     assert.equal(f.requests.filter(r=>r.path.endsWith('/spots')).length,1);
     assert.equal(f.requests.filter(r=>r.path.endsWith('/me')).length,0,'private history waits for MY CITY');
