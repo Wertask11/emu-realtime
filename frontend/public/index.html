@@ -24426,9 +24426,53 @@ async function spShowSchoolParkUnavailable(access) {
   if (lead) lead.textContent = unavailable
     ? '公開状態を確認できませんでした。通信を確認して、もう一度お試しください。'
     : 'SchoolParkは現在、公式パス保有者向けに先行公開中です。';
+  const retry = document.getElementById('spAccessRetry');
+  if (retry) retry.style.display = unavailable ? '' : 'none';
+  /* 読み込み中の覆いが残っていると、この画面のボタンが押せない。この画面を出すときは覆いを外す */
+  try { if (typeof _cancelSpLoadingOverlay === 'function') _cancelSpLoadingOverlay(); } catch (e) {}
   screen.style.display = 'flex';
+  if (unavailable) spAccessAutoRetry();
 }
+/* 11/21 オーナー（「またこれになってる」）：確認できなかっただけのときは、出しっぱなしにしない。
+   サーバーは main に入るたびに入れ替わり（1〜2分）、そのあいだは公開状態の確認に返事が無い・502 になる。
+   しかも確認できなかった答えは覚えられ（_spAccess）、開き直すまで同じ画面が出続けていた。
+   ここでは確認の中身（spEnsureSchoolParkAccess。テストで固定）は変えず、force で覚えた答えを使わずに聞き直す。
+   3秒後に1回、そのあと10秒ごとに3分まで。つながったら画面を閉じて、そのまま SchoolPark を開く。
+   「もう一度つなぐ」を押せば、すぐ聞き直す。 */
+let _spAccessRetryTimer = null, _spAccessRetryUntil = 0, _spAccessRetrying = false;
+async function spAccessRetryNow() {
+  if (_spAccessRetrying) return;
+  _spAccessRetrying = true;
+  const note = document.getElementById('spAccessRetryNote');
+  if (note) note.textContent = 'つなぎ直しています…';
+  try {
+    const access = await spEnsureSchoolParkAccess(true);
+    const screen = document.getElementById('spAccessScreen');
+    if (access && access.allowed) {
+      spAccessStopRetry();
+      if (screen) screen.style.display = 'none';
+      if (typeof spDaoOpenWhenReady === 'function') spDaoOpenWhenReady();
+      return;
+    }
+    if (note) note.textContent = access && access.unavailable ? 'まだつながりません。少し待って、自動でつなぎ直します。' : '';
+    if (access && !access.unavailable) { spAccessStopRetry(); if (typeof spShowSchoolParkUnavailable === 'function') spShowSchoolParkUnavailable(access); }
+  } finally { _spAccessRetrying = false; }
+}
+function spAccessStopRetry() { if (_spAccessRetryTimer) clearInterval(_spAccessRetryTimer); _spAccessRetryTimer = null; }
+function spAccessAutoRetry() {
+  if (typeof setInterval !== 'function') return;
+  _spAccessRetryUntil = Date.now() + 3 * 60 * 1000;
+  if (_spAccessRetryTimer) return;
+  setTimeout(function () { spAccessRetryNow(); }, 3000);
+  _spAccessRetryTimer = setInterval(function () {
+    const screen = document.getElementById('spAccessScreen');
+    if (!screen || screen.style.display !== 'flex' || Date.now() > _spAccessRetryUntil) { spAccessStopRetry(); return; }
+    spAccessRetryNow();
+  }, 10000);
+}
+window.spAccessRetryNow = spAccessRetryNow;
 function spCloseAccessScreen() {
+  if (typeof spAccessStopRetry === 'function') spAccessStopRetry();
   const screen = document.getElementById('spAccessScreen');
   if (screen) screen.style.display = 'none';
   if (typeof showEmuToday === 'function') showEmuToday();
@@ -31166,7 +31210,11 @@ async function sendEmuFeedback() {
     <h2 id="spAccessTitle" style="font-size:clamp(21px,5vw,28px);margin:0 0 16px">公式パス保有者向け先行公開</h2>
     <p id="spAccessLead" style="font-size:14px;line-height:1.9;margin:0 0 10px">SchoolParkは現在、公式パス保有者向けに先行公開中です。</p>
     <p style="font-size:14px;line-height:1.9;margin:0 0 24px">Emu for SchoolParkは一般公開中です。<br>LINE・Google・メールから無料で見学できます。</p>
-    <button type="button" onclick="spCloseAccessScreen()" style="border:0;border-radius:8px;background:#f08300;color:#fff;padding:12px 22px;font:700 14px inherit;cursor:pointer">Emuを利用する</button>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center">
+      <button type="button" id="spAccessRetry" onclick="spAccessRetryNow()" style="display:none;border:1px solid #f08300;border-radius:8px;background:#fff;color:#b85f00;padding:12px 22px;font:700 14px inherit;cursor:pointer;min-height:44px">もう一度つなぐ</button>
+      <button type="button" onclick="spCloseAccessScreen()" style="border:0;border-radius:8px;background:#f08300;color:#fff;padding:12px 22px;font:700 14px inherit;cursor:pointer;min-height:44px">Emuを利用する</button>
+    </div>
+    <p id="spAccessRetryNote" role="status" style="font-size:12px;color:#6f5a46;margin:12px 0 0"></p>
   </div>
 </div>
 <!-- スマホ用のメニュー。
