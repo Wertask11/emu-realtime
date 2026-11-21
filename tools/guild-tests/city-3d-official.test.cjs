@@ -154,8 +154,8 @@ test('公式店舗と THE FIELD STORE を1つにまとめる（切り替えな�
   try {
     await pg.goto(base + '/t/unified');
     await pg.waitForSelector('.cs-canvas[data-ready="true"]', { timeout: 60000 });
-    assert.equal(await pg.textContent('.cs-place h2'), 'SchoolPark公式仮想店舗', '手前は公式店舗');
-    assert.match(await pg.textContent('.cs-place p'), /となりは THE FIELD STORE/);
+    assert.equal(await pg.textContent('.cs-place h2'), 'SchoolPark City', 'この空間そのものが City');
+    assert.match(await pg.textContent('.cs-place p'), /SchoolPark公式仮想店舗とTHE FIELD STOREが並ぶ街/);
     await pg.click('[data-shop="products"]');
     const panel = await pg.textContent('.cs-panel');
     assert.match(panel, /となりのお店：THE FIELD STORE/, '一覧に、となりのお店の品もまとめて出る');
@@ -167,7 +167,7 @@ test('公式店舗と THE FIELD STORE を1つにまとめる（切り替えな�
     await pg.click('.cs-panel [data-shop="products"]');
     await pg.click(`.cs-panel [data-shop="product"][data-value="${SHOP_PRODUCTS[1].id}"]`);
     assert.match(await pg.textContent('.cs-panel'), /EMUERで交換する/);
-    /* 店先へ行くと、となりのお店の台の品を正面から選べる */
+    /* THE FIELD STORE に入れる（公式店舗と同じ大きさの店が右どなりに建っている） */
     await pg.click('.cs-panel [data-shop="products"]');
     await pg.click('.cs-panel [data-shop="waypoint"][data-value="neighbor"]');
     assert.equal(await pg.locator('.cs-panel').isHidden(), true);
@@ -181,7 +181,7 @@ test('公式店舗と THE FIELD STORE を1つにまとめる（切り替えな�
   } finally { await pg.close(); server.removeAllListeners('request'); server.on('request', origin); }
 });
 
-test('3D：となりの建物の看板と、店先の台の品を正面から選べる', async () => {
+test('3D：THE FIELD STORE は公式店舗と同じ大きさで右どなりに建ち、店の中の台の品を正面から選べる', async () => {
   const pg = await browser.newPage({ viewport: { width: 900, height: 700 } });
   const errors = []; pg.on('pageerror', e => errors.push(e.message));
   try {
@@ -193,7 +193,11 @@ test('3D：となりの建物の看板と、店先の台の品を正面から選
       return import('/schoolpark/city-world.js').then(m => { window.w = m.createWorld(fresh, {
         products: [], sideProducts: fields, mainSign: 'SCHOOLPARK OFFICIAL STORE', sideSign: 'THE FIELD STORE', onSelect: id => window.selected.push(id) }); }); }, FIELD);
     await pg.waitForFunction(() => document.getElementById('c').dataset.ready === 'true', null, { timeout: 60000 });
-    for (const p of FIELD) assert.deepEqual(await pg.evaluate(id => window.pickAfterFocus(id), p.id), [p.id], p.name + ' を店先の台で選べる');
+    for (const p of FIELD) assert.deepEqual(await pg.evaluate(id => window.pickAfterFocus(id), p.id), [p.id], p.name + ' を THE FIELD STORE の中で選べる');
+    /* 入口へ行ける（右どなりの店の中まで歩いて入れる大きさがある） */
+    await pg.evaluate(() => window.w.waypoint('neighbor'));
+    const pos = JSON.parse(await pg.evaluate(() => document.getElementById('c').dataset.position));
+    assert.ok(pos.x > 12 && pos.x < 15, 'THE FIELD STORE の入口（x≒13.5）にいる ' + JSON.stringify(pos));
     assert.deepEqual(errors, []);
   } finally { await pg.close(); }
 });

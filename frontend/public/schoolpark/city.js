@@ -369,14 +369,6 @@ export function createCity(host, app, bridge = createBridge(window.parent, app))
       : '<p class="city-muted">商品はこれから並びます。新しい商品が入ったら、ここに出ます。</p>';
     return `<section class="city-showcase" aria-label="公式ショップの商品" data-tour="city-showcase"><div class="city-section-title"><h3>🏫 公式ショップの商品</h3>${button('page','すべて見る','commerce',true)}</div>${body}</section>`;
   }
-  function playSection() {
-    return `<section class="city-section" data-tour="city-play" aria-labelledby="city-play-title"><div class="city-section-title"><h3 id="city-play-title">遊ぶ・探索する</h3></div><div class="city-grid city-play-grid">${[
-      ['echo','ECHO FIELD','記憶・配置戦略・心理戦で遊ぶ。'],
-      ['ringo','林檎の方程式','手札のカードを使い、交渉を進める。'],
-      ['gods','日常の神々','神々のカードをCPUと同時に公開して勝負。'],
-      ['elevator','エレベーター','階を巡り、これまでの発見を続ける。']
-    ].map(([id,title,note]) => `<article class="city-card city-play-card"><span class="city-badge">遊び・探索</span><h3>${title}</h3><p>${note}</p>${button(id==='elevator'?'elevator':'play','開く →',id,true)}</article>`).join('')}</div><p class="city-note">これまでと同じゲーム・保存状態で開きます。利用条件と遊べる回数は現在のプランに従います。</p></section>`;
-  }
   function render() {
     // Unrelated City reads must not erase unsaved room edits or start another inventory query.
     if (page === 'my' && roomUI && host.querySelector('[data-city-room]')) return;
@@ -385,12 +377,8 @@ export function createCity(host, app, bridge = createBridge(window.parent, app))
     const focusAction = focus?.dataset.action, focusValue = focus?.dataset.value;
     const focusField = focus?.dataset.shipField && focus.type !== 'radio' ? focus.dataset.shipField : '';
     const caret = focusField ? focus.selectionStart : null;
-    host.innerHTML = `${page === 'home' ? `<section class="city-hero city-hero-3d"><img src="/schoolpark/city-showroom-preview.webp" alt="SchoolPark Cityの3Dのお店。木の棚と台とカウンターに、公式ショップの商品が並ぶ店内。" width="1200" height="675"><div class="city-hero-copy"><p class="city-eyebrow">SCHOOLPARK CITY</p><h2 data-city-heading tabindex="-1">SchoolPark City</h2><p>活動でたまったEMUERで、公式ショップの商品と交換できる街。<br>街のお店や、3Dの街も歩けます。</p>${button('walk','3Dの街へ入る ↗','',false,loading || !spots)}</div></section>` : ''}
-      ${page === 'home' ? `<div class="city-doors" role="navigation" aria-label="Cityでできること" data-tour="city-doors">${[
-        ['page','commerce','🏫','公式ショップ','EMUERで商品と交換','city-shop'],
-        ['page','partners','🏪','街のお店','円・JPYCで使えるお店','city-partners'],
-        ['walk','','🗺','3Dの街を歩く','お店に入って商品を見る','city-3d']
-      ].map(([action,value,icon,label,note,tourId]) => `<button type="button" class="city-door" data-tour="${tourId}" data-action="${action}" data-value="${value}"${action === 'walk' && (loading || !spots) ? ' disabled' : ''}><span class="city-door-icon" aria-hidden="true">${icon}</span><b>${label}</b><span>${note}</span></button>`).join('')}</div>${showcaseSection()}${playSection()}` : ''}
+    host.innerHTML = `${page === 'home' ? `<section class="city-hero city-hero-3d" data-tour="city-3d"><img src="/schoolpark/city-showroom-preview.webp" alt="SchoolPark Cityの3Dのお店。木の棚と台とカウンターに、公式ショップの商品が並ぶ店内。" width="1200" height="675"><div class="city-hero-copy"><p class="city-eyebrow">SCHOOLPARK CITY</p><h2 data-city-heading tabindex="-1">SchoolPark City</h2><p>活動でたまったEMUERで、公式ショップの商品と交換できる街。<br>街のお店や、3Dの街も歩けます。</p>${button('walk','3Dの街へ入る ↗','',false,loading || !spots)}</div></section>` : ''}
+      ${page === 'home' ? showcaseSection() : ''}
       <nav class="city-nav ${page === 'home' ? 'city-nav-sub' : 'city-nav-compact'}" aria-label="Cityのページ">${[...(page === 'home' ? [] : [['commerce','公式ショップ','EMUERで交換'],['partners','街のお店','円・JPYC']]),['orders','交換履歴','引換コード'],...(commerceMe?.isOwner?[['event-ops','イベント運営','商品QR・引渡し']]:[]),['real','REAL','街の体験スポット'],['virtual','VIRTUAL','仮想の入口'],['quest','QUEST','クエストへ'],['my','MY CITY','自分の部屋']].map(([id,label,note]) => `<button type="button"${id === 'orders' ? ' data-tour="city-orders"' : ''} data-action="${id === 'quest' ? 'quest' : 'page'}" data-value="${id === 'quest' ? '' : id}"${page === id || (id === 'commerce' && ['products','product'].includes(page) && officialShop()?.id === productShopId) ? ' aria-current="page"' : ''}><b>${label}</b><span>${note}</span></button>`).join('')}</nav>
       ${page !== 'home' ? '<button type="button" class="city-link" data-action="page" data-value="home">← City HOME</button>' : ''}
       ${error ? `<div role="alert" class="city-status city-error">${escape(error)}</div>` : ''}
@@ -541,7 +529,8 @@ export function createCity(host, app, bridge = createBridge(window.parent, app))
           const mod = await import('./city-shop.js');
           if(version !== epoch) return;
           immersive = mod.openShopWorld({bridge,spots:spots || [],wantedShop:value || 'schoolpark-official',onClose:()=>{immersive=null;},onMyCity:()=>go('my'),
-            /* 11/21 オーナー：遊び（ECHO FIELD・林檎の方程式・日常の神々・エレベーター）を、公式仮想店舗の中からも開ける */
+            /* 11/21 オーナー：遊び（ECHO FIELD・林檎の方程式・日常の神々・エレベーター）は、3Dの City の「遊ぶ」から開く。
+               「あの空間が全て City」なので、City のトップの遊びのカードと入口のボタン（公式ショップ／街のお店／3Dの街を歩く）は置かない */
             onPlay:id=>id==='elevator'?bridge.openElevator():bridge.openPlay(id),
             onRecord:(spot,result)=>{recorded.set(spot.spotId,result.checkin);myGeneration++;myJob=null;myLoading=false;myAt=0;}});
         } finally { immersiveOpening=false; }

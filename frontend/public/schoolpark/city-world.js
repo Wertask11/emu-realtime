@@ -7,8 +7,10 @@ const VIEWPOINTS = {
   street:{x:7,z:11,lookX:0,lookZ:1}, entrance:{x:0,z:2.6,lookX:0,lookZ:-3,lookY:1.25},
   table:{x:1.6,z:1.5,lookX:0,lookZ:-1.7,lookY:1.12}, shelves:{x:-2.9,z:-3.3,lookX:-4.4,lookZ:-4.5},
   counter:{x:1.7,z:-2.5,lookX:3.25,lookZ:-3.75,lookY:1.48},
-  // となりのお店（THE FIELD STORE）の店先の台（11/21）
-  neighbor:{x:8.4,z:6.6,lookX:8.4,lookZ:4.3,lookY:1.05},
+  // となりのお店（THE FIELD STORE）の入口。公式店舗と同じ大きさの店が、右どなりに建っている（11/21）
+  neighbor:{x:13.5,z:2.6,lookX:13.5,lookZ:-3,lookY:1.25},
+  // 2軒が並んでいるときの最初の眺め（公式店舗と THE FIELD STORE の両方が見える）
+  streetBoth:{x:6.8,z:15.5,lookX:6.8,lookZ:0,lookY:1.6},
   // 広場（朝は噴水、昼はクリスタル、夜はやぐら）を、少し見上げる
   plaza:{x:PLAZA.x+9.5,z:PLAZA.z+5.5,lookX:PLAZA.x,lookZ:PLAZA.z,lookY:3.4}
 };
@@ -16,10 +18,12 @@ const VIEWPOINTS = {
 // A real perspective scene, not a panorama or an image with click areas.
 // All geometry/textures are original, generated locally. No remote asset/CDN.
 // time は 'morning' | 'day' | 'night'。外の世界（空・光・広場）だけが変わり、店内は同じ。
-/* 11/21 オーナー：公式店舗と THE FIELD STORE を切り替えずに、1つの街に並べる。
-   mainSign … 手前のお店の看板（公式店舗）。sideSign / sideNote … となりの建物の看板。
-   sideProducts … となりのお店の品。店先の台に並べる（選べる） */
-export function createWorld(canvas, { products = [], sideProducts = [], mainSign = 'THE FIELD STORE', sideSign = '', sideNote = '', time = 'day', onSelect = () => {}, onFocus = () => {}, onLost = () => {} } = {}) {
+/* 11/21 オーナー：公式店舗と THE FIELD STORE を切り替えずに、1つの街に並べる（あの空間が City）。
+   mainSign … 手前のお店の看板（公式店舗）。sideSign … 右どなりのお店の看板。
+   sideSign があるときは、公式店舗と同じ大きさ・同じつくりの店を右どなり（x=+13.5）に建て、
+   sideProducts をその店の中の台に並べる（選べる）。 */
+const SIDE_X = 13.5;
+export function createWorld(canvas, { products = [], sideProducts = [], mainSign = 'THE FIELD STORE', sideSign = '', time = 'day', onSelect = () => {}, onFocus = () => {}, onLost = () => {} } = {}) {
   const renderer = new T.WebGLRenderer({canvas,antialias:true,alpha:false,powerPreference:'low-power'});
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1,1.5));
   renderer.outputColorSpace=T.SRGBColorSpace;
@@ -28,7 +32,7 @@ export function createWorld(canvas, { products = [], sideProducts = [], mainSign
   const scene=new T.Scene();scene.background=new T.Color('#dce3da');scene.fog=new T.Fog('#dce3da',24,70);
   const camera=new T.PerspectiveCamera(64,1,.08,240);camera.rotation.order='YXZ';
   // 店の南の広場まで歩ける（前は x±10・z15 まで）
-  const bounds={minX:-16,maxX:12,minZ:-8,maxZ:24}, boxes=[], disposables=new Set();
+  const bounds={minX:-16,maxX:sideSign?20:12,minZ:-8,maxZ:24}, boxes=[], disposables=new Set();
   let yaw=0,pitch=0,drag=null,joystick={x:0,y:0},moveTarget=null,blockedFrames=0,raf=0,last=0,dead=false,paused=false,visible=true,frames=0;
   const keys=new Set(), ray=new T.Raycaster(), pointer=new T.Vector2(), abort=new AbortController();
   const options={signal:abort.signal};
@@ -71,10 +75,12 @@ export function createWorld(canvas, { products = [], sideProducts = [], mainSign
   // never become click-to-move destinations.
   const walkMaterial=new T.MeshBasicMaterial({transparent:true,opacity:0,depthWrite:false});walkMaterial.visible=false; // 描かない（当たり判定には残る）。透明な床を1枚塗る分だけ軽くなる。
   disposables.add(walkMaterial);
-  const walkSurface=mesh(new T.PlaneGeometry(28,32),walkMaterial,-2,.075,8);walkSurface.rotation.x=-Math.PI/2;walkSurface.userData.walkable=true;walkSurface.castShadow=false;walkSurface.receiveShadow=false;
+  const walkSurface=mesh(new T.PlaneGeometry(36,32),walkMaterial,2,.075,8);walkSurface.rotation.x=-Math.PI/2;walkSurface.userData.walkable=true;walkSurface.castShadow=false;walkSurface.receiveShadow=false;
   const markerMaterial=new T.MeshBasicMaterial({color:'#f7efd9',transparent:true,opacity:.82,depthWrite:false,side:T.DoubleSide});disposables.add(markerMaterial);
   const moveMarker=mesh(new T.TorusGeometry(.22,.025,8,32),markerMaterial,0,.085,0);moveMarker.rotation.x=-Math.PI/2;moveMarker.visible=false;moveMarker.castShadow=false;moveMarker.receiveShadow=false;moveMarker.userData.navigationMarker=true;
   let markerPulseUntil=0;
+  // ここから下が「お店1軒」（建物と店の中）。右どなりの THE FIELD STORE は、これをそのまま写して建てる
+  const storeFrom=scene.children.length, storeBoxesFrom=boxes.length;
   // Store envelope, wide doorway and large windows. Collision boxes match walls.
   block(0,1.9,-8.15,10.4,3.8,.3,plaster);obstacle(0,-8.15,10.4,.3);
   block(5.15,1.9,-2,.3,3.8,12.3,plaster);obstacle(5.15,-2,.3,12.3);
@@ -94,7 +100,7 @@ export function createWorld(canvas, { products = [], sideProducts = [], mainSign
     const material=new T.MeshBasicMaterial({map,side:T.DoubleSide});disposables.add(material);
     const o=mesh(new T.PlaneGeometry(w,h),material,x,y,z,parent);o.rotation.y=rotation;o.castShadow=false;return o;
   }
-  label(mainSign,0,3.5,4.32,6,.5,undefined,undefined,68);
+  const mainSignMesh=label(mainSign,0,3.5,4.32,6,.5,undefined,undefined,68);
   label('LEARN  /  MAKE  /  TAKE HOME',0,2.82,-7.97,5.2,.7,'#eee7d7','#244936',38);
   label('SCHOOLPARK CITY',0,2.18,-7.96,3.3,.45,'#eee7d7','#91704f',35);
   // Shelves, books, sideboard, a central display and a coffee counter.
@@ -133,6 +139,16 @@ export function createWorld(canvas, { products = [], sideProducts = [], mainSign
   for(const [x,z] of [[0,-1.5],[3.6,-4.6],[-3.4,1.1]]){
     cylinder(x,3.4,z,.018,.018,.8,black);cylinder(x,2.98,z,.12,.3,.3,brass);cylinder(x,2.82,z,.25,.25,.018,glow);
   }
+  if(sideSign){
+    /* 右どなりの THE FIELD STORE。公式店舗の建物と店の中を写し、看板だけ替える。形と材質は共有するので軽い */
+    const twin=new T.Group();twin.position.x=SIDE_X;
+    scene.children.slice(storeFrom).filter(o=>o!==mainSignMesh).forEach(o=>twin.add(o.clone()));
+    scene.add(twin);
+    boxes.slice(storeBoxesFrom).forEach(b=>boxes.push({minX:b.minX+SIDE_X,maxX:b.maxX+SIDE_X,minZ:b.minZ,maxZ:b.maxZ}));
+    block(SIDE_X,-.015,-2,10,.15,12,wood);
+    label(sideSign,SIDE_X,3.5,4.32,6,.5,undefined,undefined,68);
+    const sideFill=new T.PointLight('#ffdaaa',15,15,2);sideFill.position.set(SIDE_X,3,-3);scene.add(sideFill);
+  }
   function plant(x,z,scale=1) {
     const g=new T.Group();g.position.set(x,0,z);g.scale.setScalar(scale);scene.add(g);
     cylinder(0,.3,0,.31,.23,.58,mat('#b89a77'),g);cylinder(0,.6,0,.28,.28,.025,soil,g);
@@ -148,14 +164,10 @@ export function createWorld(canvas, { products = [], sideProducts = [], mainSign
   for(let i=0;i<5;i++){plant(-7.4,-6+i*2.2,.8);}
   // Outdoor bench, next partner's facade and wayfinding make the entry spatial.
   block(7.9,.43,7.5,2.7,.14,.65,wood);for(const x of [6.9,8.9])block(x,.21,7.5,.16,.42,.5,black);obstacle(7.9,7.5,2.7,.65);
-  block(8,1.7,-1,4,3.4,8,plaster);obstacle(8,-1,4,8);
-  block(8,2.8,3.1,3.8,.55,.15,green);label(sideSign||'YOUR LOCAL STORE',8,2.81,3.19,3.3,.4,undefined,undefined,47);
-  if(sideSign){
-    label('SHOWROOM',8,1.65,3.12,2.8,.7,'#eee7d7','#244936',42);
-    label(sideNote||'NEXT DOOR',8,1.02,3.12,2.8,.4,'#eee7d7','#91704f',34);
-    // 店先の台。となりのお店の品をここに並べる
-    block(8.4,.78,4.35,2.6,.08,.9,wood);block(8.4,.4,4.35,2.4,.7,.75,oak);obstacle(8.4,4.35,2.6,.9);   // 左の大きな鉢植えに隠れないよう、少し右に寄せる
-  }else{
+  /* となりのお店があるときは、そこに THE FIELD STORE が建つので、出店準備中の小さな建物は置かない */
+  if(!sideSign){
+    block(8,1.7,-1,4,3.4,8,plaster);obstacle(8,-1,4,8);
+    block(8,2.8,3.1,3.8,.55,.15,green);label('YOUR LOCAL STORE',8,2.81,3.19,3.3,.4,undefined,undefined,47);
     label('PARTNER 01 / 02',8,1.65,3.12,2.8,.7,'#eee7d7','#244936',42);
     label('COMING TO THE CITY',8,1.02,3.12,2.8,.4,'#eee7d7','#91704f',34);
   }
@@ -184,12 +196,12 @@ export function createWorld(canvas, { products = [], sideProducts = [], mainSign
       for(const x of [b.min.x,b.max.x])for(const y of [b.min.y,b.max.y])for(const z of [b.min.z,b.max.z]){v.set(x,y,z).applyMatrix4(o.matrixWorld);lo=Math.min(lo,v.y);hi=Math.max(hi,v.y);}});
     return Number.isFinite(lo)?(lo+hi)/2:g.position.y+.12;
   }
-  /* 公式の品が無いときは、店の中の4つの台に置く。となりのお店の品は、その店先の台に置く */
+  /* 公式の品が無いときは、店の中の4つの台に置く。となりのお店の品は、となりの店の中の同じ4つの台に置く */
   const inside=[[-.68,.94,-1.45],[.68,.94,-1.43],[.42,.94,-2.05],[3.25,1.31,-3.75]];
-  const outside=[[7.6,.84,4.35],[8.15,.84,4.35],[8.7,.84,4.35],[9.25,.84,4.35]];
-  const generic=[];const positions=[];
-  (placed.size?[]:products).slice(0,4).forEach((p,i)=>{generic.push(p);positions.push(inside[i]);});
-  (sideSign?sideProducts:[]).slice(0,4).forEach((p,i)=>{generic.push(p);positions.push(outside[i]);});
+  const outside=inside.map(([x,y,z])=>[x+SIDE_X,y,z]);
+  const generic=[];const positions=[];const seats=[];   // seats[i] … [何番目の台, 右へずらした分]
+  (placed.size?[]:products).slice(0,4).forEach((p,i)=>{generic.push(p);positions.push(inside[i]);seats.push([i,0]);});
+  (sideSign?sideProducts:[]).slice(0,4).forEach((p,i)=>{generic.push(p);positions.push(outside[i]);seats.push([i,SIDE_X]);});
   generic.forEach((product,i)=>{
     const [x,y,z]=positions[i], g=new T.Group();g.position.set(x,y,z);g.userData.productId=product.id;scene.add(g);
     const color=mat(product.color), cream=mat('#eee3ca');
@@ -225,8 +237,8 @@ export function createWorld(canvas, { products = [], sideProducts = [], mainSign
     const at=placed.get(id);
     if(at){const [x,,z,r,mid]=at;view({x:x+Math.sin(r)*1.3,z:z+Math.cos(r)*1.3,lookX:x,lookZ:z,lookY:mid});return;}
     const i=generic.findIndex(p=>p.id===id);if(i<0)return;const [x,y,z]=positions[i];
-    if(z>4){view({x,z:z+1.4,lookX:x,lookZ:z,lookY:y+.07});return;}   // となりのお店の店先の台は、正面から少し見下ろす
-    const k=inside.findIndex(q=>q[0]===x&&q[2]===z);const from=[[-2,.4],[2,.5],[2,-2.8],[1.6,-2.3]][k];if(from)view({x:from[0],z:from[1],lookX:x,lookZ:z,lookY:y+.18});}
+    const [k,off]=seats[i];   // となりの店の品は、同じ見方を右へずらす
+    const from=[[-2,.4],[2,.5],[2,-2.8],[1.6,-2.3]][k];view({x:from[0]+off,z:from[1],lookX:x,lookZ:z,lookY:y+.18});}
   function productAt(x,y){
     pointer.set(x,y);ray.setFromCamera(pointer,camera);
     const hits=ray.intersectObjects(scene.children,true);
@@ -342,7 +354,7 @@ export function createWorld(canvas, { products = [], sideProducts = [], mainSign
   const ro=new ResizeObserver(resize);ro.observe(canvas);
   const io=new IntersectionObserver(entries=>{visible=entries[0]?.isIntersecting!==false;if(visible)start();else{release();cancelAnimationFrame(raf);raf=0;}});io.observe(canvas);
   document.addEventListener('visibilitychange',()=>{release();if(document.hidden){cancelAnimationFrame(raf);raf=0;}else start();},options);
-  canvas.style.cursor='grab';canvas.dataset.navigation='idle';resize();waypoint('street');start();
+  canvas.style.cursor='grab';canvas.dataset.navigation='idle';resize();waypoint(sideSign?'streetBoth':'street');start();
   return {
     waypoint, selectCenter, focusProduct,
     focus(){canvas.focus({preventScroll:true});},

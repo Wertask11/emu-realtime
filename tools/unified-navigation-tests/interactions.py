@@ -21,11 +21,14 @@ with sync_playwright() as p:
  g.on('dialog',dialog)
  try:
   g.goto(BASE+'/test/native.html');g.wait_for_function('typeof __localEmulatorLogin==="function"');g.locator('#localEmulatorLogin').click();g.evaluate('window.__localLoginResult');g.wait_for_function('_chesEntered===true');g.locator('#spLoadingOverlay').wait_for(state='hidden',timeout=30000)
-  g.locator('#esnCity').click();f=g.frame_locator('#spDaoFrame');f.locator('.city-play-card').nth(3).wait_for()
+  g.locator('#esnCity').click();f=g.frame_locator('#spDaoFrame');f.locator('.city-hero [data-action="walk"]:not([disabled])').wait_for()
+  # 11/21: the games live in the 3D City (top bar "遊ぶ"), not as cards on the City top page.
+  assert f.locator('.city-play-card').count()==0
+  f.locator('.city-hero [data-action="walk"]').click();f.locator('#city-explorer [data-shop="plays"]').click();f.locator('#city-explorer [data-shop="play"]').nth(3).wait_for()
   g.evaluate("localStorage.setItem('sp_elev_badges',JSON.stringify(['1F']));localStorage.setItem('sp_elev_secret_unlocked','1')")
   # Every card opens its original implementation through the unchanged plan gate.
   for kind,frameid,path in [('echo','room2Frame','/Emu_room2/echo-field.html'),('ringo','ringoFrame','/ringo-game.html'),('gods','spRoomFrame','/daily-gods/index.html'),('elevator','spRoomFrame','/schoolpark/south-elevator.html')]:
-   f.locator('[data-action="'+('elevator' if kind=='elevator' else 'play')+'"][data-value="'+kind+'"]').click()
+   f.locator('#city-explorer [data-shop="play"][data-value="'+kind+'"]').click()
    g.locator('#'+frameid).wait_for(state='visible');g.wait_for_function('(args)=>{const f=document.getElementById(args.id);return f.contentDocument?.readyState==="complete"&&new URL(f.src).pathname===args.path}',arg={'id':frameid,'path':path})
    frame=g.frame_locator('#'+frameid);assert frame.locator('body').inner_text().strip(),kind
    if kind=='elevator':
@@ -36,7 +39,8 @@ with sync_playwright() as p:
    elif kind=='ringo':g.locator('#ringoOverlay [onclick="closeRingoGame()"]',).click()
    else:g.evaluate('closeSpRoom()')
    assert g.locator('#spDaoFrame').is_visible()
-  RESULTS.append({'games':'all four original URLs opened via City','elevator_storage':'existing badge/secret keys retained'})
+  f.locator('#city-explorer [data-shop="close"]').click();f.locator('#city-explorer').wait_for(state='detached')
+  RESULTS.append({'games':'all four original URLs opened via the 3D City','elevator_storage':'existing badge/secret keys retained'})
   # Same tour storage: no reset of completed guides when moving between the new routes.
   saved=json.loads(g.evaluate("localStorage.getItem('rk-tour-v1')"));assert saved.get('emu-feed')=='done'
   g.locator('#emuHeaderProfile').click();g.locator('#emuAccountMenu').wait_for(state='visible')

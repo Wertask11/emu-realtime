@@ -75,7 +75,7 @@ async function open(width = 390, { me = ME(), products = PRODUCTS, admin = null 
      ここでは dao.html の中で City の画面へ切り替える（11/3 点検 13：City のテストが止まっていた）。 */
   await frame.waitForFunction(() => window.app && typeof window.app.setState === 'function');
   await frame.evaluate(() => window.app.setState({ screen: 'city' }));
-  await frame.locator('.city-doors').waitFor();
+  await frame.locator('.city-showcase').waitFor();   // 11/21：トップの3つの入口は無くした。公式ショップの商品の欄を待つ
   return { page, frame, posts, puts, gets, errors, text: () => frame.locator('#sp-city').innerText(), close: () => context.close() };
 }
 const openProduct = async (f, id) => { await f.frame.locator(`.city-product[data-value="${id}"]`).click(); await f.frame.locator('.city-wallet').waitFor(); };
@@ -83,7 +83,7 @@ const openProduct = async (f, id) => { await f.frame.locator(`.city-product[data
 test('Light は「月1回の楽しみ」と、プランごとの交換回数を出す', async () => {
   const f = await open();
   try {
-    await f.frame.locator('.city-door[data-value="commerce"]').click();
+    await f.frame.locator('.city-showcase [data-action="page"][data-value="commerce"]').click();
     await f.frame.locator('.city-wallet-count').waitFor();
     const t = await f.text();
     assert.match(t, /Light は月1回の楽しみ。今月はあと1回交換できます。/);
@@ -92,7 +92,7 @@ test('Light は「月1回の楽しみ」と、プランごとの交換回数を�
   } finally { await f.close(); }
   const pro = await open(390, { me: ME({ emuer: { ok: true, plan: 'pro', used: 0, limit: null, unconverted: '0' } }) });
   try {
-    await pro.frame.locator('.city-door[data-value="commerce"]').click();
+    await pro.frame.locator('.city-showcase [data-action="page"][data-value="commerce"]').click();
     await pro.frame.getByText(/Pro は回数の制限がありません。/).waitFor();
   } finally { await pro.close(); }
 });
@@ -139,7 +139,7 @@ test('配送か会場：会場を選ぶと住所はいらない。締切を過�
   } finally { await f.close(); }
   const g = await open();
   try {
-    await g.frame.locator('.city-door[data-value="commerce"]').click();
+    await g.frame.locator('.city-showcase [data-action="page"][data-value="commerce"]').click();
     await g.frame.locator('[data-action="product"][data-value="closed"]').click();
     await g.frame.getByText('注文の受付は締め切りました。').waitFor();
     assert.equal(await g.frame.getByRole('button', { name: 'ウォレットに移す前のEMUERで交換する', exact: true }).isDisabled(), true);
@@ -169,7 +169,7 @@ test('運営：配送待ちの一覧と住所、「発送した」、公式シ�
   const f = await open(1440, { me: ME({ isOwner: true }) });
   try {
     // 運営メニューは /me を読んだあとに出る（公式ショップを開くと読む）
-    await f.frame.locator('.city-door[data-value="commerce"]').click();
+    await f.frame.locator('.city-showcase [data-action="page"][data-value="commerce"]').click();
     await f.frame.locator('.city-nav [data-value="event-ops"]').click();
     await f.frame.getByText('配送待ち（1件）').waitFor();
     const t = await f.text();
@@ -225,7 +225,7 @@ test('運営：11品を下書きで登録し、1品ずつ確かめてから販�
   const admin = { seed, rows: [] };
   const f = await open(1440, { me: ME({ isOwner: true }), admin });
   try {
-    await f.frame.locator('.city-door[data-value="commerce"]').click();
+    await f.frame.locator('.city-showcase [data-action="page"][data-value="commerce"]').click();
     await f.frame.locator('.city-nav [data-value="event-ops"]').click();
     await f.frame.getByText('公式ショップの商品（0品）').waitFor();
     await f.frame.locator('[data-action="seed-official"]').click();

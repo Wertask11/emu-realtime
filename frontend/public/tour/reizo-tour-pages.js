@@ -196,34 +196,16 @@
     "name": "CITY",
     "steps": [
       {
-        "target": "city-doors",
-        "label": "CITYでできること",
-        "text": "CITYでできることは3つ。公式ショップ・街のお店・3Dの街だよ。",
-        "screen": "city"
-      },
-      {
-        "target": "city-shop",
-        "label": "公式ショップ",
-        "text": "SchoolPark公式のお店。活動でたまったEMUERで、商品と交換できるよ。ウォレットのEMUERでも、ウォレットに移す前のEMUERでも払えるよ。",
-        "note": "EMUERでの交換は Light・Plus・Pro プラン",
+        "target": "city-3d",
+        "label": "3Dの街がCity",
+        "text": "CITYは3Dの街そのものだよ。SchoolPark公式店舗（SCHOOLPARK OFFICIAL STORE）と、そのとなりのTHE FIELD STOREに歩いて入れるよ。上の「遊ぶ」から、ECHO FIELD・林檎の方程式・日常の神々・エレベーターも開けるよ。",
+        "note": "遊びの利用条件と保存先はこれまでと同じ",
         "screen": "city"
       },
       {
         "target": "city-showcase",
         "label": "公式ショップの商品",
         "text": "公式ショップの商品は、ここに並ぶよ。押すと交換の画面に進むよ。",
-        "screen": "city"
-      },
-      {
-        "target": "city-partners",
-        "label": "街のお店",
-        "text": "SchoolParkとつながる街のお店だよ。支払いは円・JPYCで、お店でするよ（EMUERは使えないよ）。",
-        "screen": "city"
-      },
-      {
-        "target": "city-3d",
-        "label": "3Dの街",
-        "text": "3Dの街では、お店に入って歩いて、商品を見られるよ。公式ショップも3Dにあるよ。",
         "screen": "city"
       },
       {
@@ -236,12 +218,6 @@
         "target": "city-join",
         "label": "出店のご案内",
         "text": "お店の人は、ここから出店の相談ができるよ。",
-        "screen": "city"
-      },
-      {
-        "target": "city-play",
-        "label": "遊びとエレベーター",
-        "text": "ECHO FIELD・林檎の方程式・日常の神々・エレベーターはここから。利用条件と保存先はこれまでと同じだよ。",
         "screen": "city"
       }
     ]
