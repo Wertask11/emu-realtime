@@ -38,3 +38,47 @@ test('「開けませんでした」の画面：「もう一度つなぐ」で�
   assert.deepEqual(forced, [true, true], '覚えた「確認できなかった」答えを使わずに聞き直す');
   assert.ok(INDEX.indexOf('id="spAccessRetry"') > 0 && INDEX.indexOf('id="spAccessRetryNote"') > 0);
 });
+
+/* 11/21 オーナー（「これをなおして」）：ログインの証明（トークン）を付けられなかっただけで「開けませんでした」になっていた。
+   いまは一般公開中で、サーバーはログインなしでも「入れる」と答える。画面を出す前に、ログインなしで聞き直す。 */
+function screenWith({ quota = false, publicAnswer }) {
+  const src = between('async function spShowSchoolParkUnavailable(access) {', 'function spCloseAccessScreen() {');
+  const els = {};
+  ['spAccessScreen', 'spAccessLead', 'spAccessTitle', 'spAccessEyebrow', 'spAccessRetry', 'spAccessRetryNote']
+    .forEach(id => { els[id] = { style: {}, textContent: '' }; });
+  const seen = { fetches: [], opened: 0, maintenance: 0 };
+  const ctx = vm.createContext({
+    document: { getElementById: id => els[id] || null },
+    window: { emuCheckMaintenance: async () => false, _spQuotaProbe: async () => quota, _spQuotaMaintenance: () => { seen.maintenance++; return true; } },
+    SCHOOLPARK_ACCESS_API: 'https://example.invalid/entry-status',
+    AbortSignal: { timeout: () => undefined },
+    fetch: async (url, opts) => { seen.fetches.push(opts || {}); return { ok: true, json: async () => publicAnswer }; },
+    spEnsureSchoolParkAccess: async () => ({ allowed: false, unavailable: true }),
+    spDaoOpenWhenReady: () => { seen.opened++; },
+    Date
+  });
+  vm.runInContext('let _spAccess = null;\n' + src, ctx);
+  return { ctx, els, seen, access: () => vm.runInContext('_spAccess', ctx) };
+}
+
+test('トークンを付けられず確認できなかっただけなら、ログインなしで聞き直し、公開中ならそのまま開く', async () => {
+  const t = screenWith({ publicAnswer: { allowed: true, phase: 'public' } });
+  await t.ctx.spShowSchoolParkUnavailable({ allowed: false, unavailable: true });
+  assert.notEqual(t.els.spAccessScreen.style.display, 'flex', '公開中なのに「開けませんでした」を出した');
+  assert.equal(t.seen.opened, 1);
+  assert.equal(t.seen.fetches.length, 1);
+  assert.equal((t.seen.fetches[0].headers || {}).Authorization, undefined, 'ログインの証明は付けない');
+  assert.equal(t.access().phase, 'public', '答えを覚え、次から同じ確認をしない');
+});
+
+test('公開中でない答え（先行公開など）なら、これまでどおり画面を出す。上限のときはメンテナンスを出し、聞き直さない', async () => {
+  const pre = screenWith({ publicAnswer: { allowed: false, phase: 'pass-preview' } });
+  await pre.ctx.spShowSchoolParkUnavailable({ allowed: false, unavailable: true });
+  assert.equal(pre.els.spAccessScreen.style.display, 'flex');
+  assert.equal(pre.seen.opened, 0);
+  const quota = screenWith({ quota: true, publicAnswer: { allowed: true, phase: 'public' } });
+  await quota.ctx.spShowSchoolParkUnavailable({ allowed: false, unavailable: true });
+  assert.equal(quota.seen.maintenance, 1);
+  assert.equal(quota.seen.fetches.length, 0, '上限のときはログインなしの確認で入れてしまわない');
+  assert.equal(quota.seen.opened, 0);
+});
