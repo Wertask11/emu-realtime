@@ -142,11 +142,30 @@ function createWriterAccountsRouter({ db, firebaseAdmin, requireOwner, rateLimit
     }
   });
 
-  /* ───── 書き手のログイン（キー → ログインの証） ───── */
-  auth.post("/writer", rateLimit({ windowMs: 10 * 60_000, max: 10, key: "writer-login" }), async (req, res) => {
+  /* ───── 書き手のログイン（キー → ログインの証） ─────
+
+     11/23 オーナー「使えるになってるのに、入れるときと入れないときがある」。
+     前は「同じ回線から10分に10回まで」だった。Muse・ChatGPT は何人分の書き手でも同じ回線から入ってくるので、
+     5人×2つの道具が入り直すとすぐ上限に当たり、正しいキーでも断られていた（429）。
+     回数はキーごとに数える（1つのキーで10分に20回まで）。回線ごとの上限は、総当たりを止めるためだけに広めに残す。
+     キーは 192 ビットの乱数なので、回線の上限を広げても当て推量では入れない。 */
+  const KEY_WINDOW_MS = 10 * 60_000, KEY_MAX = 20;
+  const keyBuckets = new Map();
+  function keyLimited(keyHash) {
+    const t = now();
+    if (keyBuckets.size > 2000) for (const [k, b] of keyBuckets) if (b.resetAt <= t) keyBuckets.delete(k);
+    let b = keyBuckets.get(keyHash);
+    if (!b || b.resetAt <= t) b = { count: 0, resetAt: t + KEY_WINDOW_MS };
+    b.count += 1;
+    keyBuckets.set(keyHash, b);
+    return b.count > KEY_MAX ? b.resetAt - t : 0;
+  }
+  auth.post("/writer", rateLimit({ windowMs: 10 * 60_000, max: 120, key: "writer-login" }), async (req, res) => {
     const key = String((req.body && req.body.key) || "").trim();
     if (!KEY_FORMAT.test(key)) return res.status(401).json({ error: "INVALID_WRITER_KEY" });
     if (!firebaseAdmin) return res.status(503).json({ error: "AUTH_UNAVAILABLE" });
+    const wait = keyLimited(hashKey(key));
+    if (wait) return res.status(429).json({ error: "RATE_LIMITED", retryAfterMs: wait });
     try {
       const snap = await col().where("keyHash", "==", hashKey(key)).limit(1).get();
       const d = snap.docs[0];

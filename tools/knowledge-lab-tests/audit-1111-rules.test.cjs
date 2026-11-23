@@ -204,6 +204,28 @@ test("1人1回：文書のIDは小文字のアドレスだけ。大文字まじ�
   await assertFails(fb.setDoc(fb.doc(db, "sp_quests", "q1", "commits", MIXED), { name: "n", tookAt: 1 }));
 });
 
+/* 11/23 オーナー：書き手キーで入った書き手（uid は writer:…）も、利用者と同じように投票・ギルド参加・投稿ができる。
+   ログインのときにサーバー（verified-platform.js の ensureVerifiedAccount）が作る記録と同じ形で置く。
+   アドレスはサーバーが大文字まじり（チェックサム）で記録し、画面は小文字で使う。 */
+test("書き手（writer:…）も、利用者と同じく投票・ギルド参加・投稿ができる。票は1人1回", async () => {
+  const uid = "writer:0123456789ab";
+  const CHECKSUM = "0xAb5801a7D398351b8bE11C439e05C5B3259aeC9B";
+  const me = CHECKSUM.toLowerCase();
+  await env.withSecurityRulesDisabled(async (c) => {
+    const db = c.firestore();
+    await fb.setDoc(fb.doc(db, "ches_verified_accounts", uid), { uid, walletAddress: CHECKSUM, chesAddress: CHECKSUM, spid: "", passportBindingVersion: 0 });
+    await fb.setDoc(fb.doc(db, "ches_accounts", uid), { uid, walletAddress: CHECKSUM, chesAddress: CHECKSUM, provider: "writer", displayName: "Muse 1" });
+    await fb.setDoc(fb.doc(db, "entitlements", uid), { plan: "pro", source: "writer", startsAt: new Date(), grantedAt: new Date() });
+  });
+  users[uid] = { addr: me };
+  const db = as(uid);
+  await assertSucceeds(fb.setDoc(fb.doc(db, "sp_votes", "v1", "ballots", me), { optionId: "b", castAt: 1 }));
+  await assertFails(fb.setDoc(fb.doc(db, "sp_votes", "v1", "ballots", CHECKSUM), { optionId: "a", castAt: 1 }));
+  await assertFails(fb.setDoc(fb.doc(db, "sp_votes", "v1", "ballots", users.light.addr), { optionId: "a", castAt: 1 }));
+  await assertSucceeds(fb.setDoc(fb.doc(db, "sp_guild_members", "learn", "joins", me), { name: "Muse 1", at: 1 }));
+  await assertSucceeds(publish(uid));
+});
+
 test("クエストを受けるとき、周回の数（approvedRounds）を自分で入れられない", async () => {
   const db = as("other"), me = users.other.addr;
   await assertFails(fb.setDoc(fb.doc(db, "sp_quests", "q1", "commits", me), { name: "n", approvedRounds: 99 }));
