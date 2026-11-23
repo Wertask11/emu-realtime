@@ -142,3 +142,27 @@ test("書き手は公開できる段（pro）になる。止めると見学に�
     assert.equal((await ent.getEntitlement("writer:0123456789ab")).plan, "pro");
   } finally { t.close(); }
 });
+
+/* 11/23 オーナー「使えるになってるのに、入れるときと入れないときがある」。
+   前は同じ回線から10分に10回までで、Muse・ChatGPT の書き手10人が同じ回線から入り直すと、正しいキーでも断られた。
+   回数はキーごとに数える。1つのキーで入り直しすぎたときだけ断り、ほかの書き手は入れる。 */
+test("ログインの回数はキーごとに数える。1つのキーが上限に当たっても、ほかの書き手は入れる", async () => {
+  const t = await setup();
+  try {
+    const a = (await t.call("POST", "/api/admin/writer-accounts", { name: "Muse 1" })).body.key;
+    const b = (await t.call("POST", "/api/admin/writer-accounts", { name: "ChatGPT 1" })).body.key;
+    for (let i = 0; i < 20; i++) assert.equal((await t.call("POST", "/api/auth/writer", { key: a })).status, 200, `${i + 1}回目`);
+    const over = await t.call("POST", "/api/auth/writer", { key: a });
+    assert.equal(over.status, 429);
+    assert.equal(over.body.error, "RATE_LIMITED");
+    assert.ok(over.body.retryAfterMs > 0);
+    assert.equal((await t.call("POST", "/api/auth/writer", { key: b })).status, 200, "ほかの書き手は入れる");
+  } finally { t.close(); }
+});
+
+test("回線ごとの上限は、10人の書き手が入り直せる広さにしてある（総当たりを止めるためだけ）", () => {
+  const src = require("fs").readFileSync(require("path").join(__dirname, "writer-accounts.js"), "utf8");
+  const m = src.match(/auth\.post\("\/writer", rateLimit\(\{ windowMs: ([^,]+), max: (\d+)/);
+  assert.ok(m, "ログインの道に回線ごとの上限がある");
+  assert.ok(Number(m[2]) >= 100, "10人×何回かの入り直しで当たらない");
+});

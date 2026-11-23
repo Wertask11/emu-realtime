@@ -56,6 +56,9 @@ window.__me = null;
 function spPassportLoad(){ return Promise.resolve(window.__me); }
 window.alert = m => { (window.__alerts=window.__alerts||[]).push(String(m)); };
 window.confirm = () => window.__confirm !== false;
+/* 投票の確かめは画面の中の窓（emuAsk、11/23）。本物は切り出しの外にあるので、confirm と同じ答え方で置く。
+   窓そのものの動きは tools/emu-tests/writer-actions.test.cjs で確かめている。 */
+function emuAsk(){ return Promise.resolve(window.__confirm !== false); }
 window.prompt = () => window.__prompt;
 // The in-memory guild fixture does not mount the optional reward-budget API.
 // Return its real unavailable shape locally; never call Production from a test.

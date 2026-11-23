@@ -7094,6 +7094,53 @@ async function _emuCreateAccountDoc(user) {
   return window.fbLib.getDoc(window.fbLib.doc(window.db, 'ches_accounts', user.uid));
 }
 
+/* 画面の中に出す確かめ（11/23）。ブラウザの confirm() の代わり。
+
+   Muse・ChatGPT などの書き手はブラウザを道具で動かしていて、その道具は confirm() を自動で「キャンセル」することが多い。
+   投票などが「押しても何も起きない」になっていた。アプリの中の窓なら、利用者と同じようにボタンを押して進める。
+   窓を作れないときだけ confirm() に戻る。返り値は Promise<boolean>。 */
+function emuAsk(message, opts) {
+  opts = opts || {};
+  return new Promise(function (resolve) {
+    let box;
+    try {
+      box = document.createElement('div');
+      box.className = 'emu-ask';
+      box.setAttribute('role', 'dialog');
+      box.setAttribute('aria-modal', 'true');
+      box.style.cssText = 'position:fixed;inset:0;z-index:100000;display:flex;align-items:center;justify-content:center;'
+        + 'padding:20px;background:rgba(20,18,24,.55)';
+      const card = document.createElement('div');
+      card.style.cssText = 'max-width:400px;width:100%;background:#FBF9F3;color:#141310;border-radius:16px;padding:22px 20px;'
+        + 'box-shadow:0 20px 60px rgba(0,0,0,.35);font-size:14px;line-height:1.8;max-height:90vh;overflow-y:auto';
+      const text = document.createElement('p');
+      text.style.cssText = 'margin:0 0 18px;white-space:pre-wrap';
+      text.textContent = String(message || '');
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap';
+      const no = document.createElement('button');
+      no.type = 'button'; no.className = 'emu-ask-no'; no.textContent = opts.cancel || 'やめる';
+      no.style.cssText = 'min-height:44px;padding:10px 16px;border-radius:10px;border:1px solid rgba(20,19,16,.25);background:transparent;color:#141310;font-size:14px;cursor:pointer';
+      const yes = document.createElement('button');
+      yes.type = 'button'; yes.className = 'emu-ask-yes'; yes.textContent = opts.ok || 'OK';
+      yes.style.cssText = 'min-height:44px;padding:10px 18px;border-radius:10px;border:0;background:#2F5D50;color:#fff;font-weight:700;font-size:14px;cursor:pointer';
+      row.appendChild(no); row.appendChild(yes);
+      card.appendChild(text); card.appendChild(row); box.appendChild(card);
+      let done = false;
+      const finish = function (v) { if (done) return; done = true; try { box.remove(); } catch (e) {} resolve(v); };
+      yes.onclick = function () { finish(true); };
+      no.onclick = function () { finish(false); };
+      box.addEventListener('keydown', function (e) { if (e.key === 'Escape') finish(false); });
+      document.body.appendChild(box);
+      try { yes.focus(); } catch (e) {}
+    } catch (e) {
+      try { if (box) box.remove(); } catch (e2) {}
+      try { resolve(window.confirm(String(message || ''))); } catch (e3) { resolve(false); }
+    }
+  });
+}
+window.emuAsk = emuAsk;
+
 async function emuMyIdentity() {
   const user = await emuEnsureSignedIn();
   if (!user || !window.db || !window.fbLib) return null;
@@ -13346,7 +13393,7 @@ async function openPostChangeHistory(postData) {
         accept.style.marginTop = "10px";
         accept.textContent = "このChangeを採用する";
         accept.addEventListener("click", async () => {
-          if (!confirm("この提案を採用し、変更履歴として残しますか？")) return;
+          if (!(await emuAsk("この提案を採用し、変更履歴として残しますか？", { ok: '採用する' }))) return;
           accept.disabled = true;
           try {
             const batch = window.fbLib.writeBatch(window.db);
@@ -15724,7 +15771,7 @@ async function acceptKnowledgeAnswer(request, answer, button) {
   // 金額はその募集に記録された懸賞を出す。ここを固定値にすると、
   // 額を変えたときに古い数字が残る（実際に10のまま残っていた）。
   const _bounty = Number(request.bounty) || 0;
-  if (!confirm("この知識を採用しますか？\nあなたの残高から" + _bounty + " EMUERが回答者へ渡されます。")) return;
+  if (!(await emuAsk("この知識を採用しますか？\nあなたの残高から" + _bounty + " EMUERが回答者へ渡されます。", { ok: '採用する' }))) return;
   if (!await emuEnsureSignedIn()) {
     return alert("ログインの状態を確認できませんでした。\n\n一度ページを開き直して、もう一度お試しください。");
   }
@@ -18440,8 +18487,9 @@ async function spVoteCast(voteId, optionId, app) {
   const p = await spPassportLoad();
   if (!p) { alert('投票にはログインが必要です。'); return; }
   const addr = p.addr;
-  if (!confirm('この選択で投票します。あとから変えられません。\n\nよろしいですか？')) return;
+  /* 確かめの窓は画面の中に出す（emuAsk）。confirm() と違って裏の画面は止まらないので、窓が出ているあいだも押せないようにする */
   _spVoteBusy = true;
+  if (!(await emuAsk('この選択で投票します。あとから変えられません。\n\nよろしいですか？', { ok: '投票する' }))) { _spVoteBusy = false; return; }
   try {
     const fb = window.fbLib;
     await fb.setDoc(fb.doc(window.db, 'sp_votes', voteId, 'ballots', addr),
@@ -26263,7 +26311,7 @@ window.onFreeNftClick = async function () {
   const hasNFT = await window.checkFreeNFT();
 
   if (!hasNFT) {
-    const ok = confirm("無料NFTを受け取りますか？");
+    const ok = await emuAsk("無料NFTを受け取りますか？", { ok: '受け取る' });
     if (!ok) { _cancelSpLoadingOverlay(); return; }
 
     // ③ claim 実行（already claimed はOK）
@@ -29134,6 +29182,11 @@ async function sendEmuFeedback() {
     // 前から使っている人（番号の仕組みより前からいる）→ 黙って発行する
     if (!status.looksNew) return SPID.resolve(true);
 
+    /* 運営の書き手（11/23）：運営画面で作った、はじめから新しいアカウント。「前に使ったことがある」はあり得ない。
+       聞くと、Muse・ChatGPT が「前に使ったことがあります」を押してログアウトさせられることがあった。黙って発行する。 */
+    var me = window.auth && window.auth.currentUser;
+    if (me && String(me.uid || "").indexOf("writer:") === 0) return SPID.resolve(true);
+
     // 初めて見る入り方 → 一度だけ確かめる
     var yes = await SPID.askFirstTime();
     if (!yes) {
@@ -29868,19 +29921,40 @@ async function sendEmuFeedback() {
     showLoading();
     whenFirebaseReady(async function () {
       try {
-        var res = await fetch(CHES.config.writerTokenEndpoint, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ key: key })
-        });
-        var out = await res.json().catch(function () { return {}; });
+        /* 11/23：サーバーは main に入るたびに入れ替わり（1〜2分）、そのあいだは返事が無い・502 になる。
+           前は1回で「ログインできませんでした」にしていたので、入れるときと入れないときがあった。
+           通信の失敗と 5xx だけ、間をあけて聞き直す（キー違い・回数の上限は聞き直さない）。 */
+        var res = null, out = {};
+        var waits = CHES.config.writerRetryWaitsMs || [3000, 6000, 12000, 20000];
+        for (var i = 0; i <= waits.length; i++) {
+          try {
+            res = await fetch(CHES.config.writerTokenEndpoint, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ key: key })
+            });
+          } catch (netErr) { res = null; }
+          if (res && res.status < 500) break;
+          if (i < waits.length) {
+            statusMsg("サーバーにつないでいます…（" + (i + 1) + "回目）", false);
+            await new Promise(function (r) { setTimeout(r, waits[i]); });
+          }
+        }
+        if (!res) throw new Error("WRITER_UNREACHABLE");
+        out = await res.json().catch(function () { return {}; });
+        if (res.status === 429) { var e429 = new Error("RATE_LIMITED"); e429.retryAfterMs = out.retryAfterMs; throw e429; }
         if (!res.ok || !out.firebaseToken) throw new Error(out.error || ("writer " + res.status));
         var cred = await window.fbAuth.signInWithCustomToken(window.auth, out.firebaseToken);
         await completeCommonFlow(cred.user, "writer", out.profile);
       } catch (e) {
         console.error("[CHES] 書き手キーのログインエラー:", e && e.message);
-        restoreLoginScreen(e && e.message === "INVALID_WRITER_KEY"
+        var m = e && e.message;
+        restoreLoginScreen(m === "INVALID_WRITER_KEY"
           ? "書き手キーが違うか、止められています。運営に確かめてください。"
+          : m === "RATE_LIMITED"
+          ? "短いあいだに何度も入り直したため、少し休んでいます。" + Math.max(1, Math.ceil(Number(e.retryAfterMs || 60000) / 60000)) + "分ほど待ってから、もう一度入ってください。"
+          : (m === "WRITER_UNREACHABLE" || /^writer 5\d\d$/.test(String(m)))
+          ? "サーバーが起動中か、混み合っています。1〜2分待ってから、もう一度入ってください。"
           : "書き手キーでログインできませんでした。もう一度お試しください。");
       }
     }, function () {
