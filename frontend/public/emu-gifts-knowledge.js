@@ -80,6 +80,7 @@
     if (t - lastFresh < 10000) return;
     lastFresh = t;
     refreshCounts();
+    refreshPolls();
   }
   function closePicker() { var p = document.querySelector('[data-cheer-picker]'); if (p) p.remove(); }
   function openPicker(btn) {
@@ -127,7 +128,14 @@
   }
 
   /* ── みんなで決める（投票） ── */
-  var polls = [];
+  var polls = [], voting = false, lastPollFresh = 0;
+  /* 確かめは親（index.html）の画面の中の窓（emuAsk）で聞く（11/24）。
+     window.confirm() は Muse・ChatGPT などの道具が自動でキャンセルするので、EMUER を使う投票が「押しても何も起きない」になっていた。
+     親が無い・窓を出せないときだけ confirm() に戻る。 */
+  function ask(message, opts) {
+    try { var a = window.parent && window.parent !== window ? window.parent.emuAsk : null; if (typeof a === 'function') return Promise.resolve(a(message, opts)); } catch (_) {}
+    try { return Promise.resolve(window.confirm(message)); } catch (_) { return Promise.resolve(false); }
+  }
   function pollHtml(p) {
     var voted = p.myVote != null && p.myVote !== '';
     var show = voted || !p.open;
@@ -160,18 +168,44 @@
     host.innerHTML = '<div style="font-size:13px;font-weight:800;letter-spacing:.04em;color:#8a4b00">🗳️ みんなで決める</div>' + list.map(pollHtml).join('');
   }
   async function loadPolls() {
+    if (voting) return;
     var d = await G.polls(G.signedIn());
     if (!d.ok && G.signedIn()) d = await G.polls(false);
+    if (voting) return;                 // 読んでいるあいだに投票が始まったら、その画面を上書きしない
     polls = d.ok && Array.isArray(d.polls) ? d.polls : [];
     renderPolls();
   }
+  /* ほかの人の票も追いかける（11/24 オーナー「投票したけど反映されない」）。
+     前は開いたときに1回読むだけで、開いたままだと数が変わらなかった。
+     画面に戻ったとき・開いている間は45秒ごとに読み直す。開いている投票が無いときは読まない。
+     読み直しはログイン不要の一覧だけ（本人の票はもう分かっているので、引き継ぐ）。Firestore の読み取りを増やしすぎない。 */
+  async function refreshPolls() {
+    if (voting || !polls.some(function (p) { return p.open; })) return;
+    var t = Date.now();
+    if (t - lastPollFresh < 10000) return;
+    lastPollFresh = t;
+    var d = await G.polls(false);
+    if (voting || !d || !d.ok || !Array.isArray(d.polls)) return;
+    var mine = {};
+    polls.forEach(function (p) { if (p.myVote != null && p.myVote !== '') mine[p.id] = p.myVote; });
+    var next = d.polls.map(function (p) { return Object.prototype.hasOwnProperty.call(mine, p.id) ? Object.assign({}, p, { myVote: mine[p.id] }) : p; });
+    /* 何も変わっていなければ描き直さない。画面に戻った（focus）すぐあとのタップで描き直すと、
+       押そうとしたボタンが入れ替わって、押しても何も起きなくなる */
+    if (JSON.stringify(next.map(view)) === JSON.stringify(polls.map(view))) return;
+    polls = next;
+    renderPolls();
+  }
+  function view(p) { return [p.id, p.open, p.votes, p.myVote == null ? '' : p.myVote, (p.options || []).map(function (o) { return o.id + ':' + o.votes; }).join(',')]; }
   async function vote(btn) {
+    if (voting) return;                 // 確かめの窓が出ているあいだ・送っているあいだは、2つ目を受けない
     var box = btn.closest('[data-poll]'); var pollId = box.getAttribute('data-poll'); var option = btn.getAttribute('data-poll-vote');
     if (!G.signedIn()) { say('投票するには、ログインしてね🧊'); return; }
     var p = polls.filter(function (x) { return x.id === pollId; })[0];
-    if (p && p.cost && !window.confirm('「' + (btn.textContent || '') + '」に入れます。アプリ内EMUERを ' + p.cost + ' 使います。よろしいですか？')) return;
+    voting = true;
+    if (p && p.cost && !(await ask('「' + (btn.textContent || '') + '」に入れます。アプリ内EMUERを ' + p.cost + ' 使います。よろしいですか？', { ok: '入れる' }))) { voting = false; return; }
     box.querySelectorAll('button').forEach(function (b) { b.disabled = true; });
     var d = await G.vote(pollId, option);
+    voting = false;
     if (!d.ok) { box.querySelectorAll('button').forEach(function (b) { b.disabled = false; }); say(d.error); if (d.code === 'ALREADY_VOTED') loadPolls(); return; }
     polls = polls.map(function (x) { return x.id === pollId ? d.poll : x; });
     renderPolls();
@@ -195,7 +229,7 @@
   /* 応援の数を、ほかの人が贈った分も追いかける。 */
   document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') refreshSoon(); });
   window.addEventListener('focus', refreshSoon);
-  setInterval(function () { if (document.visibilityState === 'visible') refreshCounts(); }, 45000);
+  setInterval(function () { if (document.visibilityState === 'visible') { refreshCounts(); refreshPolls(); } }, 45000);
   /* 自分に応援が届いたら（親の emu-gifts.js が知らせる）、その投稿の数をすぐ新しくする。 */
   var off = G.on && G.on(function (ev) { if (ev && ev.type === 'cheers' && ev.postIds && ev.postIds.length) refreshCounts(ev.postIds); });
   window.addEventListener('pagehide', function () { if (typeof off === 'function') off(); });
