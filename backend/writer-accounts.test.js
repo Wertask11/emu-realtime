@@ -66,7 +66,9 @@ test("書き手キーでログインの証をもらう。名前が付く。違�
     assert.equal((await t.call("POST", "/api/auth/writer", { key: "short" })).status, 401);
     await t.call("PATCH", "/api/admin/writer-accounts/" + body.account.id, { active: false });
     assert.deepEqual(t.revoked, ["writer:" + body.account.id], "止めたら、いまのログインも切る");
-    assert.equal((await t.call("POST", "/api/auth/writer", { key: body.key })).status, 401);
+    const stopped = await t.call("POST", "/api/auth/writer", { key: body.key });
+    assert.equal(stopped.status, 403);
+    assert.equal(stopped.body.error, "WRITER_DISABLED", "止めた書き手は「止められている」と分けて返す");
     await t.call("PATCH", "/api/admin/writer-accounts/" + body.account.id, { active: true });
     assert.equal((await t.call("POST", "/api/auth/writer", { key: body.key })).status, 200);
   } finally { t.close(); }
@@ -165,4 +167,39 @@ test("回線ごとの上限は、10人の書き手が入り直せる広さにし
   const m = src.match(/auth\.post\("\/writer", rateLimit\(\{ windowMs: ([^,]+), max: (\d+)/);
   assert.ok(m, "ログインの道に回線ごとの上限がある");
   assert.ok(Number(m[2]) >= 100, "10人×何回かの入り直しで当たらない");
+});
+
+/* 11/24 オーナー：「書き手キーが違うか、止められています」と出る（運営画面では全員「使える」）。
+   渡したキーが今のキーか、書き写すうちに1文字ちがっていないかを見比べられるよう、キーの最後の4文字を目印として残す。 */
+test("キーの目印（最後の4文字）：作ったとき・作り直したときに残り、一覧に出る。キーそのもの・それ以上は出さない", async () => {
+  const t = await setup();
+  try {
+    const made = await t.call("POST", "/api/admin/writer-accounts", { name: "Muse 4" });
+    const id = made.body.account.id;
+    assert.equal(made.body.account.keyHint, made.body.key.slice(-4));
+    let list = await t.call("GET", "/api/admin/writer-accounts");
+    assert.equal(list.body.items[0].keyHint, made.body.key.slice(-4));
+    const again = await t.call("POST", "/api/admin/writer-accounts/" + id + "/key");
+    assert.equal(again.body.account.keyHint, again.body.key.slice(-4));
+    list = await t.call("GET", "/api/admin/writer-accounts");
+    assert.equal(list.body.items[0].keyHint, again.body.key.slice(-4), "作り直したら新しいキーの目印になる");
+    assert.ok(!JSON.stringify(list.body).includes(again.body.key.slice(4, 30)), "キーの中身は一覧に出さない");
+    const old = await t.call("POST", "/api/auth/writer", { key: made.body.key });
+    assert.equal(old.status, 401, "作り直す前の古いキーは「違う」");
+    assert.equal(old.body.error, "INVALID_WRITER_KEY");
+  } finally { t.close(); }
+});
+
+test("目印が無い前からの書き手は、正しいキーで入ったときに目印が付く", async () => {
+  const t = await setup();
+  try {
+    const made = await t.call("POST", "/api/admin/writer-accounts", { name: "店長" });
+    const id = made.body.account.id;
+    await t.db.collection("writer_accounts").doc(id).set({ keyHint: "" }, { merge: true });
+    assert.equal((await t.call("GET", "/api/admin/writer-accounts")).body.items[0].keyHint, "");
+    assert.equal((await t.call("POST", "/api/auth/writer", { key: "emw_" + "z".repeat(32) })).status, 401, "違うキーでは付かない");
+    assert.equal((await t.call("GET", "/api/admin/writer-accounts")).body.items[0].keyHint, "");
+    assert.equal((await t.call("POST", "/api/auth/writer", { key: made.body.key })).status, 200);
+    assert.equal((await t.call("GET", "/api/admin/writer-accounts")).body.items[0].keyHint, made.body.key.slice(-4));
+  } finally { t.close(); }
 });

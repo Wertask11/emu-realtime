@@ -25,6 +25,10 @@ const newKey = () => "emw_" + crypto.randomBytes(24).toString("base64url");
 const newId = () => crypto.randomBytes(6).toString("hex");
 const KEY_FORMAT = /^emw_[A-Za-z0-9_-]{32}$/;
 const WRITER_PLAN = "pro";
+/* キーの目印（11/24）。キーの最後の4文字だけを残し、運営画面とログイン画面で見比べられるようにする。
+   「書き手キーが違う」と断られたとき、渡したキーが今のキーか（作り直す前の古いキーではないか）、
+   書き写すうちに1文字ちがっていないかを確かめるため。32文字の乱数のうち4文字なので、当て推量の助けにはならない。 */
+const keyHintOf = (key) => String(key || "").slice(-4);
 
 /* 書き手の公開できる段。止めているときは期限を今にして切る。
    expiresAt を null で書くとルールの比較が通らないので、生きているあいだは欄ごと持たない（上書きで入れ直す）。 */
@@ -54,6 +58,7 @@ function publicView(id, d) {
     createdAt: d.createdAt || 0,
     lastLoginAt: d.lastLoginAt || 0,
     keyIssuedAt: d.keyIssuedAt || 0,
+    keyHint: d.keyHint || "",
   };
 }
 
@@ -83,7 +88,7 @@ function createWriterAccountsRouter({ db, firebaseAdmin, requireOwner, rateLimit
       const id = newId(), key = newKey(), uid = "writer:" + id;
       const doc = {
         name, note: cleanNote(req.body.note), active: true,
-        uid, address: deriveAddress(uid).toLowerCase(), keyHash: hashKey(key),
+        uid, address: deriveAddress(uid).toLowerCase(), keyHash: hashKey(key), keyHint: keyHintOf(key),
         createdAt: now(), keyIssuedAt: now(), createdBy: req.identity.walletAddress,
       };
       await col().doc(id).create(doc);
@@ -103,8 +108,8 @@ function createWriterAccountsRouter({ db, firebaseAdmin, requireOwner, rateLimit
       const snap = await ref.get();
       if (!snap.exists) return res.status(404).json({ error: "NOT_FOUND" });
       const key = newKey();
-      await ref.set({ keyHash: hashKey(key), keyIssuedAt: now() }, { merge: true });
-      res.json({ account: publicView(id, { ...snap.data(), keyIssuedAt: now() }), key });
+      await ref.set({ keyHash: hashKey(key), keyHint: keyHintOf(key), keyIssuedAt: now() }, { merge: true });
+      res.json({ account: publicView(id, { ...snap.data(), keyHint: keyHintOf(key), keyIssuedAt: now() }), key });
     } catch (e) {
       console.error("writer-accounts key:", e.message);
       res.status(503).json({ error: "UNAVAILABLE" });
@@ -169,9 +174,16 @@ function createWriterAccountsRouter({ db, firebaseAdmin, requireOwner, rateLimit
     try {
       const snap = await col().where("keyHash", "==", hashKey(key)).limit(1).get();
       const d = snap.docs[0];
-      if (!d || d.data().active === false) return res.status(401).json({ error: "INVALID_WRITER_KEY" });
+      /* 11/24：前は「無いキー」と「止めた書き手」を同じ返事にしていたので、画面は「違うか、止められています」としか言えなかった。
+         止めた書き手のキーを持っている人には、止められていると伝えても何も漏れない。分けて返す。 */
+      if (!d) {
+        console.warn("writer login: 一致する書き手キーがありません（末尾 …" + keyHintOf(key) + "）");
+        return res.status(401).json({ error: "INVALID_WRITER_KEY" });
+      }
+      if (d.data().active === false) return res.status(403).json({ error: "WRITER_DISABLED" });
       const v = d.data();
-      await col().doc(d.id).set({ lastLoginAt: now() }, { merge: true }).catch(() => {});
+      /* 目印が無い書き手（11/24 より前に作ったキー）は、正しいキーで入ったときに目印を残す */
+      await col().doc(d.id).set(v.keyHint ? { lastLoginAt: now() } : { lastLoginAt: now(), keyHint: keyHintOf(key) }, { merge: true }).catch(() => {});
       /* 段を付ける前に作った書き手（11/18 より前）にも、ログインのときに付ける */
       await setWriterGrant(db, v.uid, true, now);
       forgetEntitlement(v.uid);
