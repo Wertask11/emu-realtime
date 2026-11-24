@@ -113,7 +113,10 @@ test('完走したクエストは「✓ 完走した」（2周以上なら周回
 test('完走を認められた記録からは降りられない（降りると完走の記録が消えるため）', () => {
   const t = INDEX.slice(INDEX.indexOf('const cur = await _spRestDoc(path, true, true);'));
   const guard = t.indexOf("if (cur && (cur.approved === true || Number(cur.approvedRounds) > 0)) {");
-  assert.ok(guard > 0 && guard < t.indexOf("if (!confirm('このクエストから降りますか？')) return;"));
+  /* 11/24：「降りますか？」は画面の中の確かめ（emuAsk）になった。完走の確認がその前にあることは同じ */
+  const ask = t.indexOf("if (!(await emuAsk('このクエストから降りますか？', { ok: '降りる' }))) return;");
+  assert.ok(ask > 0, '降りる前の確かめがある');
+  assert.ok(guard > 0 && guard < ask);
 });
 
 function approvalHarness(commit) {

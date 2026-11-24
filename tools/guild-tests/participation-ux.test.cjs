@@ -17,11 +17,16 @@ test('UX does not change enrollment writes, Passport resolution, reports or wisd
  // (window.EmuAnalytics?.track('quest_join', …)). It does not change the action or
  // identity rules, so compare without that line (tools/emu-tests/analytics.test.cjs covers it).
  const withoutMeasure=src=>src.split('\n').filter(l=>!/window\.EmuAnalytics\?\.track\(/.test(l)).join('\n');
+ // 11/24（オーナー：書き手キーで入った Muse・ChatGPT も利用者と同じことができるように）：spQuestToggle の
+ // 「このクエストから降りますか？」だけを、道具に自動でキャンセルされる confirm() から画面の中の emuAsk に替えた。
+ // その1行だけを元に戻してから比べる（ほかの行・受ける・降りる・本人の決まりは今までどおり一字一句比べる）。
+ const QUEST_LEAVE_NOW="if (!(await emuAsk('このクエストから降りますか？', { ok: '降りる' }))) return;",QUEST_LEAVE_WAS="if (!confirm('このクエストから降りますか？')) return;";
+ const undoLeaveAsk=(src,name)=>{if(name!=='spQuestToggle')return src;assert.equal(src.split(QUEST_LEAVE_NOW).length,2,'spQuestToggle: 認めた変更が見つからない');return src.replace(QUEST_LEAVE_NOW,QUEST_LEAVE_WAS);};
  // spPassportLoad changed on purpose: plan names (#232, 10/27) and, on 11/3 (#267),
  // tying the cached Passport to the signed-in UID so a previous user's Passport is never shown.
  // tools/unified-navigation-tests/navigation.test.cjs covers the account switch.
  for(const name of ['spQuestToggle','spLogSubmit','spWisdomSubmit'])
-  assert.equal(withoutMeasure(grab(now,name)),grab(old,name),name+' must preserve the existing action and identity rules');
+  assert.equal(withoutMeasure(undoLeaveAsk(grab(now,name),name)),grab(old,name),name+' must preserve the existing action and identity rules');
  const passport=grab(now,'spPassportLoad');
  assert.ok(passport.includes('window.auth?.currentUser?.uid'),'the Passport must stay tied to the signed-in UID');
 });
