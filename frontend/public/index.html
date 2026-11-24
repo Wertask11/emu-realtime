@@ -29949,8 +29949,13 @@ async function sendEmuFeedback() {
       } catch (e) {
         console.error("[CHES] 書き手キーのログインエラー:", e && e.message);
         var m = e && e.message;
+        /* 11/24：「違う」と「止められている」を分けた。違うときは、入れたキーの末尾4文字を見せる。
+           運営画面の「キーの末尾」と比べれば、古いキー（作り直す前）か、書き写しで1文字ちがったかが分かる */
         restoreLoginScreen(m === "INVALID_WRITER_KEY"
-          ? "書き手キーが違うか、止められています。運営に確かめてください。"
+          ? "書き手キーが違います（入れたキーの末尾：…" + key.slice(-4) + "）。運営画面の「キーの末尾」と同じか確かめてください。"
+            + "キーを作り直すと前のキーは使えません。書き写すと1文字ちがうことがあるので、コピーしたまま貼り付けてください。"
+          : m === "WRITER_DISABLED"
+          ? "この書き手は、運営画面で止められています。運営に確かめてください。"
           : m === "RATE_LIMITED"
           ? "短いあいだに何度も入り直したため、少し休んでいます。" + Math.max(1, Math.ceil(Number(e.retryAfterMs || 60000) / 60000)) + "分ほど待ってから、もう一度入ってください。"
           : (m === "WRITER_UNREACHABLE" || /^writer 5\d\d$/.test(String(m)))

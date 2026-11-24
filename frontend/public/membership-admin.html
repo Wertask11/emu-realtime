@@ -4367,7 +4367,9 @@ function showWriterKey(account, key) {
     + '<b>' + esc(account.name) + '</b> の書き手キー（この画面を閉じると、もう見られません）<br>'
     + '<code id="wrKeyText" style="display:inline-block;margin:8px 0;padding:6px 10px;background:#fff;border-radius:6px;word-break:break-all;font-size:14px">' + esc(key) + '</code><br>'
     + '<button type="button" class="btn" id="wrCopy">キーをコピー</button> '
-    + '<small>書き手（ChatGPT・Muse）に渡すときは、ほかの人の目に触れない方法で。</small></div>';
+    + '<small>書き手（ChatGPT・Muse）に渡すときは、ほかの人の目に触れない方法で。</small><br>'
+    + '<small>書き写すと1文字ちがうことがあります。コピーしたまま貼り付けて渡し、書き手にも「書き写さず、そのまま貼り付けて」と伝えてください。'
+    + 'キーの末尾は <code>…' + esc(String(key).slice(-4)) + '</code> です。</small></div>';
   $("#wrCopy").onclick = async () => {
     try { await navigator.clipboard.writeText(key); $("#wrCopy").textContent = "コピーしました"; }
     catch (_) { $("#wrCopy").textContent = "コピーできませんでした（選んでコピーしてください）"; }
@@ -4378,11 +4380,14 @@ async function loadWriters() {
   try {
     const { items } = await api("/api/admin/writer-accounts");
     const when = (ms) => ms ? new Date(ms).toLocaleString("ja-JP") : "まだ";
-    box.innerHTML = items.length ? '<table><thead><tr><th>名前</th><th>メモ</th><th>状態</th><th>最後に入った</th><th>アドレス</th><th></th></tr></thead><tbody>'
+    box.innerHTML = items.length ? '<table><thead><tr><th>名前</th><th>メモ</th><th>状態</th><th>最後に入った</th><th>キーの末尾</th><th>アドレス</th><th></th></tr></thead><tbody>'
       + items.map((w) => '<tr data-wr="' + esc(w.id) + '">'
         + '<td><b>' + esc(w.name) + '</b></td><td>' + esc(w.note) + '</td>'
         + '<td>' + (w.active ? '<span class="state ok">使える</span>' : '<span class="state ng">止めている</span>') + '</td>'
         + '<td>' + esc(when(w.lastLoginAt)) + '</td>'
+        /* 11/24：キーの最後の4文字。ログイン画面で断られたときに出る「入れたキーの末尾」と見比べる。
+           前に作ったキーは、正しいキーで1回入ると出る */
+        + '<td>' + (w.keyHint ? '<code style="font-size:12px">…' + esc(w.keyHint) + '</code>' : '<small>次に入ったときに出ます</small>') + '</td>'
         + '<td><code style="font-size:11px">' + esc(w.address.slice(0, 6) + "…" + w.address.slice(-4)) + '</code></td>'
         + '<td style="white-space:nowrap"><button type="button" class="btn" data-wr-rename>名前を変える</button> '
         + '<button type="button" class="btn" data-wr-key>キーを作り直す</button> '

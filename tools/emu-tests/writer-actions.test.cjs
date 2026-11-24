@@ -176,9 +176,16 @@ test('書き手のログイン：サーバーの入れ替え中（つながら�
 
 test('書き手のログイン：キー違いは聞き直さない。回数の上限は「何分待つか」を出す。ずっと落ちているときは「起動中」と出す', async () => {
   const bad = loginCtx([{ status: 401, body: { error: 'INVALID_WRITER_KEY' } }]);
-  await bad.go(KEY);
+  await bad.go('emw_' + 'a'.repeat(28) + 'Xy9_');
   assert.equal(bad.seen.fetches, 1);
-  assert.match(bad.seen.restored, /書き手キーが違うか/);
+  assert.match(bad.seen.restored, /書き手キーが違います（入れたキーの末尾：…Xy9_）/, '入れたキーの末尾を見せて、運営画面と見比べられるようにする');
+  assert.match(bad.seen.restored, /コピーしたまま貼り付けて/);
+  assert.ok(!bad.seen.restored.includes('a'.repeat(8)), 'キーの中身は見せない');
+
+  const stopped = loginCtx([{ status: 403, body: { error: 'WRITER_DISABLED' } }]);
+  await stopped.go(KEY);
+  assert.equal(stopped.seen.fetches, 1);
+  assert.match(stopped.seen.restored, /運営画面で止められています/);
 
   const many = loginCtx([{ status: 429, body: { error: 'RATE_LIMITED', retryAfterMs: 4 * 60000 } }]);
   await many.go(KEY);
