@@ -38,11 +38,29 @@ const ORDERS = `<!doctype html><meta charset="utf-8"><body><ul><li>コーヒー1
 <script src="/schoolpark/ticket-qr.js"></script></body>`;
 const INBOX = `<!doctype html><meta charset="utf-8"><body><script>window.auth={currentUser:{uid:'U1'}};async function emuAuthHeaders(){return {'Content-Type':'application/json',Authorization:'Bearer T'};}</script><script src="/emu-gifts.js"></script></body>`;
 
+/* 11/24 オーナー：Muse の書き手が「1票 1 EMUER」の投票に入れたが反映されない。
+   確かめが window.confirm() で、道具が自動でキャンセルしていた。親（index.html）の本物の emuAsk で聞く。
+   ほかの人の票も、開いたまま読み直す。 */
+const INDEX_SRC = fs.readFileSync(path.join(PUBLIC, 'index.html'), 'utf8');
+const EMU_ASK = INDEX_SRC.slice(INDEX_SRC.indexOf('function emuAsk(message, opts) {'), INDEX_SRC.indexOf('window.emuAsk = emuAsk;')) + 'window.emuAsk = emuAsk;';
+const COST_GIFTS = `window.calls=[];window.others=0;window.voteResult=null;
+const poll=(mine,extra)=>({id:'poll9',question:'Cityに欲しい店舗は？？',options:[{id:'o1',label:'①飲食',votes:2+extra},{id:'o3',label:'③洋服',votes:1+(mine==='o3'?1:0)}],cost:1,votes:3+extra+(mine?1:0),open:true,closesAt:Date.now()+86400000,myVote:mine});
+window.confirm=()=>{window.calls.push(['confirm']);return false;};
+window.EmuGifts={signedIn:()=>true,petals:()=>{},on:()=>()=>{},
+  me:async ()=>({ok:true,balance:3,sentToday:0,dailyLimit:100}),
+  cheerCounts:async ()=>({ok:true,counts:{}}),
+  polls:async signed=>{window.calls.push(['polls',!!signed]);const m=window.myVote||null;const p=poll(m,window.others);if(!signed)delete p.myVote;return {ok:true,polls:[p]};},
+  vote:async (id,o)=>{window.calls.push(['vote',id,o]);if(window.voteResult)return window.voteResult;window.myVote=o;return {ok:true,poll:poll(o,window.others)};}
+};`;
+const KCOST = `<!doctype html><meta charset="utf-8"><body><script>${COST_GIFTS}</script><script>${EMU_ASK}</script><iframe id="k" src="/knowledge.html" style="width:1000px;height:1400px"></iframe>
+<script>const k=document.getElementById('k');addEventListener('message',e=>{if(e.source===k.contentWindow&&e.data&&e.data.type==='emu-knowledge-ready')window.ready=true;});
+window.toK=m=>k.contentWindow.postMessage(m,location.origin);</script></body>`;
+
 let server, base, browser;
 before(async () => {
   server = http.createServer((req, res) => {
     const url = new URL(req.url, 'http://x');
-    const pages = { '/kparent.html': KPARENT, '/quest.html': QUEST, '/quest-frame.html': QUEST_FRAME, '/orders.html': ORDERS, '/inbox.html': INBOX };
+    const pages = { '/kcost.html': KCOST, '/kparent.html': KPARENT, '/quest.html': QUEST, '/quest-frame.html': QUEST_FRAME, '/orders.html': ORDERS, '/inbox.html': INBOX };
     if (pages[url.pathname]) { res.writeHead(200, { 'Content-Type': TYPES['.html'] }); return res.end(pages[url.pathname]); }
     const file = path.join(PUBLIC, path.normalize(url.pathname));
     if (!file.startsWith(PUBLIC) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) { res.writeHead(404); return res.end(); }
@@ -171,5 +189,56 @@ test('届いた応援：「応援が届いたよ」と使える残高を出し�
     fresh = true;   // 開いている間に、また応援が届いた
     await page.evaluate(() => window.EmuGifts.checkInbox());
     await page.getByText('応援が届いたよ！').waitFor();
+  } finally { await page.close(); }
+});
+
+test('知識を読む：1票 1 EMUER の投票も、画面の中の「入れる」で入る（confirm() は使わない）。やめる・足りないとき・ほかの人の票', async () => {
+  const page = await browser.newPage({ viewport: { width: 1000, height: 1400 } });
+  try {
+    await page.clock.install();         // 45秒ごと・10秒の間引きを、時計を進めて確かめる
+    await page.goto(base + '/kcost.html');
+    await page.waitForFunction(() => window.ready === true);
+    await page.evaluate(() => window.toK({ type: 'emu-knowledge-posts', posts: [], account: '0xaaa', authors: {} }));
+    const k = page.frameLocator('#k');
+    await k.locator('#emuPolls').getByText('Cityに欲しい店舗は？？').waitFor();
+    assert.match(await k.locator('#emuPolls').textContent(), /1票 1 EMUER/);
+
+    /* やめる：票は入らず、もう一度押せる */
+    await k.locator('[data-poll-vote="o3"]').click();
+    const askBox = page.locator('.emu-ask');
+    await askBox.waitFor();
+    assert.match(await askBox.textContent(), /「③洋服」に入れます。アプリ内EMUERを 1 使います/);
+    await askBox.getByRole('button', { name: 'やめる', exact: true }).click();
+    await askBox.waitFor({ state: 'detached' });
+    assert.equal((await page.evaluate(() => window.calls)).filter((c) => c[0] === 'vote').length, 0);
+    assert.equal(await k.locator('[data-poll-vote="o3"]').isDisabled(), false);
+
+    /* 足りないとき：断られたことが分かり、押せる状態に戻る */
+    await page.evaluate(() => { window.voteResult = { ok: false, code: 'INSUFFICIENT_EMUER', error: 'アプリ内EMUERが足りないみたい🧊（いま 0 EMUER）' }; });
+    await k.locator('[data-poll-vote="o3"]').click();
+    await askBox.getByRole('button', { name: '入れる', exact: true }).click();
+    await k.getByText('アプリ内EMUERが足りないみたい🧊（いま 0 EMUER）').first().waitFor();
+    assert.equal(await k.locator('[data-poll-vote="o3"]').isDisabled(), false);
+
+    /* 入れる：票が入り、✓ が付く */
+    await page.evaluate(() => { window.voteResult = null; });
+    await k.locator('[data-poll-vote="o3"]').click();
+    await askBox.getByRole('button', { name: '入れる', exact: true }).click();
+    await k.locator('#emuPolls').getByText('✓ ③洋服').waitFor();
+    const calls = await page.evaluate(() => window.calls);
+    assert.deepEqual(calls.filter((c) => c[0] === 'vote').pop(), ['vote', 'poll9', 'o3']);
+    assert.equal(calls.filter((c) => c[0] === 'confirm').length, 0, 'ブラウザの confirm() は使わない');
+
+    /* ほかの人の票：開いている間は45秒ごとに読み直す（ログイン不要の一覧だけ）。自分の ✓ は残る */
+    await page.evaluate(() => { window.others = 3; window.calls.length = 0; });
+    await page.clock.fastForward(46000);
+    await k.locator('#emuPolls').getByText('いま 7票').waitFor();
+    await k.locator('#emuPolls').getByText('✓ ③洋服').waitFor();
+    assert.deepEqual((await page.evaluate(() => window.calls)).filter((c) => c[0] === 'polls'), [['polls', false]], '読み直しはログイン不要の一覧');
+    /* 画面に戻ったときも読み直す（10秒以内の重ねがけはしない） */
+    await page.evaluate(() => { window.others = 4; });
+    await page.clock.fastForward(11000);
+    await page.evaluate(() => document.getElementById('k').contentWindow.dispatchEvent(new Event('focus')));
+    await k.locator('#emuPolls').getByText('いま 8票').waitFor();
   } finally { await page.close(); }
 });
