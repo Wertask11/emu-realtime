@@ -125,7 +125,9 @@ with sync_playwright() as p:
         d.get_by_role('button',name='続きをする →',exact=True).first.wait_for()
         assert d.locator('.sp-qh-item').count()==1
         d.get_by_role('button',name='続きをする →',exact=True).first.click()
-        d.get_by_role('button',name='✓ 受けている',exact=True).click();await_state(g,'entryCommits',0)
+        # 11/24：「このクエストから降りますか？」はブラウザの確かめではなく、画面の中の窓（emuAsk）。利用者と同じく「降りる」を押す
+        d.get_by_role('button',name='✓ 受けている',exact=True).click()
+        g.locator('.emu-ask').get_by_role('button',name='降りる',exact=True).click();await_state(g,'entryCommits',0)
         g.wait_for_function('!_spQuestBusy')
         d.get_by_text('← クエスト一覧',exact=True).click()
         d.get_by_role('tab',name='挑戦を探す',exact=False).click();d.locator('[data-tour="quest-card"]').first.wait_for()
