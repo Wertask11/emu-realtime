@@ -13081,7 +13081,7 @@ if (scheduledPostsBtn) {
           <button data-id="${item.id}" class="cancel-schedule-btn" style="margin-top:8px;background:#fee;border:1px solid #f88;color:#c00;border-radius:4px;padding:3px 10px;font-size:11px;cursor:pointer;">キャンセル</button>
         `;
         el.querySelector(".cancel-schedule-btn").addEventListener("click", async function () {
-          if (!confirm("この予約投稿をキャンセルしますか？")) return;
+          if (!(await emuAsk("この予約投稿をキャンセルしますか？", { ok: 'キャンセルする', cancel: 'そのままにする' }))) return;
           try {
             const r = await fetch(
               `https://emu-realtime.onrender.com/api/scheduled-posts/${this.dataset.id}`,
@@ -20101,7 +20101,7 @@ window.spQuestToggle = async function (questId, app) {
       return;
     }
     if (cur) {
-      if (!confirm('このクエストから降りますか？')) return;
+      if (!(await emuAsk('このクエストから降りますか？', { ok: '降りる' }))) return;
     }
     joined = !cur;
     /* パソコンでは SDK の書き込みが返ってこないことがある（Listen が止まる）。
@@ -21416,7 +21416,7 @@ window.spTaskToggle = async function (app, taskId, done) {
 };
 
 window.spTaskDelete = async function (app, taskId, title) {
-  if (!confirm('「' + (title || 'この宿題') + '」を消します。\n\n消したものは戻せません。よろしいですか？')) return;
+  if (!(await emuAsk('「' + (title || 'この宿題') + '」を消します。\n\n消したものは戻せません。よろしいですか？', { ok: '消す' }))) return;
   const p = await spPassportLoad();
   if (!p) return;
   try {
@@ -22033,7 +22033,7 @@ window.spWisdomCite = async function (wisdomId, app) {
   try {
     const cur = await fb.getDoc(ref);
     if (cur.exists()) {
-      if (!confirm('引用を取り消しますか？')) return;
+      if (!(await emuAsk('引用を取り消しますか？', { ok: '取り消す' }))) return;
       want = false;
       await fb.deleteDoc(ref);
     } else {
@@ -22976,7 +22976,7 @@ async function spOpenProof(questId, title) {
         const withWisdom = !!(box.querySelector('[data-proof-wisdom]') || {}).checked;
         await _spProofCall('/' + key + '/publish', { showName: showName, name: myName, withWisdom: withWisdom });
       } else {
-        if (!confirm('公開をやめますか？ このURLはすぐ見られなくなります（完走の記録は消えません）。')) { t.disabled = false; return; }
+        if (!(await emuAsk('公開をやめますか？ このURLはすぐ見られなくなります（完走の記録は消えません）。', { ok: '公開をやめる' }))) { t.disabled = false; return; }
         await _spProofCall('/' + key + '/unpublish', {});
       }
       spOpenProof(questId, title);

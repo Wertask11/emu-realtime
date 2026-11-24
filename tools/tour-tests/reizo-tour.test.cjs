@@ -85,7 +85,12 @@ test('unified navigation preserves existing auth, contracts, Quest business logi
    assert.ok(cite.includes("alert('自分の知恵カードは引用できません。')"),'spWisdomCite must still refuse your own wisdom card');
    assert.ok(cite.includes("'cites', key)") && cite.includes("String(p.addr || '').toLowerCase()"),'spWisdomCite must key the cite by the lower-case Passport address');
    assert.ok(cite.includes('busy[wisdomId]'),'spWisdomCite must ignore a second press while saving'); }
- for(const fn of ['spEnsureSchoolParkAccess','emuAuthHeaders','accountGo','spQuestToggle','spQuestLog','spQuestWisdom','spWisdomSubmit','spOpenPlay']) assert.equal(grab(current,fn),grab(before,fn),fn);
+ // spQuestToggle changed on purpose on 11/24 (owner: 書き手キーで入った Muse・ChatGPT も利用者と同じことができるように).
+ // Only the "leave this Quest?" question moved from the browser's confirm() (which automation tools auto-cancel)
+ // to the in-page emuAsk. Undo exactly that one line, then the whole function must still equal the baseline.
+ const QUEST_LEAVE_NOW="if (!(await emuAsk('このクエストから降りますか？', { ok: '降りる' }))) return;", QUEST_LEAVE_WAS="if (!confirm('このクエストから降りますか？')) return;";
+ const pinned=(src,fn)=>{let g=grab(src,fn);if(src===current&&fn==='spQuestToggle'){assert.equal(g.split(QUEST_LEAVE_NOW).length,2,'spQuestToggle: 認めた変更が見つからない');g=g.replace(QUEST_LEAVE_NOW,QUEST_LEAVE_WAS);}return g;};
+ for(const fn of ['spEnsureSchoolParkAccess','emuAuthHeaders','accountGo','spQuestToggle','spQuestLog','spQuestWisdom','spWisdomSubmit','spOpenPlay']) assert.equal(pinned(current,fn),grab(before,fn),fn);
  for(const file of ['firestore.rules','backend/identity.js','backend/entitlement.js','backend/membership-policy.js','backend/quest-completion.js','frontend/public/knowledge.html','frontend/public/Emu_room2/echo-field.html','frontend/public/ringo-game.html','frontend/public/daily-gods/index.html','frontend/public/daily-gods/game.js','frontend/public/schoolpark/south-elevator.html']) assert.equal(withoutErrorReporter(undoApproved(file,fs.readFileSync(path.join(root,file),'utf8'))),readBefore(file),file);
  const retired=fs.readFileSync(path.join(root,'frontend/public/schoolpark/dao.html'),'utf8');
  for(const view of ['isHome','isPark','isPlaza','isMembers','isTreasury']) assert.ok(!retired.includes('value="{{ '+view+' }}"'),view);
