@@ -156,13 +156,16 @@ function cleanLayout(input, counts) {
   }
   return out;
 }
+/* 部屋の道具は、支払いが済んだ時点（paid）で持ち物に入る。運営の引渡し（fulfilled）を待たない。
+   返金・取消になった注文は次に読んだときに外れる。 */
+const OWNED_STATUS = ["paid", "fulfilled"];
 function qualifies(o, spid) {
   return (
     o &&
     o.passportId === spid &&
     o.shopId === "schoolpark-official" &&
     o.storeType === "schoolpark_virtual" &&
-    o.status === "fulfilled" &&
+    OWNED_STATUS.includes(o.status) &&
     PAID.includes(o.digitalAssetId)
   );
 }
@@ -254,7 +257,7 @@ function createCityRoomRouter({
     const q = db
       .collection("mitemiru_orders")
       .where("passportId", "==", a.spid)
-      .where("status", "==", "fulfilled")
+      .where("status", "in", OWNED_STATUS)
       .where("digitalAssetId", "in", PAID);
     const snap = await selectFields(q, [
       "passportId",

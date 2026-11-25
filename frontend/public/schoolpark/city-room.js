@@ -176,7 +176,7 @@ export function createRoomUI(
    )
    .join(
      "",
-   )}<hr><p class="room-caption">公式ショップの部屋用アイテムは、引渡し済みになったものだけ持ち物に入ります。現在の販売・価格・条件はショップでご確認ください。</p>${btn("shop", "公式ショップへ", busy)}${btn("passport", "Passport・星空へ", busy)}${data.isOwner ? btn("reports", "公開部屋の通報を確認", busy) : ""}</aside></div>
+   )}<hr><p class="room-caption">公式ショップの部屋用アイテムは、交換の支払いが済むと持ち物に入ります。返金・取消になったものは外れます。現在の販売・価格・条件はショップでご確認ください。</p>${btn("shop", "公式ショップへ", busy)}${btn("passport", "Passport・星空へ", busy)}${data.isOwner ? btn("reports", "公開部屋の通報を確認", busy) : ""}</aside></div>
  ${reports ? `<section class="room-panel room-admin"><h3>公開部屋の通報（最大20件）</h3>${reports.reports.length ? reports.reports.map((v) => `<div class="room-admin-row"><p>${e({ spam: "迷惑行為", harass: "嫌がらせ", personal: "個人情報", other: "その他" }[v.reason])}</p><a href="/schoolpark/room.html?room=${e(v.publicId)}" target="_blank" rel="noopener">公開ページを確認</a><div>${[true, false].map((h) => `<button type="button" data-room-moderate="${e(v.publicId)}" data-room-hidden="${h}">${h ? "公開を停止" : "確認して公開を再開"}</button>`).join("")}</div></div>`).join("") : "<p>未確認の通報はありません。</p>"}${reports.nextBefore ? btn("next-reports", "次の通報へ") : ""}${btn("close-reports", "閉じる")}</section>` : ""}</section>`;
     bindDrag();
   }

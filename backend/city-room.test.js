@@ -212,10 +212,11 @@ test("room: private/public/save/reopen uses random publicId; public projection c
     assert.equal((await f.call("GET", "/" + id, "")).status, 404);
     assert.equal(JSON.stringify(f.db._dump("mitemiru_orders")), before);
   }));
-test("room: only fulfilled own official catalogue orders add inventory, one order gives one item", () =>
+test("room: only paid/fulfilled own official catalogue orders add inventory, one order gives one item", () =>
   using(async (f) => {
     for (const [i, p] of [
-      { status: "paid" },
+      { status: "pending_payment" },
+      { status: "expired" },
       { status: "refunded" },
       { status: "cancelled" },
       { passportId: B },
@@ -242,6 +243,20 @@ test("room: only fulfilled own official catalogue orders add inventory, one orde
     );
     assert.equal(denied.status, 403);
     assert.equal(denied.body.error, "ROOM_ITEM_NOT_OWNED");
+  }));
+test("room: a paid order enters the room right away and leaves when it is refunded", () =>
+  using(async (f) => {
+    await f.order(1, { status: "paid", digitalAssetId: "room-lamp-v1" });
+    const r = await f.call("GET", "/me");
+    assert.equal(r.status, 200);
+    assert.equal(r.body.inventory.find((x) => x.itemId === "room-lamp-v1").count, 1);
+    const l = clone(DEFAULT);
+    l.placements.push(extra("lamp", "room-lamp-v1"));
+    assert.equal((await f.call("PUT", "/me", "alice", save(l))).status, 200);
+    await f.order(1, { status: "refunded", digitalAssetId: "room-lamp-v1" });
+    const after = await f.call("GET", "/me");
+    assert.equal(after.body.inventory.find((x) => x.itemId === "room-lamp-v1")?.count || 0, 0);
+    assert.ok(after.body.room.unavailableInstances.includes("lamp"));
   }));
 test("room: unknown/unowned items, unknown fields, out-of-range and overlapping placements reject without writes", () =>
   using(async (f) => {
