@@ -43,8 +43,11 @@ button.ok{background:var(--ok);color:#fff} button.no{background:#fff;color:var(-
 button.neutral{background:#fff;color:var(--ink);border:1.5px solid var(--line)}
 button:disabled{opacity:.5;cursor:default}
 input,select,textarea{width:100%;border:1.5px solid var(--line);border-radius:10px;padding:10px;font-family:inherit;font-size:14px;margin-top:6px}
+/* まとめて認めるときの選ぶ箱。上の input の幅100%を打ち消す */
+input.pick{width:18px;height:18px;flex:none;margin:2px 10px 0 0;padding:0;cursor:pointer;accent-color:var(--ok)}
 /* 入力欄の見出し。SchoolParkタブで使う */
 label{display:block;margin-top:12px;font-size:12px;font-weight:600;color:var(--muted)}
+label.pickrow{display:flex;align-items:flex-start;min-width:0;margin-top:0;font-size:inherit;font-weight:inherit;color:inherit;cursor:pointer;overflow-wrap:anywhere}
 .pill{display:inline-block;font-size:11px;font-weight:700;padding:2px 10px;border-radius:999px;background:#f2efeb;color:var(--muted)}
 .pill.on{background:#e7f5ec;color:var(--ok)} .pill.warn{background:#fdecea;color:var(--warn)}
 .gate{text-align:center;padding:70px 20px;color:var(--muted)}
@@ -3215,14 +3218,20 @@ async function renderSchoolPark() {
           const need = [];
           if (r.t.logs < 3) need.push("報告あと" + (3 - r.t.logs) + "本");
           if (r.t.wisdom < 1) need.push("知恵カードあと1枚");
+          /* まとめて認める（11/25）。1人ずつ押すと8人で8回、確かめの窓も8回出る。
+             条件を満たした人には最初から印を付けておき、足りない人は付けない。 */
           return '<div class="row" style="border-top:1px solid var(--line);padding-top:10px;margin-top:10px">'
+            + '<label class="pickrow"><input type="checkbox" class="pick" data-qpick="' + esc(r.q.id)
+            + '" data-addr="' + esc(r.t.addr) + '" data-qready="' + (r.ready ? '1' : '0')
+            + '" data-qname="' + name + '　' + label + (r.round > 1 ? '（' + r.round + '周目）' : '') + '"'
+            + (r.ready ? ' checked' : '') + '>'
             + '<span><b>' + name + '</b>　' + label
             + (r.round > 1 ? '　<b style="color:#0F5C3F">' + r.round + '周目</b>' : '') + '<br>'
             + '<small style="color:var(--muted)">報告 ' + r.t.logs + '本'
             + (r.t.logs >= 3 ? ' ✓' : '')
             + ' · 知恵カード ' + r.t.wisdom + '枚' + (r.t.wisdom >= 1 ? ' ✓' : '')
             + (need.length ? ' · <b style="color:#b45309">' + esc(need.join("、")) + '</b>' : '')
-            + '</small></span>'
+            + '</small></span></label>'
             + '<span><button class="act ' + (r.ready ? 'ok' : 'neutral') + '" data-qapprove="'
             + esc(r.q.id) + '" data-addr="' + esc(r.t.addr) + '">認める</button></span></div>';
         };
@@ -3232,6 +3241,13 @@ async function renderSchoolPark() {
           + '完走条件は<b>報告3回＋知恵カード1枚＋運営の確認</b>です。'
           + 'ここで認めると、信用スコアの「完走」とパスポートの記録、星空の星に入ります。<br>'
           + 'EMUERは別です。下の「EMUERの予算と貢献」で渡します。</p>'
+          + (rows.length
+              ? '<div class="actions" style="margin:0 0 4px;align-items:center">'
+                + '<button class="act ok" id="qApproveBulk">選んだ人をまとめて認める（<span id="qPickN">' + ready + '</span>人）</button>'
+                + '<button class="act neutral" data-qpickset="ready">条件を満たした人だけ選ぶ</button>'
+                + '<button class="act neutral" data-qpickset="all">全員選ぶ</button>'
+                + '<button class="act neutral" data-qpickset="none">全部外す</button></div>'
+              : '')
           + (rows.length ? rows.map(line).join("")
              : (function () {
                  /* 空の理由を言い分ける。黙って「ありません」と出すと、
@@ -3396,11 +3412,25 @@ async function renderSchoolPark() {
     + '特殊議題の投票も同じ。一般議題の投票は誰でもできます。<br>'
     + '信用スコア＝完走×10＋知恵×5＋引用され×3＋在籍月数（上限12）。'
     + '目安は ' + TRUST_NEED + ' 点です。</p>'
+    /* まとめて参加OKにする（11/25）。目安の点に届いている人に最初から印を付ける。 */
+    + (people.some(m => !m.trusted)
+        ? '<div class="actions" style="margin:0 0 4px;align-items:center">'
+          + '<button class="act ok" id="tAddBulk">選んだ人をまとめて参加OKにする（<span id="tPickN">'
+          + people.filter(m => !m.trusted && m.score >= TRUST_NEED).length + '</span>人）</button>'
+          + '<button class="act neutral" data-tpickset="need">目安の点に届いた人だけ選ぶ</button>'
+          + '<button class="act neutral" data-tpickset="all">全員選ぶ</button>'
+          + '<button class="act neutral" data-tpickset="none">全部外す</button></div>'
+        : '')
     + (people.length ? people.map(m =>
-        '<div class="row"><span>' + esc(m.name) + '<br>'
+        '<div class="row">'
+        + (m.trusted ? '<span>'
+          : '<label class="pickrow"><input type="checkbox" class="pick" data-tpick="' + esc(m.addr)
+            + '" data-tname="' + esc(m.name) + '" data-tneed="' + (m.score >= TRUST_NEED ? '1' : '0') + '"'
+            + (m.score >= TRUST_NEED ? ' checked' : '') + '><span>')
+        + esc(m.name) + '<br>'
         + '<small style="color:var(--muted)">' + esc(m.short) + ' · '
         + '信用 ' + m.score + ' 点（完走' + m.done + '・知恵' + m.wisdom + '・引用され' + m.cited + '）'
-        + (m.trusted ? ' · 認めています' : '') + '</small></span>'
+        + (m.trusted ? ' · 認めています' : '') + '</small></span>' + (m.trusted ? '' : '</label>')
         + '<span>' + (m.trusted
             ? '<button class="act no" data-tdel="' + esc(m.addr) + '">取り消す</button>'
             : '<button class="act ok" data-tadd="' + esc(m.addr) + '" data-tname="' + esc(m.name) + '">参加OKにする</button>')
@@ -3735,6 +3765,56 @@ async function renderSchoolPark() {
       }
     };
   });
+  /* 1人ぶんの承認。「認める」ボタンと「まとめて認める」が同じ道を通る。
+     確かめの窓や知らせ（alert）は呼ぶ側が出す。ここは結果を返すだけ。
+       server     … サーバーで認めた（amountEmuer は引き当てた額）
+       fallback   … サーバーが使えないので、承認だけ Firestore に書いた（code は理由）
+       topupLater … 「EMUERを渡す」だったが、まだ渡せない
+       noNewRound … 「EMUERを渡す」だったが、もう全部渡してある
+       fail       … 認められなかった（code は理由） */
+  const spApproveCompletion = async (qid, addr, topup) => {
+    /* 承認はサーバーを通す。EMUERの引き当てと証明書の予約を、
+       approved を立てるのと同じ取引の中でやるため。
+       前は一般 #001 の LEARN だけがこの道を通り、ほかのクエストは
+       Firestore に直接 approved を書いていた。だから #002 以降は
+       いくら認めても EMUER も証明書も動かなかった。
+
+       サーバーが使えないとき（EMUER開始前・予算が未公開・Renderが落ちて
+       いるとき）は、承認だけは通す。完走の記録を止めないため。 */
+    try {
+      const r = await api("/api/schoolpark/quest-completions/" + encodeURIComponent(qid)
+        + "/" + encodeURIComponent(addr) + "/approve", { method:"POST" });
+      return { kind: "server", amountEmuer: (r && r.amountEmuer) || 0 };
+    } catch (e) {
+      const code = String((e && (e.code || e.message)) || "");
+      const soft = ["NOT_STARTED", "BUDGET_NOT_PUBLISHED", "WALLET_REQUIRED",
+                    "PASSPORT_LINK_REQUIRED", "CERTIFICATE_NOT_DEPLOYED",
+                    "FIRESTORE_UNAVAILABLE"].some(x => code.indexOf(x) >= 0);
+      if (topup && code.indexOf("NO_NEW_ROUND") >= 0) return { kind: "noNewRound", code: code };
+      if (!soft && code.indexOf("Failed to fetch") < 0 && code.indexOf("NetworkError") < 0) {
+        return { kind: "fail", code: code };
+      }
+      /* 承認はもう立っている。ここで Firestore を触る意味は無い。 */
+      if (topup) return { kind: "topupLater", code: code };
+      /* 周回の数も、ここで書く。
+
+         前はサーバーだけが approvedRounds を書いていた。ところが
+         10/1 までサーバーは NOT_STARTED で断るので、承認は毎回この
+         逃げ道を通る。つまり周回の数が一度も書かれず、2周目を認めても
+         完走が1のままだった。（記録の決まりにも approvedRounds を
+         足してある。firestore.rules の commits の update を見ること） */
+      const q1 = quests.find(x => x.id === qid);
+      const t1 = ((q1 && q1.tookList) || []).find(x =>
+        String(x.addr).toLowerCase() === String(addr).toLowerCase());
+      const nextRound = Math.max(Number((t1 && t1.rounds) || 0), (t1 && t1.approved) ? 1 : 0) + 1;
+      try {
+        await spWrite(() => f.updateDoc(f.doc(f.db, "sp_quests", qid, "commits", addr),
+          { approved: true, approvedAt: Date.now(), approvedBy: ownerAddr,
+            approvedRounds: nextRound, lastApprovedAt: Date.now() }));
+      } catch (e2) { return { kind: "fail", code: String(e2.code || e2.message) }; }
+      return { kind: "fallback", code: code };
+    }
+  };
   el.querySelectorAll("[data-qapprove]").forEach(b => {
     b.onclick = async () => {
       const q0 = quests.find(x => x.id === b.dataset.qapprove);
@@ -3755,60 +3835,76 @@ async function renderSchoolPark() {
       } else if (!confirm("この人の参加を認めます。\n\n分配の対象になり、信用スコアの「完走」にも入ります。\n実際に動いた証拠は確かめましたか？")) {
         return;
       }
-      /* 承認はサーバーを通す。EMUERの引き当てと証明書の予約を、
-         approved を立てるのと同じ取引の中でやるため。
-         前は一般 #001 の LEARN だけがこの道を通り、ほかのクエストは
-         Firestore に直接 approved を書いていた。だから #002 以降は
-         いくら認めても EMUER も証明書も動かなかった。
-
-         サーバーが使えないとき（EMUER開始前・予算が未公開・Renderが落ちて
-         いるとき）は、承認だけは通す。完走の記録を止めないため。 */
-      try {
-        const r = await api("/api/schoolpark/quest-completions/" + encodeURIComponent(b.dataset.qapprove)
-          + "/" + encodeURIComponent(b.dataset.addr) + "/approve", { method:"POST" });
-        if (r && r.amountEmuer) alert("認めました。" + r.amountEmuer + " EMUER を引き当てました。");
-      } catch (e) {
-        const code = String((e && (e.code || e.message)) || "");
-        const soft = ["NOT_STARTED", "BUDGET_NOT_PUBLISHED", "WALLET_REQUIRED",
-                      "PASSPORT_LINK_REQUIRED", "CERTIFICATE_NOT_DEPLOYED",
-                      "FIRESTORE_UNAVAILABLE"].some(x => code.indexOf(x) >= 0);
-        if (b.dataset.qtopup && code.indexOf("NO_NEW_ROUND") >= 0) {
-          alert("この人の認めた周回ぶんは、すべて EMUER を渡してあります。");
-          renderSchoolPark(); return;
-        }
-        if (!soft && code.indexOf("Failed to fetch") < 0 && code.indexOf("NetworkError") < 0) {
-          alert("認められませんでした（" + code + "）"); return;
-        }
-        if (b.dataset.qtopup) {
-          /* 承認はもう立っている。ここで Firestore を触る意味は無い。 */
-          alert("EMUER はまだ渡せません（" + code + "）。\n\n"
-            + "「EMUERの予算を公開」が済んでいるか確かめてください。\n"
-            + "承認そのものは残っているので、あとから「EMUERを渡す」で渡せます。");
-          renderSchoolPark(); return;
-        }
-        /* 周回の数も、ここで書く。
-
-           前はサーバーだけが approvedRounds を書いていた。ところが
-           10/1 までサーバーは NOT_STARTED で断るので、承認は毎回この
-           逃げ道を通る。つまり周回の数が一度も書かれず、2周目を認めても
-           完走が1のままだった。（記録の決まりにも approvedRounds を
-           足してある。firestore.rules の commits の update を見ること） */
-        const q1 = quests.find(x => x.id === b.dataset.qapprove);
-        const t1 = ((q1 && q1.tookList) || []).find(x =>
-          String(x.addr).toLowerCase() === String(b.dataset.addr).toLowerCase());
-        const nextRound = Math.max(Number((t1 && t1.rounds) || 0), (t1 && t1.approved) ? 1 : 0) + 1;
-        try {
-          await spWrite(() => f.updateDoc(f.doc(f.db, "sp_quests", b.dataset.qapprove, "commits", b.dataset.addr),
-            { approved: true, approvedAt: Date.now(), approvedBy: ownerAddr,
-              approvedRounds: nextRound, lastApprovedAt: Date.now() }));
-        } catch (e2) { alert("認められませんでした（" + (e2.code || e2.message) + "）"); return; }
-        alert("完走として認めました。\n\nただし EMUER は渡せていません（" + code + "）。\n"
+      const out = await spApproveCompletion(b.dataset.qapprove, b.dataset.addr, !!b.dataset.qtopup);
+      if (out.kind === "noNewRound") {
+        alert("この人の認めた周回ぶんは、すべて EMUER を渡してあります。");
+        renderSchoolPark(); return;
+      }
+      if (out.kind === "fail") { alert("認められませんでした（" + out.code + "）"); return; }
+      if (out.kind === "topupLater") {
+        alert("EMUER はまだ渡せません（" + out.code + "）。\n\n"
+          + "「EMUERの予算を公開」が済んでいるか確かめてください。\n"
+          + "承認そのものは残っているので、あとから「EMUERを渡す」で渡せます。");
+        renderSchoolPark(); return;
+      }
+      if (out.kind === "server" && out.amountEmuer) alert("認めました。" + out.amountEmuer + " EMUER を引き当てました。");
+      if (out.kind === "fallback") {
+        alert("完走として認めました。\n\nただし EMUER は渡せていません（" + out.code + "）。\n"
           + "「EMUERの予算を公開」を済ませてから、この人の行に出る「EMUERを渡す」を押すと渡せます。");
       }
       spNotifyQuestChanged(b.dataset.qapprove, b.dataset.addr);
       renderSchoolPark();
     };
   });
+  /* まとめて認める（11/25）。
+
+     1人ずつ押すと、8人で8回、確かめの窓も8回出る。
+     印を付けた人を、1人ずつ上と同じ道（spApproveCompletion）で認める。
+     途中で転んでも、済んだ人は承認待ちから外れるので、押し直せばよい。
+     条件が足りない人に印が付いていたら、確かめの窓でその人たちを別に出す。 */
+  const qPicks = () => Array.from(el.querySelectorAll("[data-qpick]"));
+  const qPickCount = () => {
+    const n = $("#qPickN");
+    if (n) n.textContent = String(qPicks().filter(x => x.checked).length);
+  };
+  qPicks().forEach(x => { x.onchange = qPickCount; });
+  el.querySelectorAll("[data-qpickset]").forEach(b => {
+    b.onclick = () => {
+      const mode = b.dataset.qpickset;
+      qPicks().forEach(x => { x.checked = mode === "all" || (mode === "ready" && x.dataset.qready === "1"); });
+      qPickCount();
+    };
+  });
+  const qBulkBtn = $("#qApproveBulk");
+  if (qBulkBtn) qBulkBtn.onclick = async () => {
+    const picked = qPicks().filter(x => x.checked);
+    if (!picked.length) { alert("認める人に印を付けてください。"); return; }
+    const notReady = picked.filter(x => x.dataset.qready !== "1");
+    if (!confirm(picked.length + "人ぶんの完走を、まとめて認めます。\n\n"
+      + picked.map(x => "・" + x.dataset.qname + (x.dataset.qready === "1" ? "" : "　※条件が足りない")).join("\n")
+      + "\n\n分配の対象になり、信用スコアの「完走」にも入ります。\n実際に動いた証拠は確かめましたか？")) return;
+    if (notReady.length && !confirm("このうち " + notReady.length + "人は、まだ完走条件を満たしていません。\n\n"
+      + notReady.map(x => "・" + x.dataset.qname).join("\n") + "\n\nそれでも認めますか？")) return;
+    qBulkBtn.disabled = true;
+    let emuer = 0;
+    const ok = [], soft = [], failed = [];
+    for (const x of picked) {
+      const out = await spApproveCompletion(x.dataset.qpick, x.dataset.addr, false);
+      if (out.kind === "fail") { failed.push(x.dataset.qname + "（" + out.code + "）"); continue; }
+      if (out.kind === "fallback") soft.push(x.dataset.qname + "（" + out.code + "）");
+      else { ok.push(x.dataset.qname); emuer += Number(out.amountEmuer) || 0; }
+      spNotifyQuestChanged(x.dataset.qpick, x.dataset.addr);
+    }
+    const L = [(ok.length + soft.length) + "人を完走として認めました。"];
+    if (emuer) L.push("EMUER は合わせて " + emuer + " を引き当てました。");
+    if (soft.length) L.push("", "次の " + soft.length + "人は、EMUER をまだ渡せていません。"
+      + "「EMUERの予算を公開」を済ませてから、行に出る「EMUERを渡す」で渡せます。",
+      soft.map(x => "・" + x).join("\n"));
+    if (failed.length) L.push("", "次の " + failed.length + "人は、認められませんでした。もう一度押してください。",
+      failed.map(x => "・" + x).join("\n"));
+    alert(L.join("\n"));
+    renderSchoolPark();
+  };
   /* EMUER の予算を、まとめて公開する。
 
      #002 WORK は15本ある。1本ずつ押すと16回になり、途中で1回でも
@@ -4009,15 +4105,53 @@ async function renderSchoolPark() {
       renderSchoolPark();
     };
   });
+  /* 1人ぶんの参加OK。「参加OKにする」と「まとめて参加OKにする」が同じ道を通る。 */
+  const spTrustAdd = (who, name) => spWrite(() => f.setDoc(f.doc(f.db, "sp_trust", who),
+    { name: name || "", by: addr, at: Date.now() }));
   el.querySelectorAll("[data-tadd]").forEach(b => {
     b.onclick = async () => {
       if (!confirm("この方をギルドに参加OKにします。\n\n議題を出すことと、特殊ギルドへの投票ができるようになります。")) return;
-      try { await spWrite(() => f.setDoc(f.doc(f.db, "sp_trust", b.dataset.tadd),
-        { name: b.dataset.tname || "", by: addr, at: Date.now() })); }
+      try { await spTrustAdd(b.dataset.tadd, b.dataset.tname); }
       catch (e) { alert("できませんでした（" + (e.code || e.message) + "）"); return; }
       renderSchoolPark();
     };
   });
+  /* まとめて参加OKにする（11/25）。印を付けた人を、上と同じ道で1人ずつ書く。 */
+  const tPicks = () => Array.from(el.querySelectorAll("[data-tpick]"));
+  const tPickCount = () => {
+    const n = $("#tPickN");
+    if (n) n.textContent = String(tPicks().filter(x => x.checked).length);
+  };
+  tPicks().forEach(x => { x.onchange = tPickCount; });
+  el.querySelectorAll("[data-tpickset]").forEach(b => {
+    b.onclick = () => {
+      const mode = b.dataset.tpickset;
+      tPicks().forEach(x => { x.checked = mode === "all" || (mode === "need" && x.dataset.tneed === "1"); });
+      tPickCount();
+    };
+  });
+  const tBulkBtn = $("#tAddBulk");
+  if (tBulkBtn) tBulkBtn.onclick = async () => {
+    const picked = tPicks().filter(x => x.checked);
+    if (!picked.length) { alert("参加OKにする人に印を付けてください。"); return; }
+    const low = picked.filter(x => x.dataset.tneed !== "1");
+    if (!confirm(picked.length + "人を、まとめてギルドに参加OKにします。\n\n"
+      + picked.map(x => "・" + x.dataset.tname + (x.dataset.tneed === "1" ? "" : "　※目安の点に届いていない")).join("\n")
+      + "\n\n議題を出すことと、特殊ギルドへの投票ができるようになります。")) return;
+    if (low.length && !confirm("このうち " + low.length + "人は、信用スコアが目安の点に届いていません。\n\n"
+      + low.map(x => "・" + x.dataset.tname).join("\n") + "\n\nそれでも参加OKにしますか？")) return;
+    tBulkBtn.disabled = true;
+    const failed = [];
+    let done = 0;
+    for (const x of picked) {
+      try { await spTrustAdd(x.dataset.tpick, x.dataset.tname); done += 1; }
+      catch (e) { failed.push(x.dataset.tname + "（" + (e.code || e.message) + "）"); }
+    }
+    alert(done + "人を参加OKにしました。"
+      + (failed.length ? "\n\n次の " + failed.length + "人はできませんでした。もう一度押してください。\n"
+        + failed.map(x => "・" + x).join("\n") : ""));
+    renderSchoolPark();
+  };
   el.querySelectorAll("[data-tdel]").forEach(b => {
     b.onclick = async () => {
       if (!confirm("この方の参加を取り消します。よろしいですか？")) return;
