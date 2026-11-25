@@ -468,7 +468,9 @@ test('1周ぶん渡したあとも、渡していない周回があれば「EMUE
   assert.ok(seg.indexOf('data-qunapprove') < 0, 'EMUER が動いたあとに取り消せてしまう');
   assert.ok(BACKEND.indexOf('rewardedRounds: (') > 0, 'サーバーが何周ぶん渡したかを残していない');
   /* 渡し終えていたら、そう伝える（「認められませんでした」ではない） */
-  assert.ok(ADMIN.indexOf('b.dataset.qtopup && code.indexOf("NO_NEW_ROUND") >= 0') > 0);
+  /* 承認の中身は spApproveCompletion にまとめた（まとめて認めると同じ道）。 */
+  assert.ok(ADMIN.indexOf('if (topup && code.indexOf("NO_NEW_ROUND") >= 0) return { kind: "noNewRound"') > 0);
+  assert.ok(ADMIN.indexOf('if (out.kind === "noNewRound") {') > 0, '渡し終えたと伝えていない');
 });
 
 test('渡し直すときは、完走条件ではなく支払いを聞く', () => {
@@ -481,9 +483,16 @@ test('渡し直すときは、完走条件ではなく支払いを聞く', () =>
 });
 
 test('渡し直しが失敗したときは、Firestore を触らない', () => {
-  const i = ADMIN.lastIndexOf('if (b.dataset.qtopup) {');
+  /* 承認の中身（spApproveCompletion）で、Firestore に書く前に返す。 */
+  const h = ADMIN.indexOf('const spApproveCompletion = async (qid, addr, topup) => {');
+  assert.ok(h > 0, '承認の道が見つからない');
+  const back = ADMIN.indexOf('if (topup) return { kind: "topupLater"', h);
+  const write = ADMIN.indexOf('f.updateDoc(', h);
+  assert.ok(back > h && write > back, '承認をもう一度書いてしまっている');
+  /* ボタンの側は、伝えて止まるだけ。 */
+  const i = ADMIN.indexOf('if (out.kind === "topupLater") {');
   const end = ADMIN.indexOf('renderSchoolPark(); return;', i);
-  assert.ok(end > i, '止めていない');
+  assert.ok(i > 0 && end > i, '止めていない');
   const seg = ADMIN.slice(i, end);
   assert.ok(seg.indexOf('EMUER はまだ渡せません') >= 0);
   assert.ok(seg.indexOf('f.updateDoc(') < 0, '承認をもう一度書いてしまっている');
