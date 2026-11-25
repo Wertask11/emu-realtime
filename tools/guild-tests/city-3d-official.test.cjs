@@ -66,7 +66,10 @@ async function open(p) {
 test('公式ショップの11品が、それぞれの場所に置かれ、正面から見て選べる', async () => {
   const { pg, errors, requests } = await open('/t/official');
   try {
-    for (const p of PRODUCTS) {
+    // マイCityの部屋の道具（11/25 追加）は、3Dのお店には模型を置かない。一覧から選ぶ
+    const models = PRODUCTS.filter(p => !p.id.startsWith('official-room-'));
+    assert.equal(models.length, 11);
+    for (const p of models) {
       const got = await pg.evaluate(id => window.pickAfterFocus(id), p.id);
       assert.deepEqual(got, [p.id], p.name + ' を正面から選べる');
     }

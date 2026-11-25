@@ -227,8 +227,8 @@ test("商品の受け取り方と締切は、決まった形だけを受け付�
   assert.equal(old.fulfillmentMode, ""); assert.equal(old.orderDeadlineMs, null, "前からある商品はそのまま");
 });
 
-/* 11品（10/29 オーナー決定：おすすめの値段・優先席5席・企画会議3名・物の品は各10個）。 */
-test("11品を下書きでまとめて登録できる。何度押しても同じで、販売中の品には触らない", async () => {
+/* 11品（10/29 オーナー決定：おすすめの値段・優先席5席・企画会議3名・物の品は各10個）＋マイCityの部屋の道具10品（11/25 オーナー決定：10〜20 EMUER）。 */
+test("21品を下書きでまとめて登録できる。何度押しても同じで、販売中の品には触らない", async () => {
   const t = setup({ realAssets: true });
   try {
     assert.equal((await t.call("alice", "POST", "/admin/city/official-catalog")).status, 403, "運営だけ");
@@ -236,11 +236,11 @@ test("11品を下書きでまとめて登録できる。何度押しても同じ
     await t.call("owner", "POST", "/admin/city/reizo-sticker", {});
     const first = await t.call("owner", "POST", "/admin/city/official-catalog");
     assert.equal(first.status, 200, JSON.stringify(first.body));
-    assert.equal(first.body.results.length, 11);
-    assert.deepEqual(first.body.results.map(r => r.result), ["updated", ...Array(10).fill("created")]);
+    assert.equal(first.body.results.length, 21);
+    assert.deepEqual(first.body.results.map(r => r.result), ["updated", ...Array(20).fill("created")]);
     const rows = t.db._dump("mitemiru_products");
     const price = id => rows[id].prices.EMUER;
-    assert.deepEqual(CATALOG.products.map(p => price(p.id)), [5, 15, 25, 30, 30, 80, 150, 150, 100, 100, 300]);
+    assert.deepEqual(CATALOG.products.map(p => price(p.id)), [5, 15, 25, 30, 30, 80, 150, 150, 100, 100, 300, 20, 15, 20, 10, 10, 10, 10, 15, 15, 20]);
     for (const p of CATALOG.products) {
       const row = rows[p.id];
       assert.equal(row.status, "draft", p.id);
@@ -264,7 +264,7 @@ test("11品を下書きでまとめて登録できる。何度押しても同じ
     await t.call("owner", "PUT", "/admin/products/official-can-badge-v1", { status: "live", prices: { EMUER: 120 } });
     const again = await t.call("owner", "POST", "/admin/city/official-catalog");
     assert.equal(again.body.results.find(r => r.id === "official-can-badge-v1").result, "kept");
-    assert.equal(again.body.results.filter(r => r.result === "updated").length, 10);
+    assert.equal(again.body.results.filter(r => r.result === "updated").length, 20);
     assert.equal(t.db._dump("mitemiru_products")["official-can-badge-v1"].prices.EMUER, 120, "販売中の品はそのまま");
     const shown = (await t.call("alice", "GET", "/products?shopId=schoolpark-official")).body.products;
     assert.deepEqual(shown.map(p => p.id), ["official-can-badge-v1"]);
@@ -272,12 +272,15 @@ test("11品を下書きでまとめて登録できる。何度押しても同じ
   } finally { t.close(); }
 });
 
-test("11品の配布ファイル：一覧のファイルがそろっていて、本人がダウンロードできる", async () => {
+test("デジタルの品の配布ファイル：一覧のファイルがそろっていて、本人がダウンロードできる", async () => {
   const t = setup({ realAssets: true });
   try {
     await t.call("owner", "POST", "/admin/city/official-catalog");
     const want = { "reizo-kun-sticker-v1": "reizo-kun-sticker.png", "official-wallpaper-icons-v1": "reizo-kun-wallpaper-icons.zip",
       "official-wisdom-cards-v1": "wisdom-cards-hajime.zip", "official-tankyu-note-v1": "tankyu-note-hajime.pdf" };
+    for (const p of CATALOG.products.filter(p => p.digitalAssetId && p.digitalAssetId.startsWith("room-")))
+      want[p.id] = p.digitalAssetId + ".png";
+    assert.equal(Object.keys(want).length, 14);
     for (const [id, name] of Object.entries(want)) {
       await t.call("owner", "PUT", `/admin/products/${id}`, { status: "live" });
       const r = await order(t, id);
