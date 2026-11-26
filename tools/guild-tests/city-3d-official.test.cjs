@@ -204,3 +204,52 @@ test('3D：THE FIELD STORE は公式店舗と同じ大きさで右どなりに�
     assert.deepEqual(errors, []);
   } finally { await pg.close(); }
 });
+
+/* 11/26 オーナー：City の中に遊ぶ場所を作る（ゲームセンターのような所）。近づいたらボタンが出て遊べる。
+   下の「あそび場」で前まで行く → 「あそび場で遊ぶ」が出る → 押すと4つの遊び。ゲーム機を正面から選ぶと、そのゲームが開く。
+   離れるとボタンは消える。お試し表示（遊びが無い）では建てない。 */
+test('あそび場（ゲームセンター）：近づくと「あそび場で遊ぶ」が出て、ゲーム機を選ぶとそのゲームが開く', async () => {
+  const origin = server.listeners('request')[0];
+  server.removeAllListeners('request');
+  server.on('request', (req, res) => (new URL(req.url, 'http://x').pathname === '/t/unified' ? res.end(unifiedPage) : origin(req, res)));
+  const pg = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+  const errors = []; pg.on('pageerror', e => errors.push(e.message));
+  try {
+    await pg.goto(base + '/t/unified');
+    await pg.waitForSelector('.cs-canvas[data-ready="true"]', { timeout: 60000 });
+    assert.equal(await pg.locator('.cs-arcade').isHidden(), true, '最初（街の通り）では出ない');
+    await pg.click('.cs-controls [data-shop="waypoint"][data-value="arcade"]');
+    await pg.waitForSelector('.cs-canvas[data-near="arcade"]', { timeout: 20000 });
+    await pg.locator('.cs-arcade').waitFor({ state: 'visible' });
+    assert.match(await pg.textContent('.cs-arcade'), /あそび場で遊ぶ/);
+    await pg.screenshot({ path: path.join(process.env.CITY_QA_DIR || require('os').tmpdir(), 'city-arcade-1280.png') });
+    /* 押すと4つの遊び。パネルが出ているあいだはボタンを隠す */
+    await pg.click('.cs-arcade');
+    assert.equal(await pg.locator('.cs-panel [data-shop="play"]').count(), 4);
+    assert.match(await pg.textContent('.cs-panel'), /ECHO FIELD[\s\S]*林檎の方程式/);
+    assert.equal(await pg.locator('.cs-arcade').isHidden(), true);
+    await pg.click('.cs-panel [data-shop="play"][data-value="echo"]');
+    await pg.click('.cs-panel [data-shop="panel-close"]');
+    await pg.locator('.cs-arcade').waitFor({ state: 'visible' });
+    /* 正面のゲーム機（林檎の方程式）を選ぶ：真ん中のボタンが「… で遊ぶ」になり、押すとそのゲームが開く */
+    await pg.locator('.cs-pick').waitFor({ state: 'visible', timeout: 20000 });
+    assert.equal(await pg.textContent('.cs-pick'), '林檎の方程式 で遊ぶ ↗');
+    await pg.click('.cs-pick');
+    assert.deepEqual(await pg.evaluate(() => window.played), ['echo', 'ringo']);
+    /* 離れると消える */
+    await pg.click('.cs-controls [data-shop="waypoint"][data-value="entrance"]');
+    await pg.waitForSelector('.cs-canvas[data-near=""]', { timeout: 20000 });
+    assert.equal(await pg.locator('.cs-arcade').isHidden(), true);
+    assert.deepEqual(errors, []);
+  } finally { await pg.close(); server.removeAllListeners('request'); server.on('request', origin); }
+});
+
+test('あそび場：お試し表示（遊びが無い）では建てず、ボタンも出さない', async () => {
+  const { pg, errors } = await open('/t/official');
+  try {
+    await pg.evaluate(() => window.w.waypoint('arcade'));
+    await pg.waitForTimeout(600);
+    assert.notEqual(await pg.evaluate(() => document.getElementById('c').dataset.near), 'arcade');
+    assert.deepEqual(errors, []);
+  } finally { await pg.close(); }
+});

@@ -109,14 +109,11 @@ with sync_playwright() as p:
     g.evaluate('closeSpRoom()')
     g.locator('#spDaoFrame').evaluate('e=>e.contentWindow.app.go("city")()')
     dao.locator('#sp-city').wait_for(timeout=20000)
-    dao.locator('[data-action="page"][data-value="real"]').click()
-    dao.locator('[data-action="spot"][data-value="demo-book"]').click()
-    with g.expect_response(lambda r: '/api/schoolpark/city/checkins' in r.url and r.request.method == 'POST') as checkin:
-        dao.locator('[data-action="checkin"]').click()
-    assert checkin.value.status == 200
-    dao.get_by_text('記録済み', exact=False).wait_for()
-    g.screenshot(path=str(OUT / 'local-city-real-demo-checkin.png'))
-    results.append({'scenario': 'City demo UI check-in persists through original Passport/City route; no payments/rewards', 'result': 'PASS'})
+    # 11/26 オーナー：City の REAL・VIRTUAL・QUEST の入口は消した（体験スポットのチェックインへは City から入らない）
+    assert dao.locator('.city-nav [data-value="real"], .city-nav [data-value="virtual"], .city-nav [data-action="quest"]').count() == 0
+    dao.locator('.city-nav [data-value="my"]').wait_for()
+    g.screenshot(path=str(OUT / 'local-city-home.png'))
+    results.append({'scenario': 'City opens through original Passport/City route without REAL/VIRTUAL/QUEST entries; no payments/rewards', 'result': 'PASS'})
     assert not errors, errors
     OUT.joinpath('results.json').write_text(json.dumps({'environment':'local native UI + actual Auth/Firestore emulators', 'productionWrites':False,'providerMock':False,'results':results,'pageErrors':errors,'blockedExternalRequests':blocked}, ensure_ascii=False, indent=2))
     print(json.dumps(results, ensure_ascii=False, indent=2))
