@@ -6,7 +6,9 @@ const glyph = kind => ({notebook:'01',mug:'02',tote:'03',coffee:'04'}[kind] || '
 /* 11/21 オーナー：公式店舗と THE FIELD STORE は切り替えずに1つの街にまとめる。
    手前の建物が SchoolPark 公式店舗（公式ショップの品）、右どなりに同じ大きさの THE FIELD STORE（展示品は店の中の台）。
    商品の一覧も、店ごとに分けて1つにまとめて出す（店の切り替えボタンは置かない）。
-   この3Dの空間そのものが City。遊び（ECHO FIELD など）も、上の「遊ぶ」から開ける（onPlay）。City のトップには置かない。 */
+   この3Dの空間そのものが City。遊び（ECHO FIELD など）も、上の「遊ぶ」から開ける（onPlay）。City のトップには置かない。
+   11/26 オーナー：街の中に遊ぶ場所（あそび場＝ゲームセンター）を作る。近づくと「あそび場で遊ぶ」が出る。
+   ゲーム機をタップすると、そのゲームが開く。下の「あそび場」で、その前まで行ける。 */
 const PLAYS=[['echo','ECHO FIELD','記憶・配置戦略・心理戦で遊ぶ。'],['ringo','林檎の方程式','手札のカードを使い、交渉を進める。'],['gods','日常の神々','神々のカードをCPUと同時に公開して勝負。'],['elevator','エレベーター','階を巡り、これまでの発見を続ける。']];
 export function openShopWorld({bridge,spots,wantedShop='',preview=false,onClose=()=>{},onMyCity=()=>{},onRecord=()=>{},onPlay=null}) {
   if(!document.querySelector('link[data-city-shop-style]')){
@@ -26,20 +28,28 @@ export function openShopWorld({bridge,spots,wantedShop='',preview=false,onClose=
     <div class="cs-load" role="status"><span class="cs-spinner"></span>Cityの扉を開いています…</div>
     <button type="button" class="cs-plaza" data-shop="waypoint" data-value="plaza">${timeLabel.plaza}</button>
     <div class="cs-aim" aria-hidden="true">+</div><button class="cs-pick" type="button" data-shop="pick" hidden></button>
+    <button class="cs-arcade" type="button" data-shop="arcade" hidden>🎮 あそび場で遊ぶ</button>
     <div class="cs-toast" role="status" hidden></div>
     <aside class="cs-panel" hidden></aside>
-    <footer class="cs-controls"><div class="cs-route"><p><b>床をクリック / タップして移動</b> · ドラッグ / スワイプで見回す</p><div><button type="button" data-shop="waypoint" data-value="entrance">入店する ↗</button><button type="button" data-shop="waypoint" data-value="shelves">商品棚</button><button type="button" data-shop="waypoint" data-value="counter">カウンター</button></div></div>
+    <footer class="cs-controls"><div class="cs-route"><p><b>床をクリック / タップして移動</b> · ドラッグ / スワイプで見回す</p><div><button type="button" data-shop="waypoint" data-value="entrance">入店する ↗</button><button type="button" data-shop="waypoint" data-value="shelves">商品棚</button><button type="button" data-shop="waypoint" data-value="counter">カウンター</button>${onPlay&&!preview?'<button type="button" data-shop="waypoint" data-value="arcade">あそび場</button>':''}</div></div>
       <button type="button" class="cs-passport" data-shop="checkin">Passport<br><b>チェックイン</b></button></footer>`;
   document.body.appendChild(root);
   let canvas=root.querySelector('canvas');
   const panel=root.querySelector('.cs-panel'),load=root.querySelector('.cs-load');
-  const pick=root.querySelector('.cs-pick'),toast=root.querySelector('.cs-toast');
-  let focusedProduct=null,toastTimer=null;
+  const pick=root.querySelector('.cs-pick'),toast=root.querySelector('.cs-toast'),arcade=root.querySelector('.cs-arcade');
+  let focusedProduct=null,toastTimer=null,nearArcade=false;
+  const playable=!!onPlay&&!preview;
+  const playTitle=id=>(PLAYS.find(p=>p[0]===id)||[])[1]||'';
+  /* ゲーム機（'play:<id>'）は商品と同じ仕組みで選ばれる */
+  const playOf=id=>String(id||'').startsWith('play:')?String(id).slice(5):'';
+  function showArcade(){arcade.hidden=!(playable&&nearArcade&&panel.hidden);}
+  function play(id){if(!playable||!playTitle(id))return;Promise.resolve().then(()=>onPlay(id)).catch(()=>say('開けませんでした。もう一度お試しください。'));}
   function say(message){clearTimeout(toastTimer);toast.textContent=message;toast.hidden=false;toastTimer=setTimeout(()=>{toast.hidden=true;},6000);}
-  function showPanel(html){panel.innerHTML=`<button type="button" class="cs-panel-close" data-shop="panel-close" aria-label="商品パネルを閉じる">×</button>${html}`;panel.scrollTop=0;panel.hidden=false;world?.pause(true);pick.hidden=true;panel.querySelector('button')?.focus({preventScroll:true});}
-  function closePanel(){request++;busy=false;panel.hidden=true;panel.innerHTML='';selected=null;world?.pause(false);world?.focus();}
+  function showPanel(html){panel.innerHTML=`<button type="button" class="cs-panel-close" data-shop="panel-close" aria-label="商品パネルを閉じる">×</button>${html}`;panel.scrollTop=0;panel.hidden=false;world?.pause(true);pick.hidden=true;showArcade();panel.querySelector('button')?.focus({preventScroll:true});}
+  function closePanel(){request++;busy=false;panel.hidden=true;panel.innerHTML='';selected=null;world?.pause(false);showArcade();world?.focus();}
   function destroy(){if(closed)return;closed=true;request++;loadNumber++;abort.abort();clearTimeout(toastTimer);world?.destroy();world=null;root.remove();priorFocus?.isConnected&&priorFocus.focus?.({preventScroll:true});onClose();}
   function productPanel(id){
+    if(playOf(id)){play(playOf(id));return;}
     const owner=ownerOf(id);if(owner)shop=owner;
     const product=shop?.products.find(p=>p.id===id);if(!product)return;request++;busy=false;selected=product;world?.focusProduct(id);
     if(shop.storeType==='schoolpark_virtual'){
@@ -79,10 +89,10 @@ export function openShopWorld({bridge,spots,wantedShop='',preview=false,onClose=
   /* 遊ぶ・探索する（City のトップと同じゲーム・保存状態で開く） */
   function playsPanel(){
     selected=null;request++;
-    showPanel(`<p class="cs-kicker">PLAY / 遊ぶ・探索する</p><h3>Cityで遊ぶ</h3><p>これまでと同じゲーム・保存状態で開きます。利用条件と遊べる回数は現在のプランに従います。</p>
+    showPanel(`<p class="cs-kicker">GAME CENTER / あそび場</p><h3>Cityで遊ぶ</h3><p>これまでと同じゲーム・保存状態で開きます。利用条件と遊べる回数は現在のプランに従います。あそび場のゲーム機を直接タップしても遊べます。</p>
       <div class="cs-products">${PLAYS.map(([id,title,note],i)=>`<button type="button" data-shop="play" data-value="${id}"><span class="cs-product-number">${String(i+1).padStart(2,'0')}</span><span><b>${esc(title)}</b><small>${esc(note)}</small></span><span>↗</span></button>`).join('')}</div>`);
   }
-  function help(){showPanel('<p class="cs-kicker">HOW TO EXPLORE</p><h3>行きたい場所を、選ぶだけ。</h3><dl class="cs-help"><dt>移動する</dt><dd>PCは床をクリックまたはダブルクリック。スマートフォンは床をタップすると、そこまで歩きます。</dd><dt>周囲を見る</dt><dd>画面をドラッグ／スワイプします。スワイプしただけでは移動しません。</dd><dt>商品を見る</dt><dd>商品を直接クリック／タップします。</dd><dt>迷ったら</dt><dd>「入店する」「商品棚」「カウンター」から場所を選べます。PCではWASDも補助操作として使えます。</dd></dl><button type="button" class="cs-primary" data-shop="panel-close">歩いてみる</button>');}
+  function help(){showPanel(`<p class="cs-kicker">HOW TO EXPLORE</p><h3>行きたい場所を、選ぶだけ。</h3><dl class="cs-help"><dt>移動する</dt><dd>PCは床をクリックまたはダブルクリック。スマートフォンは床をタップすると、そこまで歩きます。</dd><dt>周囲を見る</dt><dd>画面をドラッグ／スワイプします。スワイプしただけでは移動しません。</dd><dt>商品を見る</dt><dd>商品を直接クリック／タップします。</dd>${playable?'<dt>遊ぶ</dt><dd>下の「あそび場」で、ゲームセンターの前まで行けます。近づくと「あそび場で遊ぶ」が出ます。ゲーム機をタップしても遊べます。</dd>':''}<dt>迷ったら</dt><dd>「入店する」「商品棚」「カウンター」から場所を選べます。PCではWASDも補助操作として使えます。</dd></dl><button type="button" class="cs-primary" data-shop="panel-close">歩いてみる</button>`);}
   async function checkout(){
     if(!selected?.checkoutEnabled||busy)return;
     const product=selected,version=++request;busy=true;const button=panel.querySelector('[data-shop="checkout"]');button.disabled=true;button.textContent='店舗を確認しています…';
@@ -121,7 +131,7 @@ export function openShopWorld({bridge,spots,wantedShop='',preview=false,onClose=
     const b=e.target.closest('[data-shop]');if(!b||b.disabled)return;
     const action=b.dataset.shop,value=b.dataset.value;
     if(action==='close')destroy();else if(action==='products')productsPanel();else if(action==='product')productPanel(value);
-    else if(action==='plays')playsPanel();else if(action==='play'&&onPlay)Promise.resolve().then(()=>onPlay(value)).catch(()=>say('開けませんでした。もう一度お試しください。'));
+    else if(action==='plays'||action==='arcade')playsPanel();else if(action==='play')play(value);
     else if(action==='panel-close')closePanel();else if(action==='help')help();else if(action==='checkout')checkout();
     else if(action==='exchange')exchange();
     else if(action==='waypoint'){closePanel();world?.waypoint(value);world?.focus();root.dataset.location=value;}
@@ -175,9 +185,12 @@ export function openShopWorld({bridge,spots,wantedShop='',preview=false,onClose=
       if(module.status!=='fulfilled')throw module.reason;
       world=module.value.createWorld(canvas,{products:main.products,sideProducts:side?.products||[],
         mainSign:main.storeType==='schoolpark_virtual'?'SCHOOLPARK OFFICIAL STORE':main.name,sideSign:side?.name||'',
-        time,onSelect:productPanel,onFocus:id=>{
-        focusedProduct=id;const p=ownerOf(id)?.products.find(p=>p.id===id);pick.hidden=!p||!panel.hidden;if(p)pick.textContent=p.name+' を見る ↗';
-      },onLost:()=>{load.hidden=false;load.innerHTML='3D描画が中断しました。<button type="button" data-shop="retry">再開する</button>';}});
+        time,plays:playable?PLAYS.map(([id,title])=>[id,title]):[],onSelect:productPanel,onFocus:id=>{
+        focusedProduct=id;
+        const game=playable&&playTitle(playOf(id));
+        const p=game?null:ownerOf(id)?.products.find(p=>p.id===id);pick.hidden=!(p||game)||!panel.hidden;
+        if(game)pick.textContent=game+' で遊ぶ ↗';else if(p)pick.textContent=p.name+' を見る ↗';
+      },onNear:where=>{nearArcade=where==='arcade';showArcade();},onLost:()=>{load.hidden=false;load.innerHTML='3D描画が中断しました。<button type="button" data-shop="retry">再開する</button>';}});
       load.hidden=true;world.focus();
     }catch(_){load.innerHTML='この端末では3D表示を利用できません。<button type="button" data-shop="products">商品一覧をひらく</button><button type="button" data-shop="retry">3Dを再試行</button>';}
   }

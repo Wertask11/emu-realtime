@@ -135,8 +135,11 @@ async function noOverflow(f) {
   assert.equal(widths.x,0);
 }
 
-for(const width of [375,390,412,768,1440]) test(`City UI ${width}px: current routes, REAL/VIRTUAL, check-in, Quest/Guild return, MyCity, share`,async()=>{
-  const f=await fixture(width);
+/* 11/26 オーナー：City の REAL（街の体験スポット）・VIRTUAL（仮想の入口）・QUEST（クエストへ）の入口は要らない、で消した。
+   体験スポットの一覧・チェックインへは City の画面から入れなくなった。前に記録したチェックインはそのまま残り、MY CITY に並ぶ。
+   ここでは2件（BOOK SPOT と SchoolPark Lab）を前に記録した状態から始める。 */
+for(const width of [375,390,412,768,1440]) test(`City UI ${width}px: current routes, no REAL/VIRTUAL/QUEST entries, MyCity keeps old check-ins, share`,async()=>{
+  const f=await fixture(width,['demo-book','schoolpark-lab']);
   try {
     assert.equal(f.modules.length,0,'no City module at SchoolPark startup');
     assert.equal(f.requests.length,0,'no City API at SchoolPark startup');
@@ -157,31 +160,10 @@ for(const width of [375,390,412,768,1440]) test(`City UI ${width}px: current rou
     await f.frame.evaluate(()=>{window.__savedCity=document.querySelector('#sp-city');app.setState({today:'test'});});
     assert.equal(await f.frame.evaluate(()=>window.__savedCity===document.querySelector('#sp-city')),true);
     assert.equal(f.requests.filter(r=>r.path.endsWith('/spots')).length,1);
-    await f.frame.locator('.city-nav [data-value="real"]').click();
-    assert.equal(await f.frame.locator('.city-card').count(),2);
-    await f.frame.locator('[data-action="spot"][data-value="demo-book"]').click();
-    await noOverflow(f);
-    await f.frame.locator('[data-action="checkin"]').click();
-    await f.frame.getByText(/記録済み ·/).waitFor();
-    assert.match(await f.frame.locator('#sp-city').innerText(),/現地訪問を証明するものではありません/);
-    await f.frame.locator('[data-action="checkin"]').click();
-    await f.frame.getByText('今日のチェックインは記録済みです。二重には増えません。').waitFor();
-    await f.frame.locator('.city-detail [data-action="quest"]').click();
-    await f.frame.getByRole('button',{name:'← Cityへ戻る',exact:true}).waitFor();
-    assert.equal(await f.frame.evaluate(()=>app.state.screen),'experiments');
-    await f.frame.getByRole('button',{name:'← Cityへ戻る',exact:true}).click();
-    await f.frame.locator('[data-action="guild"][data-value="learn"]').click();
-    await f.frame.getByRole('button',{name:'← Cityへ戻る',exact:true}).waitFor();
-    assert.equal(await f.frame.evaluate(()=>app.state.screen),'guild');
-    await f.frame.getByRole('button',{name:'← Cityへ戻る',exact:true}).click();
-    await f.frame.locator('[data-action="emu"]').click();
-    await f.page.getByRole('heading',{name:'emu',exact:true}).waitFor();
-    await f.page.getByRole('button',{name:'SchoolParkへ戻る',exact:true}).click();
-    await f.frame.locator('.city-nav [data-value="virtual"]').click();
-    assert.equal(await f.frame.locator('.city-card').count(),1);
-    await f.frame.locator('[data-action="spot"]').click();
-    await f.frame.getByRole('button',{name:'このVirtual Spotに入る',exact:true}).click();
-    await f.frame.getByText(/記録済み ·/).waitFor();
+    const navIds=await f.frame.locator('.city-nav button').evaluateAll(bs=>bs.map(b=>b.dataset.value||b.dataset.action));
+    assert.deepEqual(navIds.filter(v=>['real','virtual','quest'].includes(v)),[],'REAL・VIRTUAL・QUEST の入口は出さない');
+    assert.ok(navIds.includes('orders') && navIds.includes('my'),'交換履歴・MY CITY は残す');
+    assert.equal(await f.frame.getByText(/街の体験スポット|仮想の入口|クエストへ/).count(),0);
     await f.frame.locator('.city-nav [data-value="my"]').click();
     await f.frame.getByText('保存済みの部屋を開きました。',{exact:true}).waitFor();
     assert.equal(await f.frame.locator('[data-room-instance]').count(),3);
@@ -231,11 +213,13 @@ test('City UI: failed room read is not empty inventory; old-account late respons
   await f.frame.locator('[data-action="retry"]').click();await f.frame.locator('.city-hero [data-action="walk"]:not([disabled])').waitFor();await f.frame.locator('.city-nav [data-value="my"]').click();await f.frame.getByText('保存済みの部屋を開きました。',{exact:true}).waitFor();assert.equal(await f.frame.locator('[data-room-instance]').count(),3);assert.deepEqual(f.errors,[]);
  }finally{release?.();await f.close();}
 });
-test('City UI: in-flight room read cannot erase a later check-in; MyCity no longer requests achievements',async()=>{
+/* 11/26：City から新しくチェックインする入口は無くなった（REAL・VIRTUAL を消したため）。
+   読み込みが遅れても前のチェックインは消えず、MY CITY は実績（Star 等）を取りに行かないことを確かめる */
+test('City UI: a slow room read keeps earlier check-ins; MyCity no longer requests achievements',async()=>{
  const f=await fixture(390,['demo-book','schoolpark-lab']);let release;try{
   await f.page.evaluate(()=>{__quests=[{id:'founder',isFounder:true}];});await f.city();f.control.historyGate=new Promise(r=>release=r);await f.frame.locator('.city-nav [data-value="my"]').click();await f.frame.getByText('持ち物と部屋を読み込んでいます…',{exact:true}).waitFor();
-  await f.frame.locator('.city-nav [data-value="real"]').click();await f.frame.locator('[data-action="spot"][data-value="demo-cafe"]').click();await f.frame.locator('[data-action="checkin"]').click();await f.frame.getByText(/記録済み ·/).waitFor();release();f.control.historyGate=null;
-  await f.frame.locator('.city-nav [data-value="my"]').click();await f.frame.getByText('保存済みの部屋を開きました。',{exact:true}).waitFor();assert.equal((await db.collection('sp_identities/'+SPID+'/city_checkins').get()).docs.length,3);assert.equal(f.requests.filter(r=>r.path==='/api/schoolpark/city/me'||r.path.endsWith('/stars/mine')).length,0);assert.deepEqual(f.errors,[]);
+  release();f.control.historyGate=null;
+  await f.frame.getByText('保存済みの部屋を開きました。',{exact:true}).waitFor();assert.equal((await db.collection('sp_identities/'+SPID+'/city_checkins').get()).docs.length,2);assert.equal(f.requests.filter(r=>r.path==='/api/schoolpark/city/me'||r.path.endsWith('/stars/mine')).length,0);assert.deepEqual(f.errors,[]);
  }finally{release?.();await f.close();}
 });
 

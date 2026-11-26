@@ -12,8 +12,15 @@ const VIEWPOINTS = {
   // 2軒が並んでいるときの最初の眺め（公式店舗と THE FIELD STORE の両方が見える）
   streetBoth:{x:6.8,z:15.5,lookX:6.8,lookZ:0,lookY:1.6},
   // 広場（朝は噴水、昼はクリスタル、夜はやぐら）を、少し見上げる
-  plaza:{x:PLAZA.x+9.5,z:PLAZA.z+5.5,lookX:PLAZA.x,lookZ:PLAZA.z,lookY:3.4}
+  plaza:{x:PLAZA.x+9.5,z:PLAZA.z+5.5,lookX:PLAZA.x,lookZ:PLAZA.z,lookY:3.4},
+  // あそび場（ゲームセンター）の前。ゲーム機の画面が見える高さ
+  arcade:{x:-7.7,z:4.3,lookX:-12.3,lookZ:4.6,lookY:1.33}
 };
+/* 11/26 オーナー：City の中に遊ぶ場所を作る（ゲームセンターのような所）。近づいたらボタンが出て遊べる。
+   公式店舗の左どなり。朝・夜の屋台（x=-14）、広場、旗のロープ、植木とぶつからない所に置く。
+   ゲーム機は商品と同じ仕組みで選べる（userData.productId を 'play:<id>' にする）。 */
+export const ARCADE = { x: -11, z: 4 };
+const ARCADE_NEAR = 3.9;
 
 // A real perspective scene, not a panorama or an image with click areas.
 // All geometry/textures are original, generated locally. No remote asset/CDN.
@@ -23,7 +30,7 @@ const VIEWPOINTS = {
    sideSign があるときは、公式店舗と同じ大きさ・同じつくりの店を右どなり（x=+13.5）に建て、
    sideProducts をその店の中の台に並べる（選べる）。 */
 const SIDE_X = 13.5;
-export function createWorld(canvas, { products = [], sideProducts = [], mainSign = 'THE FIELD STORE', sideSign = '', time = 'day', onSelect = () => {}, onFocus = () => {}, onLost = () => {} } = {}) {
+export function createWorld(canvas, { products = [], sideProducts = [], mainSign = 'THE FIELD STORE', sideSign = '', time = 'day', plays = [], onSelect = () => {}, onFocus = () => {}, onNear = () => {}, onLost = () => {} } = {}) {
   const renderer = new T.WebGLRenderer({canvas,antialias:true,alpha:false,powerPreference:'low-power'});
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1,1.5));
   renderer.outputColorSpace=T.SRGBColorSpace;
@@ -33,7 +40,7 @@ export function createWorld(canvas, { products = [], sideProducts = [], mainSign
   const camera=new T.PerspectiveCamera(64,1,.08,240);camera.rotation.order='YXZ';
   // 店の南の広場まで歩ける（前は x±10・z15 まで）
   const bounds={minX:-16,maxX:sideSign?20:12,minZ:-8,maxZ:24}, boxes=[], disposables=new Set();
-  let yaw=0,pitch=0,drag=null,joystick={x:0,y:0},moveTarget=null,blockedFrames=0,raf=0,last=0,dead=false,paused=false,visible=true,frames=0;
+  let yaw=0,pitch=0,drag=null,joystick={x:0,y:0},moveTarget=null,blockedFrames=0,raf=0,last=0,dead=false,paused=false,visible=true,frames=0,near=null;
   const keys=new Set(), ray=new T.Raycaster(), pointer=new T.Vector2(), abort=new AbortController();
   const options={signal:abort.signal};
   const mat=(color,more={}) => {const m=new T.MeshStandardMaterial({color,roughness:.85,...more});disposables.add(m);return m;};
@@ -174,6 +181,31 @@ export function createWorld(canvas, { products = [], sideProducts = [], mainSign
   block(-2.15,.8,5.7,.95,1.6,.13,green);obstacle(-2.15,5.7,.95,.16);
   label('STEP INSIDE',-2.15,1.08,5.78,.88,.35,undefined,undefined,62);
   label('3D SHOWROOM',-2.15,.64,5.78,.85,.3,undefined,undefined,41);
+  /* あそび場（ゲームセンター）。前（+x の向き）が開いていて、奥の壁ぎわにゲーム機が4台並ぶ。
+     遊べるゲーム（plays）が渡されたときだけ建てる（お試し表示では建てない） */
+  if(plays.length){
+    const ax=ARCADE.x, az=ARCADE.z, wall=mat('#3b3350'), floor=mat('#2f2a3a'), trim=mat('#f2b84b',{emissive:'#f2b84b',emissiveIntensity:.35});
+    const colors=['#5b8fd0','#e8695a','#8a4fc8','#2fa58a'];
+    block(ax,0,az,4.2,.12,5.8,floor);
+    block(ax-1.95,1.7,az,.2,3.4,5.6,wall);obstacle(ax-1.95,az,.2,5.6);
+    for(const side of [-1,1]){block(ax,1.7,az+side*2.8,4,3.4,.2,wall);obstacle(ax,az+side*2.8,4,.2);}
+    block(ax,3.48,az,4.3,.16,6,wall);
+    block(ax+2.05,3.12,az,.12,.56,5.9,trim);
+    label('GAME CENTER',ax+2.13,3.12,az,4.6,.48,'#2a2140','#ffd36a',70,Math.PI/2);
+    label('あそび場 · 近づくと遊べます',ax+2.13,2.66,az,3.4,.3,'#2a2140','#f6f0e2',44,Math.PI/2);
+    const arcadeLight=new T.PointLight('#c9a6ff',9,9,2);arcadeLight.position.set(ax,2.7,az);scene.add(arcadeLight);
+    plays.slice(0,4).forEach(([id,title],i)=>{
+      // 前から見て左から ECHO FIELD・林檎の方程式・日常の神々・エレベーター
+      const z=az+1.8-i*1.2, g=new T.Group();g.position.set(ax-1.25,0,z);g.userData.productId='play:'+id;scene.add(g);
+      const body=mat(colors[i%colors.length]);
+      block(0,.75,0,.8,1.5,.95,body,g);block(.02,1.72,0,.76,.44,.95,body,g);
+      block(.47,.98,0,.32,.08,.9,mat('#1f1f28'),g);
+      for(const [bz,c] of [[-.2,'#ff5a5a'],[0,'#ffd36a'],[.2,'#5fd0ff']])cylinder(.5,1.04,bz,.045,.045,.05,mat(c,{emissive:c,emissiveIntensity:.4}),g);
+      label(title,.41,1.33,0,.88,.6,'#0e1630','#9ef0ff',58,Math.PI/2,g);
+      label('PLAY',.41,1.75,0,.9,.3,colors[i%colors.length],'#ffffff',60,Math.PI/2,g);
+      obstacle(ax-1.25,z,.85,.95);
+    });
+  }
   // Products are selectable meshes; each has its own visible physical model.
   /* 公式ショップの11品は、Claude デザインの模型（city-products-3d.js）を決まった場所に置く。
      値段はサーバーの値（EMUER）を出す。ほかの店の商品は、これまでどおり4つの台に置く。 */
@@ -345,6 +377,9 @@ export function createWorld(canvas, { products = [], sideProducts = [], mainSign
     if(frames===0){renderer.shadowMap.autoUpdate=false;canvas.dataset.ready='true';}
     if(++frames%10===0){
       publishPose();
+      /* あそび場の前に来たら知らせる（ボタンを出す）。離れたら消す */
+      const nowNear=plays.length&&Math.hypot(camera.position.x-(ARCADE.x+1.2),camera.position.z-ARCADE.z)<ARCADE_NEAR?'arcade':null;
+      if(nowNear!==near){near=nowNear;canvas.dataset.near=near||'';onNear(near);}
       canvas.dataset.drawCalls=String(renderer.info.render.calls);canvas.dataset.triangles=String(renderer.info.render.triangles);
       onFocus(paused?null:productAt(0,0));
     }
