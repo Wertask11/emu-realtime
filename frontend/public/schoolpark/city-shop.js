@@ -28,7 +28,7 @@ export function openShopWorld({bridge,spots,wantedShop='',preview=false,onClose=
     <div class="cs-load" role="status"><span class="cs-spinner"></span>Cityの扉を開いています…</div>
     <button type="button" class="cs-plaza" data-shop="waypoint" data-value="plaza">${timeLabel.plaza}</button>
     <div class="cs-aim" aria-hidden="true">+</div><button class="cs-pick" type="button" data-shop="pick" hidden></button>
-    <button class="cs-arcade" type="button" data-shop="plays" hidden>🎮 あそび場で遊ぶ</button>
+    <button class="cs-arcade" type="button" data-shop="arcade" hidden>🎮 あそび場で遊ぶ</button>
     <div class="cs-toast" role="status" hidden></div>
     <aside class="cs-panel" hidden></aside>
     <footer class="cs-controls"><div class="cs-route"><p><b>床をクリック / タップして移動</b> · ドラッグ / スワイプで見回す</p><div><button type="button" data-shop="waypoint" data-value="entrance">入店する ↗</button><button type="button" data-shop="waypoint" data-value="shelves">商品棚</button><button type="button" data-shop="waypoint" data-value="counter">カウンター</button>${onPlay&&!preview?'<button type="button" data-shop="waypoint" data-value="arcade">あそび場</button>':''}</div></div>
@@ -131,7 +131,7 @@ export function openShopWorld({bridge,spots,wantedShop='',preview=false,onClose=
     const b=e.target.closest('[data-shop]');if(!b||b.disabled)return;
     const action=b.dataset.shop,value=b.dataset.value;
     if(action==='close')destroy();else if(action==='products')productsPanel();else if(action==='product')productPanel(value);
-    else if(action==='plays')playsPanel();else if(action==='play')play(value);
+    else if(action==='plays'||action==='arcade')playsPanel();else if(action==='play')play(value);
     else if(action==='panel-close')closePanel();else if(action==='help')help();else if(action==='checkout')checkout();
     else if(action==='exchange')exchange();
     else if(action==='waypoint'){closePanel();world?.waypoint(value);world?.focus();root.dataset.location=value;}
