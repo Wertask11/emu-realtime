@@ -2738,6 +2738,12 @@ function draw() {
      覚え、新しい要素へ同じ描画処理内で戻す（描画後の rAF では一度上に跳ぶ）。 */
   var scrollTop = app.scroller.current ? app.scroller.current.scrollTop : 0;
   var pageY = window.scrollY;
+  /* 11/27 オーナー（スマホ）：「LEARN以外を押してるのに、LEARNに勝手にスワイプなって、開いたらPLAYの画面とかもやめて」。
+     描き直すと扉の横スワイプ（.gh-swipe）も作り直され、先頭の LEARN へ戻っていた。
+     扉を押すと「開く」演出で描き直すので、押した扉が見えなくなり LEARN が映ったまま PLAY が開いていた。
+     読み込みが終わったときの描き直しでも、見ていた扉から LEARN へ跳んでいた。縦の位置と同じく、横の位置も保つ。 */
+  var ghSwipeOld = host.querySelector('.gh-swipe');
+  if (ghSwipeOld) app.ghSwipeLeft = ghSwipeOld.scrollLeft;
   var open = keptOpen();
   var vals = app.renderVals();
   var frag = document.createDocumentFragment();
@@ -2752,6 +2758,19 @@ function draw() {
   /* タブを押して画面を描き直しても、利用者が横に動かした位置を保つ。
      先頭へ戻ると、タブと画面全体が勝手に動いたように見えるため。 */
   if (app.bottomRef.current) app.bottomRef.current.scrollLeft = app.tabScrollLeft || 0;
+  var ghSwipeNew = host.querySelector('.gh-swipe');
+  if (ghSwipeNew) {
+    /* 開いている扉があれば、その扉を見えるところに置く（押した扉が開くのを見せる） */
+    var openSlide = ghSwipeNew.querySelector('.gh-door[data-open="1"]');
+    openSlide = openSlide && openSlide.closest('.gh-slide');
+    var keepLeft = app.ghSwipeLeft || 0;
+    if (openSlide) {
+      var slideBox = openSlide.getBoundingClientRect(), railBox = ghSwipeNew.getBoundingClientRect();
+      if (slideBox.left < railBox.left || slideBox.right > railBox.right)
+        keepLeft = ghSwipeNew.scrollLeft + slideBox.left - railBox.left - (railBox.width - slideBox.width) / 2;
+    }
+    ghSwipeNew.scrollLeft = keepLeft;
+  }
   app.tourRenderedDataReady = Object.assign({}, app.tourDataReady);
   app.tourRenderedScreen = app.state.screen;
   try { if (window.parent.ReizoTourSchoolParkRendered) window.parent.ReizoTourSchoolParkRendered(); } catch (e) {}

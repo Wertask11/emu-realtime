@@ -178,3 +178,37 @@ test('あとから増えたギルド（扉の絵が無いもの）は、今ま�
     assert.match(await w.f.locator('.sp-ux-guild-card').textContent(), /EXTRA/);
   } finally { await w.close(); }
 });
+
+/* 11/27 オーナー（スマホ）：「LEARN以外を押してるのに、LEARNに勝手にスワイプなって、開いたらPLAYの画面とかもやめて」。
+   描き直すたびに扉の横スワイプが作り直され、先頭（LEARN）へ戻っていた。扉を押すと「開く」演出で描き直すので、
+   押した扉が見えなくなり、LEARN が映ったまま PLAY が開いていた。読み込みの描き直しでも LEARN へ跳んでいた。 */
+test('スマホ：PLAY までスワイプして押すと、PLAY の扉が開くのが見えたまま PLAY に入る（LEARN へ戻らない）', async () => {
+  const w = await open(390);
+  try {
+    const rail = w.f.locator('.gh-swipe');
+    await rail.waitFor();
+    const slideOf = (name) => w.f.locator('.gh-swipe .gh-slide').filter({ has: w.f.locator('.gh-name', { hasText: name }) });
+    await slideOf('PLAY').scrollIntoViewIfNeeded();
+    await slideOf('PLAY').evaluate((el) => el.scrollIntoView({ inline: 'center', block: 'nearest' }));
+    await w.page.waitForTimeout(400);
+    const centred = async () => rail.evaluate((r) => {
+      const box = r.getBoundingClientRect(), mid = box.left + box.width / 2;
+      const hit = [...r.querySelectorAll('.gh-slide')].find((s) => { const b = s.getBoundingClientRect(); return b.left <= mid && b.right >= mid; });
+      return hit ? hit.querySelector('.gh-name').textContent.trim() : '';
+    });
+    assert.equal(await centred(), 'PLAY');
+
+    // 読み込みが終わったときの描き直し（親がもう一度ギルドを渡す）でも、見ている扉のまま
+    await w.page.evaluate(() => { const f = document.getElementById('f').contentWindow; window.spDaoReloadAll(f.app); });
+    await w.page.waitForTimeout(300);
+    assert.equal(await centred(), 'PLAY', '描き直しで LEARN へ戻らない');
+
+    await slideOf('PLAY').locator('.gh-door').click();
+    await w.page.waitForTimeout(250);
+    assert.equal(await centred(), 'PLAY', '押した扉が開いているあいだも PLAY が見えている');
+    assert.equal(await rail.locator('.gh-door[data-open="1"] .gh-name').textContent(), 'PLAY', '開いているのは PLAY の扉');
+    await w.page.waitForFunction(() => window.entered.length > 0, null, { timeout: 5000 });
+    assert.deepEqual(await w.page.evaluate(() => window.entered), ['play']);
+    assert.deepEqual(w.errors, []);
+  } finally { await w.close(); }
+});
