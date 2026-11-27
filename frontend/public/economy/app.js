@@ -18,8 +18,12 @@
     artifactUI = null,
     practiceUI = null,
     walletManifest = null,
-    walletEstimate = null;
+    walletEstimate = null,
+    /* 11/27 やることを本人が選び直したか。選び直していなければ、頼んだ文から自動で選ぶ */
+    kindChosen = false;
   const watchedJobs = new Map();
+  /* 頼んだ文はサーバーから返らない（本人の入力を残さない）。この画面で頼んだものだけ、結果の上に出す */
+  const askedGoals = new Map();
   const activeStates = new Set([
     "awaiting_payment",
     "awaiting_wallet_payment",
@@ -31,10 +35,10 @@
   const labels = {
     awaiting_payment: "決済確認待ち",
     awaiting_wallet_payment: "ウォレットの支払い・確定待ち",
-    queued: "支払い済み・実行待ち",
-    running: "探索中",
-    result_saved: "結果保存済み・引渡し確認中",
-    completed: "完了",
+    queued: "支払い済み・もうすぐ始めます",
+    running: "冷蔵庫くんが動いています…",
+    result_saved: "結果を保存しました・確認中",
+    completed: "できました",
     refund_pending: "返却待ち",
     refunded: "未受取EMUERへ返却済み",
     failed: "依頼を受付できませんでした",
@@ -101,8 +105,30 @@
     requestId = null;
     $("approval").hidden = true;
     $("executionPlan").replaceChildren();
-    $("paymentConsent").checked = false;
-    $("aiConsent").checked = false;
+    $("approvalGoal").textContent = "";
+  }
+  /* 頼んだ文から、やることを選ぶ（11/27）。
+     「持ってきて・探して・教えて」は探して持ってくる。「作って・準備・計画・下書き」は、話題に合う作業。
+     どちらとも言えないときは、探して持ってくる。選べない作業（停止中・資料なし）は使わない。 */
+  function pickTask(goal, available) {
+    const t = String(goal || "");
+    const can = (id) => available.includes(id);
+    const fetchy = /持ってき|探して|さがして|教えて|見せて|知りたい|どこ|一覧|ある[？?]|ない[？?]/.test(t);
+    const make = /作って|つくって|準備|計画|下書き|まとめて|書いて|考えて|整理/.test(t);
+    if (fetchy && !make) return "";
+    const pick = [
+      ["knowledge_draft", /投稿|知識にしたい|知識に|下書き|記事/],
+      ["quest_plan", /クエスト/],
+      ["guild_plan", /ギルド|LEARN|WORK|PLAY|CONNECT|WEB3/i],
+      ["city_comparison", /City|シティ|ショップ|交換|商品|お店/i],
+      ["wil_plan", /探究|WIL|学習計画|学びの計画/i],
+    ].find(([id, re]) => can(id) && re.test(t));
+    return make && pick ? pick[0] : "";
+  }
+  function availableTasks() {
+    return Array.from($("taskType").options)
+      .filter((o) => o.value && !o.disabled)
+      .map((o) => o.value);
   }
   function reset() {
     generation++;
@@ -211,7 +237,7 @@
       : "現在は探索・比較・候補提案が対象です。正常に探索が完了した場合は候補0件も5 EMUERがかかります。";
     $("workOptions").hidden = !work?.enabled;
     $("taskType").replaceChildren(
-      node("option", "調べて比較する（既存の探索）"),
+      node("option", "探して持ってくる"),
     );
     $("taskType").firstChild.value = "";
     for (const t of work?.tasks || []) {
@@ -288,6 +314,7 @@
       $("availability").textContent =
         "サービスは準備中です。提供状態を確認できるまで有料依頼はできません。";
     }
+    $("availability").hidden = !$("availability").textContent;
   }
   async function operations() {
     try {
@@ -334,30 +361,28 @@
       content.append(
         node(
           "p",
-          "参照した領域：" +
+          "見たところ：" +
             (names.join("・") || "今回利用できる参照情報はありません"),
         ),
-        node("h3", "調べた情報・出典"),
       );
+      content.lastChild.className = "agent-meta";
     }
     if (!answer.results?.length)
       content.append(
         node(
           "p",
-          "目的に関連する公開情報は見つかりませんでした。架空の候補は追加していません。",
+          "見つかりませんでした。言い方を変えて、もう一度頼んでみてください（作り話の候補は出しません）。",
         ),
       );
     for (const r of answer.results || []) {
       const card = node("div");
       card.className = "source-card";
-      card.append(
-        node("h3", r.title),
-        node("p", r.reason),
-        node("blockquote", r.evidence),
-        sourceInfo(r),
-      );
+      const why = node("details");
+      why.className = "source-info";
+      why.append(node("summary", "根拠・出典"), node("blockquote", r.evidence), sourceInfo(r));
+      card.append(node("h3", r.title), node("p", r.reason));
       if (Number.isSafeInteger(r.facts?.priceEmuer))
-        card.append(
+        why.append(
           node(
             "p",
             "公開価格：" +
@@ -366,7 +391,7 @@
           ),
         );
       if (Number.isSafeInteger(r.facts?.stockAvailable))
-        card.append(
+        why.append(
           node(
             "p",
             "確認時点の在庫：" +
@@ -375,7 +400,7 @@
           ),
         );
       if (r.facts?.deadlineMs)
-        card.append(
+        why.append(
           node(
             "p",
             "受付期限：" +
@@ -386,11 +411,11 @@
           ),
         );
       if (r.facts?.scenario === "exercise")
-        card.append(
+        why.append(
           node("p", "公式の演習課題です。架空の店舗・主催者設定を含みます。"),
         );
       if (r.updatedAtMs)
-        card.append(
+        why.append(
           node(
             "p",
             "資料の更新：" +
@@ -400,24 +425,24 @@
               "（日本時間）",
           ),
         );
-      const link = node("button", "内容を確認する →");
+      const link = node("button", "開く →");
       link.type = "button";
       link.onclick = () => openTarget(r.target);
-      card.append(link);
+      card.append(link, why);
       content.append(card);
     }
     if (answer.comparisons?.length) {
-      content.append(node("h3", "比較（AIの提案）"));
+      content.append(node("h3", "くらべると"));
       for (const c of answer.comparisons)
         content.append(node("p", c.titles.join(" ／ ") + "：" + c.text));
     }
     if (answer.steps?.length) {
-      content.append(node("h3", "次の行動（AIの提案）"));
+      content.append(node("h3", "次にやること"));
       const list = node("ol");
       for (const step of answer.steps) {
         const item = node("li");
         item.append(node("strong", step.title), node("p", step.text));
-        const link = node("button", "参照先を開く");
+        const link = node("button", "開く →");
         link.type = "button";
         link.onclick = () => openTarget(step.target);
         item.append(link);
@@ -427,7 +452,7 @@
       content.append(
         node(
           "p",
-          "この順序は提案です。参加・投稿・購入などは、移動先で条件を確認して自分で判断してください。",
+          "提案です。参加・投稿・購入は、開いた先で条件を見て自分で決めてください。",
         ),
       );
     }
@@ -478,11 +503,16 @@
     article.dataset.state = job.state;
     article.dataset.progress = job.progress || "";
     article.tabIndex = -1;
+    if (askedGoals.has(job.id)) {
+      const asked = node("p", "「" + askedGoals.get(job.id) + "」");
+      asked.className = "agent-goal";
+      article.append(asked);
+    }
     article.append(
       node(
         "b",
         job.taskType && job.state === "running"
-          ? "下書き・計画を作成中"
+          ? "冷蔵庫くんが下書き・計画を作っています…"
           : labels[job.state] || "状態を確認中",
       ),
       node(
@@ -490,12 +520,12 @@
         new Date(job.createdAtMs).toLocaleString("ja-JP", {
           timeZone: "Asia/Tokyo",
         }) +
-          "（日本時間）" +
           " · " +
           job.price +
           " EMUER",
       ),
     );
+    article.lastChild.className = "agent-meta";
     if (job.payment)
       article.append(
         node(
@@ -531,19 +561,12 @@
         }
     }
     const stage = {
-      collecting_public_sources:
-        "公開範囲・AI許諾を確認しながら、関連する領域を探しています。",
-      comparing_verified_sources:
-        "確認できた資料を意味で比較し、出典付きの提案を組み立てています。",
+      collecting_public_sources: "関係するところを探しています。",
+      comparing_verified_sources: "見つけたものを比べて、まとめています。",
     }[job.progress];
     if (stage && job.state === "running") article.append(node("p", stage));
     if (activeStates.has(job.state))
-      article.append(
-        node(
-          "p",
-          "状態は自動で確認します。このままお待ちください。再度依頼する必要はありません。",
-        ),
-      );
+      article.append(node("p", "このまま待っていてください。もう一度頼む必要はありません。"));
     if (job.state === "refund_pending")
       article.append(
         node(
@@ -598,8 +621,16 @@
         );
       article.append(ol);
     }
+    if (!activeStates.has(job.state)) {
+      const fold = node("details");
+      fold.className = "agent-fold";
+      fold.append(node("summary", "支払い・進み具合"));
+      for (const el of Array.from(article.children))
+        if (el.tagName === "OL" || (el.tagName === "P" && /^支払い|^支払元|全額返却/.test(el.textContent))) fold.append(el);
+      if (fold.children.length > 1) article.append(fold);
+    }
     if (job.artifactId && job.state === "completed") {
-      const b = node("button", "保存した下書き・計画を開く");
+      const b = node("button", "できた下書き・計画を開く");
       b.type = "button";
       b.onclick = () => artifactUI.open(job.artifactId);
       article.append(b);
@@ -695,7 +726,7 @@
     const g = generation;
     if (!user()) {
       await publicStatus();
-      notice("ログインして残高・依頼履歴を確認してください。");
+      notice("ログインすると頼めます。");
       return;
     }
     try {
@@ -711,7 +742,7 @@
         ? "Polygon PoSの登録済みウォレットを使用します。ガス代は別途必要です。"
         : "ウォレット決済は安全性・返却体制の確認中です。アプリ内決済は従来どおりです。";
       $("availability").textContent = me.service.enabled
-        ? "受付中です。料金と条件を確認してから依頼できます。"
+        ? ""
         : me.service.blockers?.includes("AI_PROVIDER_DAY_LIMIT")
           ? messages.AI_PROVIDER_DAY_LIMIT
           : me.service.blockers?.includes("INTAKE_PAUSED")
@@ -725,14 +756,15 @@
         $("availability").textContent =
           messages[me.eligibility.reason] ||
           "現在の提供条件では依頼できません。";
+      $("availability").hidden = !$("availability").textContent;
       $("operations").hidden = !me.isOwner;
       if (me.isOwner && $("operationsPanel").open) operations();
       $("history").replaceChildren();
       if (!history.jobs.length)
-        $("history").textContent = "まだ依頼はありません。";
+        $("history").textContent = "頼んだ結果がここに出ます。";
       for (const job of history.jobs) $("history").append(renderJob(job));
       watchJobs(history.jobs);
-      notice("残高と履歴を更新しました。");
+      notice("");
     } catch (e) {
       if (g === generation)
         notice(
@@ -747,17 +779,37 @@
     busy = true;
     const g = generation;
     clearApproval();
-    try {
-      const d = await api("/quotes", {
+    if (!kindChosen) $("taskType").value = pickTask($("goal").value, availableTasks());
+    const ask = (taskType) =>
+      api("/quotes", {
         goal: $("goal").value,
         method: $("paymentMethod").value,
-        taskType: $("taskType").value || undefined,
+        taskType: taskType || undefined,
         balanceConsent: $("balanceConsent").checked,
         achievementsConsent: $("achievementsConsent").checked,
       });
+    $("quoteButton").textContent = "確認しています…";
+    notice("");
+    try {
+      let d;
+      try {
+        d = await ask($("taskType").value);
+      } catch (e) {
+        /* 自動で選んだ作業が使えなかったときは、探して持ってくるでもう一度だけ確かめる（まだ払っていない） */
+        if (
+          kindChosen ||
+          !$("taskType").value ||
+          !["WORK_MATERIAL_UNAVAILABLE", "WORK_SOURCE_DISABLED", "WORKFLOW_DISABLED", "INVALID_WORK_TYPE"].includes(e.message)
+        )
+          throw e;
+        if (g !== generation) return;
+        $("taskType").value = "";
+        d = await ask("");
+      }
       if (g !== generation) return;
       quote = d.quote;
       requestId = crypto.randomUUID();
+      $("approvalGoal").textContent = "「" + $("goal").value.trim() + "」";
       $("quoteTerms").textContent =
         quote.scope + " " + quote.refund + " " + quote.notice;
       $("executionPlan").replaceChildren(
@@ -765,19 +817,25 @@
       );
       $("approval").hidden = false;
       $("approval").scrollIntoView({ block: "nearest" });
+      $("pay").focus({ preventScroll: true });
     } catch (e) {
       notice(messages[e.message] || "料金を確認できませんでした。");
     } finally {
       busy = false;
+      $("quoteButton").textContent = "頼む（5 EMUER）";
     }
   });
   $("paymentMethod").addEventListener("change", clearApproval);
-  $("goal").addEventListener("input", clearApproval);
-  $("taskType").addEventListener("change", () => {
+  $("goal").addEventListener("input", () => {
+    kindChosen = false;
     clearApproval();
-    $("goalLabel").textContent = $("taskType").value
-      ? "どんな作業を頼みたいですか？"
-      : "何を見つけたいですか？";
+  });
+  /* 確認の札で「やること」を選び直したら、その作業でもう一度確かめる（まだ払っていない） */
+  $("taskType").addEventListener("change", () => {
+    kindChosen = true;
+    clearApproval();
+    if ($("goal").value.trim() && !$("quoteButton").disabled)
+      $("requestForm").requestSubmit();
   });
   for (const id of ["balanceConsent", "achievementsConsent"])
     $(id).addEventListener("change", () => {
@@ -788,8 +846,9 @@
     const example = event.target.closest("[data-example]");
     if (!example) return;
     $("goal").value = example.dataset.example;
+    kindChosen = false;
     clearApproval();
-    $("goal").focus();
+    if (!$("quoteButton").disabled) $("requestForm").requestSubmit();
   });
   $("inspectContext").addEventListener("click", async () => {
     if (!$("balanceConsent").checked && !$("achievementsConsent").checked) {
@@ -826,11 +885,8 @@
   $("cancel").addEventListener("click", clearApproval);
   $("pay").addEventListener("click", async () => {
     if (busy || !quote) return;
-    if (!$("paymentConsent").checked || !$("aiConsent").checked) {
-      notice("料金とAI送信の両方を確認してください。");
-      return;
-    }
     busy = true;
+    $("pay").textContent = "実行しています…";
     $("pay").disabled = true;
     const g = generation;
     try {
@@ -859,7 +915,10 @@
         achievementsConsent: $("achievementsConsent").checked,
       });
       if (g !== generation) return;
+      askedGoals.set(d.job.id, $("goal").value.trim());
       clearApproval();
+      $("goal").value = "";
+      kindChosen = false;
       await refresh();
       const current = await api("/jobs/" + d.job.id);
       if (g !== generation) return;
@@ -869,11 +928,7 @@
           watchedJobs.set(current.job.id, Date.now() + 180000);
         scheduleProgress();
       } else watchedJobs.delete(current.job.id);
-      notice(
-        current.job.state === "completed"
-          ? "依頼が完了しました。結果を下に表示しています。"
-          : labels[current.job.state] || "受付状態を確認しました。",
-      );
+      notice("");
       article.scrollIntoView({ block: "start" });
       article.focus({ preventScroll: true });
       if (current.job.state === "awaiting_wallet_payment")
@@ -896,6 +951,7 @@
     } finally {
       busy = false;
       $("pay").disabled = false;
+      $("pay").textContent = "承認して実行（5 EMUER）";
     }
   });
   async function openWalletPayment(id) {

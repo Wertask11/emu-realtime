@@ -18,15 +18,17 @@ async def main():
    await context.grant_permissions(['clipboard-read','clipboard-write']);await context.route('**/*',guard)
    page=await context.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
    await page.goto('http://127.0.0.1:4257/test/shell');f=page.frame_locator('iframe')
-   await f.locator('#quoteButton').wait_for(state='visible');await f.locator('#workOptions').wait_for(state='visible')
+   await f.locator('#quoteButton').wait_for(state='visible');await f.locator('#taskType option[value="wil_plan"]').wait_for(state='attached');await f.locator('.agent-footer').evaluate('e=>{e.open=true}');
    assert await f.locator('#taskType option:not([disabled])').count()==6
    if width==375:
-    await f.locator('#taskType').select_option(TASK);await f.locator('#goal').fill('コーヒーを学びWeb3を実践するギルド活動を準備したい')
-    await f.locator('#quoteButton').click();await f.locator('#approval').wait_for(state='visible');assert await f.locator('#executionPlan li').count()==5
+    await f.locator('#goal').fill('コーヒーを学びWeb3を実践するギルド活動を準備したい')
+    await f.locator('#quoteButton').click();await f.locator('#approval').wait_for(state='visible')
+    # 11/27 やることは頼んだ文から自動で選ぶ。確認の札で選び直すと、その作業でもう一度確かめる
+    await f.locator('#taskType').select_option(TASK);await f.locator('#approval').wait_for(state='visible');await f.locator('#executionPlan li').first.wait_for();assert await f.locator('#executionPlan li').count()==5
     await f.locator('#cancel').click();assert await f.locator('#approval').is_hidden()
-    await f.locator('#quoteButton').click();await f.locator('#paymentConsent').check();await f.locator('#aiConsent').check();await f.locator('#pay').click()
-    await f.locator('#history article').first.get_by_role('button',name='保存した下書き・計画を開く').wait_for(timeout=20000)
-    await f.locator('#history article').first.get_by_role('button',name='保存した下書き・計画を開く').click();await f.locator('#artifactDialog').wait_for(state='visible')
+    await f.locator('#quoteButton').click();await f.locator('#approval').wait_for(state='visible');assert await f.locator('#taskType').input_value()==TASK;await f.locator('#pay').click()
+    await f.locator('#history article').first.get_by_role('button',name='できた下書き・計画を開く').wait_for(timeout=20000)
+    await f.locator('#history article').first.get_by_role('button',name='できた下書き・計画を開く').click();await f.locator('#artifactDialog').wait_for(state='visible')
     assert '本人が確認・記入' in await f.locator('#artifactContent').input_value()
    else:
     await f.locator('#loadArtifacts').click();await f.get_by_role('button',name=LABEL+'を開く').first.click();await f.locator('#artifactDialog').wait_for(state='visible')

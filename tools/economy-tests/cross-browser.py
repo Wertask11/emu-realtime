@@ -11,20 +11,21 @@ async def main():
    c=await b.new_context(viewport={'width':width,'height':900});await c.route('**/*',lambda r:r.continue_() if r.request.url.startswith(BASE+'/') else r.abort())
    g=await c.new_page();errors=[];posts=[]
    g.on('pageerror',lambda e:errors.append(str(e)));g.on('request',lambda r:posts.append(r.url) if r.method=='POST' else None)
-   await g.goto(BASE+'/test/reizo-shell');await g.wait_for_function('auth.currentUser?.uid === "economy-alice"');await g.locator('#emuHeaderReizo').click();await g.get_by_role('button',name='冷蔵庫くんに頼む',exact=True).click();f=g.frame_locator('#reizoRequestWin iframe');await f.locator('#crossOptions').wait_for(state='visible');await f.locator('#spendable').filter(has_text='EMUER').wait_for()
-   if width>=1280:await g.evaluate("testSignIn('bob')");await f.locator('#history').filter(has_text='まだ依頼はありません').wait_for();await g.wait_for_timeout(1200)
-   await f.get_by_role('button',name='Web3を試したい',exact=True).click();assert await f.locator('#goal').input_value()=='Web3を学んで実際に試したい';assert not any(x.endswith('/jobs') for x in posts)
+   await g.goto(BASE+'/test/reizo-shell');await g.wait_for_function('auth.currentUser?.uid === "economy-alice"');await g.locator('#emuHeaderReizo').click();await g.get_by_role('button',name='冷蔵庫くんに頼む',exact=True).click();f=g.frame_locator('#reizoRequestWin iframe');await f.locator('#crossOptions:not([hidden])').wait_for(state='attached');await f.locator('#spendable').filter(has_text='EMUER').wait_for()
+   if width>=1280:await g.evaluate("testSignIn('bob')");await f.locator('#history').filter(has_text='頼んだ結果がここに出ます').wait_for();await g.wait_for_timeout(1200)
+   # 11/27 例を押すと、そのまま確認（5 EMUER）まで進む。まだ払わない
+   await f.get_by_role('button',name='クエストを持ってきて',exact=True).click();assert await f.locator('#goal').input_value()=='いま受けられるクエストを持ってきて';await f.locator('#approval').wait_for(state='visible');assert not any(x.endswith('/jobs') for x in posts)
    await f.locator('#goal').fill('コーヒーを学んで実際に試したい')
    if width==390:
-    await f.get_by_text('本人の情報を参照して絞る（任意）',exact=True).click();await f.locator('#balanceConsent').check();await f.locator('#achievementsConsent').check();await f.locator('#inspectContext').click();await f.locator('#contextPreview').filter(has_text='100 EMUER').wait_for();assert not any(x.endswith('/jobs') for x in posts)
+    await f.locator('.agent-footer').evaluate('e=>{e.open=true}');await f.locator('#balanceConsent').check();await f.locator('#achievementsConsent').check();await f.locator('#inspectContext').click();await f.locator('#contextPreview').filter(has_text='100 EMUER').wait_for();assert not any(x.endswith('/jobs') for x in posts)
    await f.locator('#quoteButton').click();await f.locator('#approval').wait_for(state='visible');assert 'reizo-cross-20261107-v1' in await f.locator('#quoteTerms').inner_text();assert '5 EMUER' in await f.locator('#pay').inner_text()
    if width==390:
-    await f.locator('#paymentConsent').check();await f.locator('#aiConsent').check();await f.locator('#pay').click()
+    await f.locator('#pay').click()
     # The result must appear without clicking the manual history refresh.
-    await f.get_by_text('次の行動（AIの提案）',exact=True).wait_for(timeout=45000);await f.get_by_text('調べた情報・出典',exact=True).wait_for();assert len([x for x in posts if x.endswith('/jobs')])==1
-    assert '参照した領域' in await f.locator('#history').inner_text();assert 'AIへ送信していません' in await f.locator('#history').inner_text();assert 'LOCAL-OTHER-PERSON' not in await f.locator('#history').inner_text()
+    await f.get_by_text('次にやること',exact=True).wait_for(timeout=45000);await f.get_by_text('根拠・出典',exact=True).first.wait_for(state='attached');assert len([x for x in posts if x.endswith('/jobs')])==1
+    assert '見たところ' in await f.locator('#history').inner_text();assert 'AIへ送信していません' in await f.locator('#history').inner_text();assert 'LOCAL-OTHER-PERSON' not in await f.locator('#history').inner_text()
     await f.locator('#spendable').filter(has_text='95 EMUER').wait_for();await g.screenshot(path=str(OUT/'cross-result-390.png'),full_page=True)
-    await g.evaluate("testSignIn('bob')");await g.wait_for_timeout(1300);await f.locator('#history').filter(has_text='まだ依頼はありません').wait_for();assert not await f.locator('#balanceConsent').is_checked();assert not await f.locator('#achievementsConsent').is_checked();assert await f.locator('#contextPreview').inner_text()==''
+    await g.evaluate("testSignIn('bob')");await g.wait_for_timeout(1300);await f.locator('#history').filter(has_text='頼んだ結果がここに出ます').wait_for();assert not await f.locator('#balanceConsent').is_checked();assert not await f.locator('#achievementsConsent').is_checked();assert await f.locator('#contextPreview').inner_text()==''
    if width in [375,1280]:await g.screenshot(path=str(OUT/f'cross-request-{width}.png'),full_page=True)
    assert not await f.locator('body').evaluate('()=>document.documentElement.scrollWidth>innerWidth+1');assert not errors,errors
    rows.append({'width':width,'overflow':False,'examplesDoNotPay':True,'scopedConsentShown':True,'pageErrors':errors,'scope':'isolated demo Auth/Firestore and model HTTP fixture only'})
