@@ -66,3 +66,11 @@ test('hooks follow persistence and real UI; no invented quest_start or business/
  assert.match(lab,/const result = await api\("\/notes",[\s\S]{0,700}knowledge_lab_research/);
  assert.doesNotMatch(source,/quest_start|identify\(|autocapture:|capture_pageview:/); // comment contains autocapture: inspect actual code below instead
 });
+test('11/27 クエストの②「つまずいたところと学び」を出せたことは数える。書いた中身は送らない',async()=>{
+ const b=browser();b.api.consent(true);
+ assert.equal(b.api.track('quest_finish_done',{stuck:'PRIVATE_STUCK',insight:'PRIVATE_INSIGHT'},'q1:1'),true);
+ await b.api.flush();const sent=b.calls.flatMap(c=>c.body.batch).filter(x=>x.event==='quest_finish_done');
+ assert.equal(sent.length,1);assert.doesNotMatch(JSON.stringify(b.calls),/PRIVATE/);
+ const index=fs.readFileSync('frontend/public/index.html','utf8');
+ for(const name of [...index.matchAll(/EmuAnalytics\?\.track\('([a-z_]+)'/g)].map(m=>m[1]))assert.ok(source.includes(' '+name+': '),'送る名前は計測の決まりに載っている: '+name);
+});
