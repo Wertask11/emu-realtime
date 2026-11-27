@@ -18,7 +18,7 @@ async def main():
    await f.locator('#goal').fill('コーヒーを学んで実際に試したい')
    if width==390:
     await f.locator('.agent-footer').evaluate('e=>{e.open=true}');await f.locator('#balanceConsent').check();await f.locator('#achievementsConsent').check();await f.locator('#inspectContext').click();await f.locator('#contextPreview').filter(has_text='100 EMUER').wait_for();assert not any(x.endswith('/jobs') for x in posts)
-   await f.locator('#quoteButton').click();await f.locator('#approval').wait_for(state='visible');assert 'reizo-cross-20261107-v1' in await f.locator('#quoteTerms').inner_text();assert '5 EMUER' in await f.locator('#pay').inner_text()
+   await f.locator('#quoteButton').click();await f.locator('#approval').wait_for(state='visible');assert 'reizo-cross-20261107-v1' in await f.locator('#quoteTerms').text_content();assert '5 EMUER' in await f.locator('#pay').inner_text()
    if width==390:
     await f.locator('#pay').click()
     # The result must appear without clicking the manual history refresh.

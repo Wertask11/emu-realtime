@@ -159,11 +159,12 @@ for (const width of [375, 390, 412, 768, 1280, 1440, 1920])
         await f
           .locator("#walletMethodOption:not([disabled])")
           .waitFor({ state: "attached" });
+        // 11/27 支払い方法は「くわしく」の中
+        await f.locator(".agent-footer").evaluate((e) => { e.open = true; });
         await f.locator("#paymentMethod").selectOption("emuer_chain");
         await f.locator("#goal").fill("クエストの計画を作る");
         await f.locator("#quoteButton").click();
-        await f.locator("#paymentConsent").check();
-        await f.locator("#aiConsent").check();
+        await f.locator("#approval").waitFor();
         await f.locator("#pay").click();
         await f
           .locator("#polygonGas")
