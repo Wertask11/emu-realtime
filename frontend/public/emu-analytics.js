@@ -16,6 +16,8 @@
     quest_list_view: {}, quest_detail_view: {}, quest_join: {}, quest_complete: {},
     /* 11/20 やってみた記録（1枚）。どこから開いたか（投稿の「これを試す」かクエストか）だけ。書いた中身は送らない */
     quest_try_open: { from: ['post','quest'] }, quest_try_done: { from: ['post','quest'] },
+    /* 11/27 報告を2回に。②「つまずいたところと学び」を出せたことだけ（書いた中身は送らない） */
+    quest_finish_done: {},
     knowledge_lab_view: { section: ['library','research','mine','requests','writer'] },
     knowledge_lab_search: { mode: ['lexical','semantic'], result_count: 'count', more: 'boolean' },
     knowledge_lab_research: { stage: ['compare','ai_success','save'], method: ['manual','ai'] },
