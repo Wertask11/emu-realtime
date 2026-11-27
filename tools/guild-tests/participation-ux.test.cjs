@@ -21,7 +21,9 @@ test('UX does not change enrollment writes, Passport resolution, reports or wisd
  // 「このクエストから降りますか？」だけを、道具に自動でキャンセルされる confirm() から画面の中の emuAsk に替えた。
  // その1行だけを元に戻してから比べる（ほかの行・受ける・降りる・本人の決まりは今までどおり一字一句比べる）。
  const QUEST_LEAVE_NOW="if (!(await emuAsk('このクエストから降りますか？', { ok: '降りる' }))) return;",QUEST_LEAVE_WAS="if (!confirm('このクエストから降りますか？')) return;";
- const undoLeaveAsk=(src,name)=>{if(name!=='spQuestToggle')return src;assert.equal(src.split(QUEST_LEAVE_NOW).length,2,'spQuestToggle: 認めた変更が見つからない');return src.replace(QUEST_LEAVE_NOW,QUEST_LEAVE_WAS);};
+ // 11/27（オーナー：「三回も報告はめんどい」）：報告を ①・② の2回にしたので、受けたときの案内の1行だけを2回の言い方に変えた。これも1か所だけ戻して比べる。
+ const QUEST_JOIN_NOW="'クエストを受けました。詳細から、はじめに「①」を出してください。終わったら「② つまずいたところと学び」を出します。'",QUEST_JOIN_WAS="'クエストを受けました。詳細から「やってみた／つまずいた／気づいた」を記録できます。'";
+ const undoLeaveAsk=(src,name)=>{if(name!=='spQuestToggle')return src;for(const [now,was] of [[QUEST_LEAVE_NOW,QUEST_LEAVE_WAS],[QUEST_JOIN_NOW,QUEST_JOIN_WAS]]){assert.equal(src.split(now).length,2,'spQuestToggle: 認めた変更が見つからない');src=src.replace(now,was);}return src;};
  // spPassportLoad changed on purpose: plan names (#232, 10/27) and, on 11/3 (#267),
  // tying the cached Passport to the signed-in UID so a previous user's Passport is never shown.
  // tools/unified-navigation-tests/navigation.test.cjs covers the account switch.

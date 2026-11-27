@@ -19866,6 +19866,44 @@ function spQuestFirstStep(q) {
   return kind === 'listed' ? '① 何をやるか' : kind === 'case' ? '① 提出物を出す' : '① やったこと';
 }
 
+/* クエストの説明文を、いまの出し方（①・② の2回）の言い方で見せる（11/27 オーナー：「クエストの説明文も今にあわせて」）。
+
+   出したあとのクエストは中身を書き換えられない（記録の決まりが status と closedAt しか許さない。
+   受けた人が見た条件がすり替わらないようにするため。_spBriefImage と同じ事情）。
+   だから記録はそのまま残し、画面に出すときだけ言い方を今に合わせる。
+   残る記録（報告3種類と知恵カード1枚）は今までと同じなので、条件の中身は変わらない。
+   ① が「やってみた」、② が「つまずいた」「気づいた」と知恵カードを一度に残す。
+
+   報告の書き方の読み取り（spQuestReportGuide）は、記録のままの文から読む。ここで変えた文は読ませない。 */
+const SP_QUEST_TEXT_NOW = [
+  [/SchoolPark の報告は「やってみた／つまずいた／気づいた」の3種類です。\n完走には、この3種類が全部そろっている必要があります。1つでも欠けると完走になりません。/g,
+   'SchoolPark への報告は2回です。はじめに「① 何をやるか」、終わったら「② つまずいたところと学び」を出します。\n完走には、① と ② の両方が必要です。② を出すと、知恵カードも一緒に置かれます。'],
+  [/SchoolPark の報告は「やってみた／つまずいた／気づいた」の3種類です。/g,
+   'SchoolPark への報告は2回です。はじめに「① 何をやるか」、終わったら「② つまずいたところと学び」を出します。'],
+  [/(→[ 　]*)やってみた(?=[ 　]*$)/gm, '$1① 何をやるか'],
+  [/(→[ 　]*)つまずいた(?=[ 　]*$)/gm, '$1② のつまずいたところ'],
+  [/(→[ 　]*)気づいた(?=[ 　]*$)/gm, '$1② の学び'],
+  [/最初の報告に書いてください。/g, '「① 何をやるか」に書いてください。'],
+  [/どの報告にも、Emu に投稿した写真を紐づけてください。/g,
+   '① と ② に、Emu に投稿した写真を紐づけてください（① で選んだ投稿は ② に引き継がれます）。'],
+  [/報告が3種類そろったら、知恵カードを1枚置いてください。/g,
+   '知恵カードは、② を出すと一緒に置かれます（② の学びが、そのままカードになります）。'],
+  [/【SchoolPark の報告】3回。/g, '【SchoolPark の報告】2回（① と ②）。'],
+  [/^・やってみた（＝/gm, '・① 何をやるか（＝'],
+  [/^・つまずいた（＝/gm, '・② つまずいたところ（＝'],
+  [/^・気づいた（＝/gm, '・② 学び（＝'],
+  [/【知恵カード】1枚/g, '【知恵カード】1枚（② で一緒に置かれる）'],
+  [/※ 報告は3種類すべてが必要です。1つでも欠けると完走になりません。/g,
+   '※ ① と ② の両方が必要です。どちらかが欠けると完走になりません。'],
+  [/報告3回（やってみた・つまずいた・気づいた）/g, '報告2回（① 何をやるか・② つまずいたところと学び）'],
+  [/^・知恵カード1枚$/gm, '・知恵カード1枚（② で一緒に置かれる）']
+];
+function spQuestTextNow(text) {
+  let t = String(text || '').replace(/\r\n/g, '\n');
+  SP_QUEST_TEXT_NOW.forEach(function (r) { t = t.replace(r[0], r[1]); });
+  return t;
+}
+
 /* クエスト1件を、枠の中で使える形にする。
    受けた人と途中報告は、その場で数える。 */
 async function _spShapeQuest(q, p, mine, gdefs, app) {
@@ -20003,8 +20041,9 @@ async function _spShapeQuest(q, p, mine, gdefs, app) {
     briefImage: q.briefImage || _spBriefImage(q),
     briefImageAlt: _spBriefImageAlt(q),
     briefImageShow: (q.briefImage || _spBriefImage(q)) ? 'block' : 'none',
-    brief: q.brief || '', given: q.given || '',
-    deliverable: q.deliverable || '', criteria: q.criteria || '',
+    /* 説明文は、いまの出し方（①・②）の言い方で見せる。記録の文はそのまま（spQuestTextNow） */
+    brief: spQuestTextNow(q.brief), given: q.given || '',
+    deliverable: spQuestTextNow(q.deliverable), criteria: spQuestTextNow(q.criteria),
     briefShow: q.brief ? 'block' : 'none',
     isCase: !!(q.given || q.deliverable || q.criteria),
     /* 仮説検証の4つを出すか。案件ものでは出さない（空の見出しが並ぶため）。 */
@@ -21027,8 +21066,13 @@ window.spQuestFinish = async function (questId, app) {
     alert('このクエストは、出した記録を運営が確かめているところです。\n\n確かめ終わる（完走として認められる）と、次の周を出せます。');
     return;
   }
-  _spFinish = { quest: q, app: app || null, did: did, logged: false };
   const rg = spQuestReportGuide(q);
+  /* Emu の投稿を紐づけるクエスト（#003 PLAY・特殊）。① で選んだ投稿があれば、それを引き継ぐ（前の3回の報告と同じ）。
+     ① で選んでいなければ、ここで選べる（たとえば特殊 #002 は、会場で投稿したものを「持ち帰り」に紐づける）。 */
+  const inherited = did.fromPostId ? { id: String(did.fromPostId), title: String(did.fromPostTitle || '（Emuの投稿）') } : null;
+  _spFinish = { quest: q, app: app || null, did: did, logged: false,
+    wantsPost: !!(rg && rg.wantsPost), pick: inherited, inherited: !!inherited };
+  _spFinishShowPosts();
   const text = function (id, v) { const el = document.getElementById(id); if (el) { el.textContent = v || ''; if (el.tagName === 'P' && el.id.endsWith('Guide')) el.hidden = !v; } };
   const set = function (id, v) { const el = document.getElementById(id); if (el) el.value = v || ''; };
   set('sfStuck', ''); set('sfInsight', '');
@@ -21040,6 +21084,67 @@ window.spQuestFinish = async function (questId, app) {
   if (btn) { btn.disabled = false; btn.textContent = '出す'; }
   document.body.classList.add('sp-finish-open');
 };
+/* ② の「紐づけるEmuの投稿」。投稿の一覧は ① の札と同じ読み口・同じ控え（_spLogPosts）を使う。 */
+function _spFinishShowPosts() {
+  const f = _spFinish, box = document.getElementById('sfPostBox');
+  if (!box) return;
+  box.hidden = !(f && f.wantsPost);
+  if (box.hidden) return;
+  const guide = document.getElementById('sfPostGuide');
+  if (guide) guide.textContent = f.inherited
+    ? '「①」で選んだ投稿を引き継ぎます。'
+    : 'Emu に投稿したもの（写真など）を選ぶと、この報告と知恵カードに紐づきます。あとから投稿した写真もここで選べます。';
+  const search = document.getElementById('sfSearch'); if (search) search.value = '';
+  _spFinishRenderPick();
+  const results = document.getElementById('sfResults');
+  if (results && !results._bound) {
+    results._bound = true;
+    results.addEventListener('click', function (ev) {
+      const hit = ev.target && ev.target.closest ? ev.target.closest('.sl-hit') : null;
+      if (!hit || !hit.dataset || !hit.dataset.pid || !_spFinish) return;
+      const x = (_spLogPosts || []).filter(function (y) { return y.id === hit.dataset.pid; })[0];
+      if (x) { _spFinish.pick = { id: x.id, title: x.title }; _spFinishRenderPick(); }
+    });
+  }
+  if (f.inherited) return;
+  if (_spLogPosts) { _spFinishRenderPosts(''); return; }
+  if (results) results.innerHTML = '<div class="sl-msg">投稿を読み込んでいます...</div>';
+  Promise.resolve(_spLogFetchPosts()).then(function (rows) {
+    if (!rows) { if (results) results.innerHTML = '<div class="sl-msg">投稿を読み込めませんでした。時間をおいて開き直してください。</div>'; return; }
+    rows.sort(function (a, b) { return b.at - a.at; });
+    _spLogPosts = rows;
+    _spFinishRenderPosts(search ? search.value : '');
+  }).catch(function () {
+    if (results) results.innerHTML = '<div class="sl-msg">投稿を読み込めませんでした。時間をおいて開き直してください。</div>';
+  });
+}
+function _spFinishRenderPosts(word) {
+  const box = document.getElementById('sfResults');
+  if (!box || !_spLogPosts) return;
+  const w = String(word || '').trim().toLowerCase();
+  const hit = _spLogPosts.filter(function (x) {
+    return !w || (x.title + ' ' + x.tags + ' ' + x.name + ' ' + x.body).toLowerCase().indexOf(w) >= 0;
+  });
+  box.innerHTML = hit.length ? hit.map(function (x) {
+    return '<button type="button" class="sl-hit" data-pid="' + _emuEsc(x.id) + '">'
+      + '<span class="sl-hit-t">' + _emuEsc(x.title) + '</span>'
+      + '<span class="sl-hit-m">' + _emuEsc(x.name) + '</span></button>';
+  }).join('') : '<div class="sl-msg">見つかりませんでした。ほかの言葉で探してください。</div>';
+}
+window._spFinishRenderPosts = _spFinishRenderPosts;
+function _spFinishClearPick() { if (!_spFinish || _spFinish.inherited) return; _spFinish.pick = null; _spFinishRenderPick(); }
+window._spFinishClearPick = _spFinishClearPick;
+function _spFinishRenderPick() {
+  const picked = document.getElementById('sfPicked'), wrap = document.getElementById('sfPickWrap');
+  if (!picked || !wrap || !_spFinish) return;
+  const pick = _spFinish.pick;
+  if (pick) {
+    picked.innerHTML = '<span class="sl-pick-t">' + _emuEsc(pick.title) + '</span>'
+      + (_spFinish.inherited ? '' : '<button type="button" class="sl-pick-x" onclick="_spFinishClearPick()">外す</button>');
+    picked.hidden = false; wrap.hidden = true;
+  } else { picked.hidden = true; wrap.hidden = false; }
+}
+
 async function spFinishSubmit() {
   if (_spFinishBusy || !_spFinish) return;
   const val = function (id) { const el = document.getElementById(id); return el ? el.value.trim() : ''; };
@@ -21048,6 +21153,9 @@ async function spFinishSubmit() {
   const p = await spPassportLoad();
   if (!p) { alert('出すにはログインが必要です。'); return; }
   const f = _spFinish, q = f.quest, questId = q.id, did = f.did;
+  /* 出し直し（知恵カードだけ置き直す）では、最初に記録した投稿のまま置く */
+  if (!f.post) f.post = f.pick || { id: '', title: '' };
+  const post = f.post;
   const btn = document.getElementById('sfSubmit');
   const step = function (t) { if (btn) btn.textContent = t; };
   _spFinishBusy = true;
@@ -21058,7 +21166,7 @@ async function spFinishSubmit() {
     if (!f.logged) {
       const at = Date.now();
       const base = { author: p.addr, authorName: p.name,
-        fromPostId: String(did.fromPostId || '').slice(0, 80), fromPostTitle: String(did.fromPostTitle || '').slice(0, 120),
+        fromPostId: String(post.id || '').slice(0, 80), fromPostTitle: String(post.title || '').slice(0, 120),
         sourceLogId: String(did.id || '') };
       const rows = [{ kind: 'つまずいた', body: stuck || '（特になし）' }, { kind: '気づいた', body: insight }];
       const created = [];
@@ -21079,9 +21187,9 @@ async function spFinishSubmit() {
     const r = await fetch('https://emu-realtime.onrender.com/api/schoolpark/quest-completions/'
       + encodeURIComponent(questId) + '/wisdom',
       { method: 'POST', headers: await emuAuthHeaders(true), body: JSON.stringify({
-        fromPostId: String(did.fromPostId || '').slice(0, 80),
-        fromPostTitle: String(did.fromPostTitle || '').slice(0, 120),
-        knowledge: String(did.fromPostTitle || q.knowledge || '').slice(0, 200),
+        fromPostId: String(post.id || '').slice(0, 80),
+        fromPostTitle: String(post.title || '').slice(0, 120),
+        knowledge: String(post.title || q.knowledge || '').slice(0, 200),
         experiment: _spTryFirstSentence(String(did.body || ''), 200),
         insight: insight.slice(0, 200),
         authorName: p.name
@@ -31780,6 +31888,16 @@ async function sendEmuFeedback() {
     <label class="spv-label" for="sfInsight">経験から得た学び（知恵カードになります・200字まで）</label>
     <p class="spp-note" id="sfInsightGuide" hidden style="margin:0 0 6px"></p>
     <textarea class="spv-in spv-area" id="sfInsight" maxlength="200" placeholder="やってみて分かったことを、一文に削る"></textarea>
+    <div id="sfPostBox" hidden>
+      <label class="spv-label" id="sfPostLabel">紐づけるEmuの投稿</label>
+      <div id="sfPicked" class="sl-pick" hidden></div>
+      <div id="sfPickWrap">
+        <input class="spv-in" id="sfSearch" maxlength="40" placeholder="全投稿から題名・タグ・名前で絞り込む"
+               oninput="_spFinishRenderPosts(this.value)">
+        <div id="sfResults" class="sl-results"></div>
+      </div>
+      <p class="spp-note" id="sfPostGuide" style="margin:6px 0 0"></p>
+    </div>
     <button type="button" class="spp-cta" id="sfSubmit" onclick="spFinishSubmit()">出す</button>
     <p class="spp-note">出すと、知恵ライブラリに知恵カードが置かれます。運営が確かめると完走です。出した記録は書き換えも削除もできません。</p>
   </div>
