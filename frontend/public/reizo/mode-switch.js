@@ -78,7 +78,11 @@
     if (mode === 'ask') {
       closeRequestWin();
       if (typeof window.spReizoOpen === 'function') window.spReizoOpen();
-      var input = document.getElementById('spReizoInput'); if (input) setTimeout(function () { input.focus(); }, 0);
+      /* 11/27 オーナー：「冷蔵庫くんを押したとき、勝手に文字入力の画面になってストレス」。
+         入力欄には置かない（スマホでキーボードが勝手に出る）。開いたら候補が見えるまま。
+         キーボードで操作する人のために、窓の中（左上の切り替え）へ移すだけにする。 */
+      var modeBtn = document.querySelector('#spReizoPanel .sp-reizo-mode');
+      if (modeBtn) setTimeout(function () { try { modeBtn.focus({ preventScroll: true }); } catch (_) {} }, 0);
       return;
     }
     if (mode === 'request') {

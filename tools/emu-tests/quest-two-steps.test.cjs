@@ -17,7 +17,8 @@ const LISTED = { id: 'q3', title: 'ゴミを拾う', series: 'general', questNum
 const CASE = { id: 'q2', title: '案件', series: 'general', questNumber: 2, deliverable: '3案を出す' };
 const TRIAL = { id: 'q1', title: '試す', series: 'general', questNumber: 1 };
 
-function el() { return { value: '', textContent: '', hidden: false, disabled: false, tagName: 'TEXTAREA', id: '' }; }
+function el() { return { value: '', textContent: '', innerHTML: '', hidden: false, disabled: false, tagName: 'TEXTAREA', id: '',
+  addEventListener(type, fn) { this.on = fn; } }; }
 function world(opts) {
   const els = {};
   const seen = { alerts: [], logs: [], posts: [], opened: false, celebrated: null };
@@ -47,10 +48,13 @@ function world(opts) {
     emuAuthHeaders: async () => ({}),
     _spWisdomErrorText: (d) => String(d.error || ''),
     _spTryFirstSentence: (t, n) => String(t).split('。')[0].slice(0, n),
-    spWisdomCelebrate: (insight) => { seen.celebrated = insight; }
+    spWisdomCelebrate: (insight) => { seen.celebrated = insight; },
+    _emuEsc: (t) => String(t),
+    _spLogFetchPosts: async () => (opts.posts || []).map((x) => Object.assign({ tags: '', name: 'わたし', body: '', at: 1 }, x))
   };
-  const api = build(INDEX, ['spQuestReportGuide', 'spQuestFirstStep', 'spQuestFinish', 'spFinishSubmit'], stubs,
-    "const SP_LOG_KINDS = ['やってみた', 'つまずいた', '気づいた']; let _spFinish = null, _spFinishBusy = false;");
+  const api = build(INDEX, ['spQuestReportGuide', 'spQuestFirstStep', 'spQuestFinish', 'spFinishSubmit',
+    '_spFinishShowPosts', '_spFinishRenderPosts', '_spFinishRenderPick', '_spFinishClearPick'], stubs,
+    "const SP_LOG_KINDS = ['やってみた', 'つまずいた', '気づいた']; let _spFinish = null, _spFinishBusy = false, _spLogPosts = null;");
   return { api, els, seen };
 }
 const DID = { id: 'd1', kind: 'やってみた', author: '0xABC', body: '近所の公園で3回拾う。袋は2つ。', at: 1, fromPostId: '', fromPostTitle: '' };
@@ -127,4 +131,59 @@ test('完走までの手順は ① と ② の2つ。クエストの詳細のボ
   assert.ok(!DAO.includes('onClick="{{ cur.wisdom }}"'), '知恵カードだけを置くボタンは出さない（② で置く）');
   assert.ok(DAO.includes('value="{{ cur.canFinishLate }}"'), '締め切ったあとも ② を出せる');
   assert.ok(DAO.includes('>4</div>') && DAO.includes('運営が確認して完走'));
+});
+
+/* 11/27 ② で Emu の投稿を紐づける（#003 PLAY・特殊）。① で選んでいれば引き継ぎ、選んでいなければ ② で選べる */
+const POSTQ = { id: 'qs2', title: '解剖フェス', series: 'special', questNumber: 2,
+  deliverable: '【Emu への投稿】\n・会場で書いたもの\n\n' + LISTED.deliverable };
+const tick = () => new Promise((r) => setTimeout(r, 0));
+
+test('② で投稿を選べる：① で選んでいなければ、選んだ投稿が報告2つと知恵カードに付く', async () => {
+  const w = world({ quest: POSTQ, logs: [DID], posts: [{ id: 'p9', title: '会場の写真' }] });
+  await w.api.spQuestFinish('qs2', null);
+  await tick();
+  assert.equal(w.els.sfPostBox.hidden, false, '投稿を紐づけるクエストでは出す');
+  assert.match(w.els.sfResults.innerHTML, /data-pid="p9"/);
+  w.els.sfResults.on({ target: { closest: () => ({ dataset: { pid: 'p9' } }) } });
+  assert.match(w.els.sfPicked.innerHTML, /会場の写真/);
+  w.els.sfInsight.value = '学び';
+  await w.api.spFinishSubmit();
+  assert.deepEqual(w.seen.logs.map((l) => l.fromPostId), ['p9', 'p9']);
+  assert.equal(w.seen.posts[0].body.fromPostId, 'p9');
+  assert.equal(w.seen.posts[0].body.knowledge, '会場の写真');
+});
+
+test('② の投稿：① で選んだ投稿は引き継ぎ、外せない。紐づけないクエストでは欄を出さない', async () => {
+  const w = world({ quest: POSTQ, logs: [Object.assign({}, DID, { fromPostId: 'p1', fromPostTitle: '拾う前' })] });
+  await w.api.spQuestFinish('qs2', null);
+  assert.equal(w.els.sfPostBox.hidden, false);
+  assert.match(w.els.sfPicked.innerHTML, /拾う前/);
+  assert.doesNotMatch(w.els.sfPicked.innerHTML, /外す/);
+  w.els.sfInsight.value = '学び';
+  await w.api.spFinishSubmit();
+  assert.deepEqual(w.seen.logs.map((l) => l.fromPostId), ['p1', 'p1']);
+  const plain = world({ quest: LISTED, logs: [DID] });
+  await plain.api.spQuestFinish('q3', null);
+  assert.equal(plain.els.sfPostBox.hidden, true);
+});
+
+/* 11/27 オーナー：「クエストの説明文も今にあわせて」。出したクエストの記録は書き換えられないので、画面に出すときに言い方を合わせる */
+test('クエストの説明文は ①・② の言い方で見せる。記録の文は変えず、報告の読み取りは記録のままの文から', () => {
+  const fs = require('node:fs'), path = require('node:path');
+  const text = build(INDEX, ['spQuestTextNow'], {},
+    INDEX.slice(INDEX.indexOf('const SP_QUEST_TEXT_NOW'), INDEX.indexOf('function spQuestTextNow')));
+  const dir = path.join(__dirname, '../quest-seeds');
+  let changed = 0;
+  for (const f of fs.readdirSync(dir)) for (const q of JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'))) {
+    for (const k of ['brief', 'deliverable', 'criteria']) {
+      const now = text.spQuestTextNow(q[k]);
+      if (now !== String(q[k] || '')) changed++;
+      assert.doesNotMatch(now, /3種類|報告3回|【SchoolPark の報告】3回|^・(やってみた|つまずいた|気づいた)（＝|→\s*(やってみた|つまずいた|気づいた)\s*$|報告が3種類|最初の報告/m, q.title + ' ' + k);
+    }
+  }
+  assert.ok(changed >= 15, '日を分けるクエストの説明文が変わる');
+  const shape = INDEX.slice(INDEX.indexOf('async function _spShapeQuest('), INDEX.indexOf('    reportSteps: (function () {'));
+  assert.ok(shape.includes('brief: spQuestTextNow(q.brief)') && shape.includes('deliverable: spQuestTextNow(q.deliverable), criteria: spQuestTextNow(q.criteria)'));
+  const w = world({ quest: LISTED, logs: [DID] });
+  assert.equal(w.api.spQuestReportGuide(LISTED).kind, 'listed', '読み取りは記録の文のまま');
 });
