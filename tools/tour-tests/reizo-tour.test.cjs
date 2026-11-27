@@ -69,6 +69,7 @@ test('unified navigation preserves existing auth, contracts, Quest business logi
  const withoutErrorReporter=src=>src.replace(/[ \t]*<script src="\/client-errors\.js"><\/script><!--[^\n]*-->\n/,'');
  // 11/7: knowledge.html のマイライブラリー（下書きを30件ずつ・Knowledge Lab の下書きも並べる）、投稿画面の「詳しく整理する（任意）」、投稿のあとの案内、下書きの一覧（置き場所をひとつに）、左の列（並び替え・マイライブラリーを外し、冷蔵庫くんとプロフィールを置く）を変えた。
  // 同じ日、創業者の決定で見学の「新着20件」を廃止した（membership-policy.js の readerScope を全段 all-public に）。
+ // 11/27 オーナー（「投稿し終わったあとはすぐに反映して」）：書いた投稿をすぐ一覧の先頭へ出す受け口（emu-knowledge-post-added）を足した。approved-2026-11-07.json の6つ目に含めて戻す（tools/emu-tests/post-instant.test.cjs）。
  // 認めた変更（approved-2026-11-07.json）をそれぞれちょうど1か所だけ元に戻してから比べる。ほかの変更は今までどおり落ちる。
  const undoApproved=(file,src)=>{for(const [now,was] of (require('./approved-2026-11-07.json')[file.replace('frontend/public/','')]||[])){assert.equal(src.split(now).length,2,file+': 認めた変更が見つからない');src=src.replace(now,was);}return src;};
  const before=readBefore('frontend/public/index.html'),current=fs.readFileSync(path.join(root,'frontend/public/index.html'),'utf8');

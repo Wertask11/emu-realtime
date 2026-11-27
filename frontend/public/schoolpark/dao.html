@@ -643,7 +643,7 @@ if (window.top === window.self) window.location.replace('/');
                     <div><dt>関わる人・視点</dt><dd>同じ課題を受けている人は参加者一覧で確認できます。報告があれば、ほかの人の試し方や気づきも読めます。</dd></div>
                     <div><dt>残せるもの</dt><dd>自分が試した結果・つまずき・気づきの報告と、学びを一文にした知恵カード。次の実践で振り返る記録になります。</dd></div>
                   </dl>
-                  <p>参加後は、課題に取り組み、3種類の報告と知恵カードを提出します。完走には運営の確認も必要です。手順・締切・報酬条件を確かめてから選べます。</p>
+                  <p>参加後は、はじめに「何をやるか」、終わったら「つまずいたところと学び（知恵カード）」の2回を出します（3種類の報告と知恵カードとして残ります）。完走には運営の確認も必要です。手順・締切・報酬条件を確かめてから選べます。</p>
                 </section>
                 </sc-if>
                 <!-- participation-value:end -->
@@ -669,10 +669,10 @@ if (window.top === window.self) window.location.replace('/');
                     </div>
                   </sc-for>
                   <div style="display:grid; grid-template-columns:28px 1fr; gap:10px; font-size:13px; line-height:1.85">
-                    <div style="font-family:Inter,sans-serif; font-size:11px; color:var(--emu-brand-strong); padding-top:2px">6</div>
+                    <div style="font-family:Inter,sans-serif; font-size:11px; color:var(--emu-brand-strong); padding-top:2px">4</div>
                     <div style="color:#3B382F"><b>運営が確認して完走</b></div>
                   </div>
-                  <div style="font-size:12px; line-height:1.8; color:#6E695C; padding-top:10px; border-top:1px solid rgba(20,19,16,.1)">報告は3種類すべてが必要です。「やってみた記録を書く」なら、3つの報告と知恵カードを1枚で出せます。</div>
+                  <div style="font-size:12px; line-height:1.8; color:#6E695C; padding-top:10px; border-top:1px solid rgba(20,19,16,.1)">出すのは2回です。はじめに「① 何をやるか」、終わったら「② つまずいたところと学び」。②を出すと知恵カードも一緒に置かれます。</div>
                 </div>
               </sc-if>
 
@@ -695,9 +695,8 @@ if (window.top === window.self) window.location.replace('/');
                 <sc-if value="{{ cur.canLog }}">
                   <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:20px; display:flex; align-items:center; gap:8px; flex-wrap:wrap">
                     <div style="font-size:13px; color:#6E695C; flex:1; min-width:160px">{{ cur.logSplitLead }}</div>
-                    <div onClick="{{ cur.logDid }}" style="padding:8px 14px; border:1px solid rgba(20,19,16,.16); border-radius:16px; font-size:12px; cursor:pointer" style-hover="border-color:var(--emu-brand-strong); color:var(--emu-brand-strong)">やってみた</div>
-                    <div onClick="{{ cur.logStuck }}" style="padding:8px 14px; border:1px solid rgba(20,19,16,.16); border-radius:16px; font-size:12px; cursor:pointer" style-hover="border-color:var(--emu-brand-strong); color:var(--emu-brand-strong)">つまずいた</div>
-                    <div onClick="{{ cur.logFound }}" style="padding:8px 14px; border:1px solid rgba(20,19,16,.16); border-radius:16px; font-size:12px; cursor:pointer" style-hover="border-color:var(--emu-brand-strong); color:var(--emu-brand-strong)">気づいた</div>
+                    <div onClick="{{ cur.logDid }}" style="padding:8px 14px; border:1px solid rgba(20,19,16,.16); border-radius:16px; font-size:12px; cursor:pointer" style-hover="border-color:var(--emu-brand-strong); color:var(--emu-brand-strong)">{{ cur.firstLabel }}</div>
+                    <div onClick="{{ cur.finish }}" style="padding:8px 14px; border:1px solid rgba(20,19,16,.16); border-radius:16px; font-size:12px; cursor:pointer" style-hover="border-color:var(--emu-brand-strong); color:var(--emu-brand-strong)">② つまずいたところと学び</div>
                   </div>
                   <!-- ここに「Emuに投稿する」を置いていた。#003 PLAY を出すときに戻す。
 
@@ -760,9 +759,6 @@ if (window.top === window.self) window.location.replace('/');
                 </div>
                 <section class="sp-ux-before-accept" data-tour="quest-before-join"><b>参加前に確認</b><p>内容を見るだけでは参加になりません。「受ける」を押すと、あなたの名前が参加者一覧に載り、報告を書けるようになります。</p><dl><div><dt>締切</dt><dd>{{ cur.due }}</dd></div><div><dt>所要時間</dt><dd>要確認（本文・提出物・手順を確認）</dd></div><div><dt>配分予算</dt><dd>{{ cur.budget }}</dd></div></dl><p>完走には、3種類の報告と知恵カード、運営の確認が必要です。個別のやること・評価・手順も確認してください。受けるだけで報酬は確定しません。</p></section>
                 <button type="button" class="sp-ux-accept" onClick="{{ cur.commit }}" style="text-align:center; padding:14px; border-radius:8px; font-size:15px; font-weight:700; cursor:pointer; background:{{ cur.btnBg2 }}; color:{{ cur.btnFg2 }}; border:1px solid #ffb366">{{ cur.btnLabel }}</button>
-                <sc-if value="{{ cur.canWisdom }}">
-                  <div onClick="{{ cur.wisdom }}" style="text-align:center; padding:12px; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; background:transparent; color:var(--emu-brand-soft); border:1px solid rgba(208,226,190,.45)" style-hover="background:rgba(208,226,190,.12)">知恵カードを置く</div>
-                </sc-if>
                 <sc-if value="{{ cur.canClose }}">
                   <div onClick="{{ cur.close }}" style="text-align:center; padding:12px; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; background:transparent; color:rgba(244,241,234,.66); border:1px solid rgba(244,241,234,.28)" style-hover="background:rgba(244,241,234,.08)">クエストを完了にする</div>
                 </sc-if>
@@ -2275,12 +2271,13 @@ class Component extends DCLogic {
       showSteps: !e.isFounder && !!(e.reportSteps && e.reportSteps.length),
       logLead: e.logLead || '今日やったことを書く',
       /* 1枚で出せるクエストでは、こちらは「1つずつ書く」入口。日を分けて出すクエストでは、こちらが本来の入口 */
-      logSplitLead: e.oneSheet === false ? (e.logLead || '今日やったことを書く') + '（開始宣言 → 中間 → 最終の順に、その時々に出します）'
-        : '1つずつ書く（画像を添えるときも）：' + (e.logLead || '今日やったことを書く'),
+      logSplitLead: e.oneSheet === false ? 'はじめに ① 何をやるかを書き、終わったら ② つまずいたところと学びを出します' : '分けて出す（画像を添えるときも）：' + (e.logLead || '今日やったことを書く'),
+      firstLabel: e.firstStepLabel || '① 何をやるか',
       noLogs: !(e.logs && e.logs.length),
       logDid:   () => { try { window.parent.spQuestLog(e.id, 'やってみた', this); } catch (err) {} },
-      logStuck: () => { try { window.parent.spQuestLog(e.id, 'つまずいた', this); } catch (err) {} },
-      logFound: () => { try { window.parent.spQuestLog(e.id, '気づいた', this); } catch (err) {} },
+      /* 11/27 オーナー：「三回も報告はめんどい」。報告は ①何をやるか と ②つまずいたところと学び の2回。
+         ② で「つまずいた」「気づいた」と知恵カードを一度に残す（親の spQuestFinish）。 */
+      finish: () => { try { window.parent.spQuestFinish(e.id, this); } catch (err) {} },
       /* このクエストのためにEmuへ投稿する入口は、いまは出していない。
          要るのは #003（Emuに投稿して、その投稿を途中報告で紐づける）だけで、
          #001 LEARN に出ていたのは場違いだった。#003 を出すときに戻す。
@@ -2411,13 +2408,12 @@ class Component extends DCLogic {
       .map(q => { const r = Math.max(1, Number(q.myRounds) || 0);
         return { title: q.fullTitle || q.title || '', doneLabel: '✓ 完走した' + (r > 1 ? '（' + r + '周）' : ''), open: this.openExp(q.id) }; });
     const myQuests = (s.quests || []).filter(q => q.iTook && !q.iDone && !q.isFounder).map(q => {
-      const steps = (q.reportSteps || []).slice(0, 3);
+      const steps = (q.reportSteps || []).slice(0, 2);
       const next = steps.find(st => !st.mark);
       return {
         title: q.fullTitle || q.title || '',
         next: next ? ('次：' + next.head + ' を出す')
-          : q.iWisdom ? '次：運営の確認を待つ（報告3つと知恵カードはそろっています）'
-          : '次：知恵カードを置く（報告は3つそろっています）',
+          : '次：運営の確認を待つ（①と②はそろっています）',
         meta: (q.due && q.due !== '締切なし') ? ('締切 ' + q.due) : '',
         metaShow: (q.due && q.due !== '締切なし') ? 'block' : 'none',
         open: this.openExp(q.id)

@@ -10,7 +10,9 @@ const DAO = readHtml('frontend/public/schoolpark/dao.html');
 test('受けているクエスト（#000 以外）を宿題に並べ、次に出す報告と締切を添え、押すと詳細が開く', () => {
   assert.ok(DAO.indexOf("const myQuests = (s.quests || []).filter(q => q.iTook && !q.iDone && !q.isFounder).map(q => {") > 0);
   assert.ok(DAO.indexOf("next: next ? ('次：' + next.head + ' を出す')") > 0);
-  assert.ok(DAO.indexOf(": '次：知恵カードを置く（報告は3つそろっています）',") > 0);
+  /* 11/27 オーナー（「三回も報告はめんどい」）：手順は ① と ② の2つ。② で知恵カードも一緒に置くので、残りは運営の確認だけ */
+  assert.ok(DAO.indexOf(": '次：運営の確認を待つ（①と②はそろっています）',") > 0);
+  assert.ok(DAO.indexOf('const steps = (q.reportSteps || []).slice(0, 2);') > 0);
   assert.ok(DAO.indexOf('open: this.openExp(q.id)') > 0);
   /* 11/2 の画面統合（#265）で SchoolPark のホームは無くなり、「自分の宿題」は知識を試す → 自分の宿題（タスク管理）の1か所になった */
   assert.equal(DAO.split('<sc-for list="{{ myQuests }}" as="mq">').length - 1, 1);
@@ -55,8 +57,9 @@ test('完走した（運営が認めた）クエストは宿題から外し、�
 test('知恵カードを置いたら、すぐに「運営の確認を待つ」になる（取り置きを捨て、その場で印を立てる）', () => {
   /* この周回のぶんを置いたか：置いた枚数が、認められた周回より多いか */
   assert.ok(INDEX.indexOf('iWisdom = placed > myRounds;') > 0);
-  assert.ok(INDEX.indexOf("mark: iWisdom ? '✓ 置いた' : '', markShow: iWisdom ? 'inline' : 'none' }]);") > 0);
-  assert.ok(DAO.indexOf("q.iWisdom ? '次：運営の確認を待つ（報告3つと知恵カードはそろっています）'") > 0);
+  /* 11/27：知恵カードは ②「つまずいたところと学び」で置く。置いたら ② に ✓ */
+  assert.ok(INDEX.indexOf("mark: iWisdom ? '✓ 出した' : '', markShow: iWisdom ? 'inline' : 'none' }") > 0);
+  assert.ok(DAO.indexOf("'次：運営の確認を待つ（①と②はそろっています）'") > 0);
   /* 置いた直後：取り置いている知恵カードの一覧を捨て、読み直しを待たずに印を立て、クエストも読み直す */
   const sub = INDEX.slice(INDEX.indexOf('async function spWisdomSubmit'));
   const body = sub.slice(0, sub.indexOf('\n}\n'));
