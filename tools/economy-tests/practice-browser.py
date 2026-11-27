@@ -28,17 +28,19 @@ async def main():
    page.on('dialog',lambda d:d.accept())
    page.on('request',lambda r: calls.append(r.url.split('?')[0]) if '/api/economy/practice' in r.url else None)
    await page.goto('http://127.0.0.1:4257/test/shell'); f=page.frame_locator('iframe')
-   await f.locator('#practiceSection').wait_for(state='visible')
+   await f.locator('.agent-footer').evaluate('e=>{e.open=true}'); await f.locator('#practiceSection').wait_for(state='visible')
    await page.wait_for_function('window.auth?.currentUser?.uid')
-   await f.locator('#notice').filter(has_text='残高と履歴を更新しました').wait_for()
+   await f.locator('#spendable').filter(has_text='EMUER').wait_for()
    if width==375:
-    await f.locator('#taskType').select_option('guild_plan'); await f.locator('#goal').fill('Web3を学びギルドで実践する計画を作りたい')
-    await f.locator('#quoteButton').click(); await f.locator('#approval').wait_for(state='visible')
-    await f.locator('#paymentConsent').check(); await f.locator('#aiConsent').check(); await f.locator('#pay').click()
-    await f.locator('#history article').first.get_by_role('button',name='保存した下書き・計画を開く').wait_for(timeout=20000)
+    await f.locator('#goal').fill('Web3を学びギルドで実践する計画を作りたい')
+    await f.locator('#quoteButton').click();await f.locator('#approval').wait_for(state='visible')
+    # 11/27 やることは頼んだ文から自動で選ぶ。確認の札で選び直すと、その作業でもう一度確かめる
+    await f.locator('#taskType').select_option('guild_plan');await f.locator('#approval').wait_for(state='visible');await f.locator('#executionPlan li').first.wait_for()
+    await f.locator('#pay').click()
+    await f.locator('#history article').first.get_by_role('button',name='できた下書き・計画を開く').wait_for(timeout=20000)
     if LEGACY:
      r=await context.request.post('http://127.0.0.1:4257/test/legacy-artifact',data={'role':'alice'}); assert r.ok
-    await f.locator('#history article').first.get_by_role('button',name='保存した下書き・計画を開く').click()
+    await f.locator('#history article').first.get_by_role('button',name='できた下書き・計画を開く').click()
    else:
     await f.locator('#loadArtifacts').click(); await f.get_by_role('button',name='ギルド活動の準備を開く').first.click()
    await f.locator('#artifactDialog').wait_for(state='visible')
@@ -87,9 +89,9 @@ async def main():
    async def delayed_login(route):
     await asyncio.sleep(1.5); await route.continue_()
    if width==375: await context.route('**/test/login?role=alice', delayed_login)
-   await page.reload(); await f.locator('#practiceSection').wait_for(state='visible')
+   await page.reload(); await f.locator('.agent-footer').evaluate('e=>{e.open=true}'); await f.locator('#practiceSection').wait_for(state='visible')
    await page.wait_for_function('window.auth?.currentUser?.uid')
-   await f.locator('#notice').filter(has_text='残高と履歴を更新しました').wait_for()
+   await f.locator('#spendable').filter(has_text='EMUER').wait_for()
    await f.locator('#loadPractice').click()
    if width==375: await context.unroute('**/test/login?role=alice', delayed_login)
    await f.get_by_role('button',name='ギルド活動の準備の実践記録を開く').click()

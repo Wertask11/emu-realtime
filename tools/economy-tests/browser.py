@@ -25,12 +25,12 @@ async def main():
    assert '5 EMUER' in await frame.locator('#pay').inner_text()
    # Quotes do not debit anything. Actual payment once, in this isolated demo environment only.
    if width==390:
-    await frame.locator('#pay').click();assert '両方' in await frame.locator('#notice').inner_text()
-    await frame.locator('#paymentConsent').check();await frame.locator('#aiConsent').check();await frame.locator('#pay').click()
+    # 11/27 「承認して実行」を押すことが同意（押す前に、払う額とAIへ送るものを札に書いている）
+    await frame.locator('#pay').click()
     await page.wait_for_timeout(1600);await frame.locator('#refresh').click()
-    await frame.locator('#history').filter(has_text='完了').wait_for()
+    await frame.locator('#history').filter(has_text='できました').wait_for()
     assert await frame.locator('#spendable').inner_text()=='95 EMUER'
-    await frame.get_by_text('外部交換の対応状況',exact=True).click();await frame.locator('#simulate').click();await frame.locator('#simulation').filter(has_text='停止').wait_for()
+    await frame.locator('.agent-footer').evaluate('e=>{e.open=true}');await frame.locator('#simulate').click();await frame.locator('#simulation').filter(has_text='停止').wait_for()
     show=frame.get_by_role('button',name='結果を見る')
     if await show.count(): await show.first.click()
     await frame.locator('#history').filter(has_text='ID:').wait_for()
@@ -41,7 +41,7 @@ async def main():
     await frame.locator('#goal').fill('保存しない目的')
     await page.evaluate("testSignIn('bob')");await page.wait_for_timeout(1600)
     assert await frame.locator('#goal').input_value()==''
-    await frame.locator('#history').filter(has_text='まだ依頼はありません').wait_for()
+    await frame.locator('#history').filter(has_text='頼んだ結果がここに出ます').wait_for()
     assert await frame.locator('#spendable').inner_text()=='100 EMUER'
    if width==1280:
     await page.screenshot(path=str(OUT/'desktop-approval-1280.png'),full_page=True)

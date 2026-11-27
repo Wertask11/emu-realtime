@@ -13,217 +13,228 @@
     <script src="/economy/app.js" defer></script>
   </head>
   <body>
+    <!-- 11/27 オーナー：「頼むの画面、文字多すぎるし、そんなのいらん」「文で指示する→5EMUERかかる→承認→実行→結果提示」。
+         1画面で、頼む → 確認（5 EMUER）→ 承認 → 実行 → 結果、だけにした。
+         料金・返却・台帳・AI送信の決まり（backend/economy）は変えていない。細かい条件は下の「くわしく」にまとめた。 -->
     <header>
       <button id="back" type="button">← 戻る</button
-      ><span>Emu for SchoolPark</span>
+      ><span>冷蔵庫くんに頼む</span>
     </header>
-    <main>
-      <div class="intro">
-        <p class="eyebrow">EMUER・サービス</p>
-        <h1>冷蔵庫くんに頼む</h1>
-      <p id="offeringMode" class="sub">提供状況を確認しています…</p>
-        <p id="introDescription">
-          Plus・Pro会員向けに、活動の候補を探す仕事を冷蔵庫くんに依頼できます。料金と条件を確認してからお申し込みください。
-        </p>
-      </div>
-      <p id="notice" role="status" aria-live="polite">
-        ログイン状態を確認しています…
-      </p>
-      <section aria-labelledby="explorerTitle">
-        <div class="title">
-          <h2 id="explorerTitle">依頼できる仕事と料金</h2>
-          <b class="price">1依頼 5 EMUER</b>
+    <main class="agent">
+      <p id="offeringMode" hidden>提供状況を確認しています…</p>
+      <p id="introDescription" hidden></p>
+
+      <form id="requestForm" class="agent-ask">
+        <label id="goalLabel" for="goal" class="agent-q">
+          <img src="/assets/mascot.jpg" alt="" />なにをする？
+        </label>
+        <textarea
+          id="goal"
+          rows="2"
+          maxlength="300"
+          placeholder="例：クエストを持ってきて／知識の下書きを作って"
+          required
+        ></textarea>
+        <div class="agent-chips" id="requestExamples">
+          <button type="button" data-example="いま受けられるクエストを持ってきて">
+            クエストを持ってきて
+          </button>
+          <button type="button" data-example="気づいたことを知識の投稿にしたいので、下書きを作って">
+            知識の下書きを作って
+          </button>
+          <button type="button" data-example="今のEMUERで何ができる？Cityで使えるものを持ってきて">
+            EMUERの使い道
+          </button>
         </div>
-        <p id="workScope">
-          初期運用では、公式5ギルドの名称と短い説明から、あなたの目的に関連する活動を探します。
+        <div class="agent-row">
+          <button id="quoteButton" class="primary" type="submit" disabled>
+            頼む（5 EMUER）
+          </button>
+          <span class="agent-bal">使える <strong id="spendable">—</strong></span>
+        </div>
+        <p id="availability" class="agent-state" hidden>提供状況を確認しています…</p>
+        <p id="notice" role="status" aria-live="polite"></p>
+      </form>
+
+      <div id="approval" class="agent-card" hidden>
+        <p class="agent-k">確認</p>
+        <p id="approvalGoal" class="agent-goal"></p>
+        <div id="workOptions" class="agent-kind">
+          <label for="taskType">やること</label>
+          <select id="taskType">
+            <option value="">探して持ってくる</option>
+          </select>
+        </div>
+        <ol id="executionPlan" class="agent-plan"></ol>
+        <p class="agent-price">
+          <strong>5 EMUER</strong>（うまくいかなかったときは全額戻ります）
         </p>
-        <details>
-          <summary>依頼できること・利用条件</summary>
-          <p class="sub">
-            検索・比較・提案まで。購入・参加・契約・送金を代わりに行うことはありません。既存の無料AI機能の条件は変わりません。
-          </p>
-          <ul
-            id="workTypes"
-            class="work-types"
-            aria-label="依頼できる仕事の範囲"
+        <div class="agent-row">
+          <button id="pay" class="primary" type="button">承認して実行（5 EMUER）</button
+          ><button id="cancel" type="button">やめる</button>
+        </div>
+        <p class="agent-fine">
+          「承認して実行」を押すと、使えるEMUERから5 EMUERを払い、<span
+            id="aiConsentText"
+            >目的の種類と対象の公開資料をGoogle Geminiへ送ります。</span
           >
-            <li>LEARN・WORK・PLAY・CONNECT・WEB3の公式ギルドを探す</li>
-            <li>公式の説明を比較し、活動紹介の画面へ案内する</li>
-          </ul>
-          <p id="workLimit" class="sub">
-            現在は上記の探索・比較・候補提案が対象です。文章制作などの汎用作業は依頼できません。正常に探索が完了した場合、候補が見つからなくても5
-            EMUERがかかります。
-          </p>
+          <a href="/privacy.html" target="_blank" rel="noopener">データの取り扱い</a>
+        </p>
+        <details class="agent-more">
+          <summary>くわしい条件</summary>
+          <p id="quoteTerms"></p>
         </details>
-        <p class="sub">
-          正常に探索が完了した場合、候補が見つからなくても5 EMUERがかかります。
-        </p>
-        <p id="availability" class="availability">提供状況を確認しています…</p>
-        <p class="sub">
-          Free・Light（7日間のLight体験を含む）では利用できません。Plus・Proでも、年齢・提供地域などのAI利用資格の確認が必要です。
-        </p>
-        <div id="crossOptions" hidden>
-          <p class="sub">
-            例を押すと入力欄に入ります。料金確認や支払いは別の操作です。
-          </p>
-          <div class="actions" id="requestExamples">
-            <button
-              type="button"
-              data-example="美容師としての経験を誰かの役に立てたい"
-            >
-              経験を知識にしたい
-            </button>
-            <button type="button" data-example="今のEMUERで何ができる？">
-              EMUERの使い道
-            </button>
-            <button type="button" data-example="Web3を学んで実際に試したい">
-              Web3を試したい
-            </button>
-          </div>
-          <details>
-            <summary>本人の情報を参照して絞る（任意）</summary>
-            <p class="sub">
-              チェックした情報だけを本人認証後に参照します。残高・実績はGoogle
-              Geminiへ送りません。商品候補は依頼料金の支払い後の残高で確認します。
-            </p>
-            <label id="balanceOption" class="check"
-              ><input
-                type="checkbox"
-                id="balanceConsent"
-              />利用可能なEMUERで商品候補を絞ることを許可する</label
-            >
-            <label id="achievementsOption" class="check"
-              ><input
-                type="checkbox"
-                id="achievementsConsent"
-              />自分の星・クエスト証明書の記録件数を確認することを許可する</label
-            >
-            <button id="inspectContext" type="button">
-              許可した本人情報を確認する（決済なし）
-            </button>
-            <p id="contextPreview" role="status"></p>
-          </details>
+      </div>
+
+      <section id="historySection" class="agent-results" aria-labelledby="historyTitle">
+        <div class="title">
+          <h2 id="historyTitle">結果</h2>
+          <button id="refresh" type="button">更新</button>
         </div>
-        <form id="requestForm">
-          <div id="workOptions" hidden>
-            <label for="taskType">冷蔵庫くんに任せる作業</label>
-            <select id="taskType">
-              <option value="">調べて比較する（既存の探索）</option>
-            </select>
-            <p class="sub">
-              作業では、本人専用の下書き・計画を保存します。利用許諾済み資料が不足する作業は決済前に停止します。公開・参加・購入はしません。
-            </p>
+        <div id="history">読み込み中…</div>
+      </section>
+
+      <details class="agent-more agent-footer">
+        <summary>くわしく（保存した計画・EMUER・条件）</summary>
+        <section aria-labelledby="artifactsTitle">
+          <h2 id="artifactsTitle">保存した計画</h2>
+          <p class="sub">
+            本人専用です。公開投稿・Knowledge
+            Labの下書きとは別に保存します。原則30日間、最新20件を表示します。
+          </p>
+          <button id="loadArtifacts" type="button">保存した計画を開く</button>
+          <div id="artifactList"></div>
+        </section>
+        <section
+          id="practiceSection"
+          hidden
+          aria-labelledby="practiceSectionTitle"
+        >
+          <h2 id="practiceSectionTitle">実践して、知識として届ける</h2>
+          <p>
+            保存した計画から、やってみる → 記録する → 振り返る →
+            知識として届ける。実践の開始・記録・手動整理は追加料金なしです。
+          </p>
+          <button id="loadPractice" type="button">実践記録を開く</button>
+          <div id="practiceList"></div>
+        </section>
+        <section aria-labelledby="balanceTitle">
+          <h2 id="balanceTitle">EMUERの内訳</h2>
+          <div class="balances">
+            <div>
+              <small>ウォレット残高</small><strong id="wallet">—</strong>
+            </div>
+            <div>
+              <small>未受取報酬の記録</small><strong id="pending">—</strong>
+            </div>
+            <div>
+              <small>受取承認中の拘束額</small><strong id="held">—</strong>
+            </div>
+            <div>
+              <small>依頼処理中（支払い済み）</small
+              ><strong id="processing">—</strong>
+            </div>
           </div>
-          <label for="paymentMethod">支払い方法を選ぶ</label>
+          <p class="sub">
+            「使える」は、このサービスに使える未受取EMUERです。各残高は別の記録です。受取承認中の報酬は、重複利用を防ぐため支払いに使えません。
+          </p>
+          <label for="paymentMethod">支払い方法</label>
           <select id="paymentMethod">
-            <option value="emuer_ledger">
-              アプリ内EMUERで支払う（5 EMUER）
-            </option>
+            <option value="emuer_ledger">アプリ内EMUERで支払う（5 EMUER）</option>
             <option id="walletMethodOption" value="emuer_chain" disabled>
               ウォレットのEMUERで支払う（準備中）
             </option>
           </select>
           <p id="walletAvailability" class="sub">
-            ウォレット決済は安全性・返却体制の確認中です。既存のアプリ内決済を利用できます。
+            ウォレット決済は安全性・返却体制の確認中です。
           </p>
-          <label id="goalLabel" for="goal">何を見つけたいですか？</label
-          ><textarea
-            id="goal"
-            rows="3"
-            maxlength="300"
-            placeholder="例：学んだ知識を実際に試すギルドを探したい"
-            required
-          ></textarea>
+          <button id="city" type="button">City公式ショップで使う →</button>
+        </section>
+        <section id="crossOptions" hidden>
+          <h2>本人の情報を参照して絞る（任意）</h2>
           <p class="sub">
-            氏名・連絡先・秘密は入力しないでください。入力文はサービス内で照合します。承認後、目的の種類と関連順の公開資料をGoogle
-            Geminiへ送信します。入力文そのものや内部IDは送りません。
+            チェックした情報だけを本人認証後に参照します。残高・実績はGoogle
+            Geminiへ送りません。商品候補は依頼料金の支払い後の残高で確認します。
           </p>
-          <section aria-labelledby="balanceTitle">
-            <h2 id="balanceTitle">あなたのEMUER</h2>
-            <div class="balances">
-              <div>
-                <small>このサービスに使える未受取EMUER</small
-                ><strong id="spendable">—</strong>
-              </div>
-            </div>
-            <details>
-              <summary>残高の内訳・City公式ショップ</summary>
-              <div class="balances">
-                <div>
-                  <small>ウォレット残高</small><strong id="wallet">—</strong>
-                </div>
-                <div>
-                  <small>未受取報酬の記録</small><strong id="pending">—</strong>
-                </div>
-                <div>
-                  <small>受取承認中の拘束額</small><strong id="held">—</strong>
-                </div>
-                <div>
-                  <small>依頼処理中（支払い済み）</small
-                  ><strong id="processing">—</strong>
-                </div>
-              </div>
-              <p class="sub">
-                各残高は別の記録です。依頼処理中の額は、既に支払った額で、残高への加算はできません。受取承認中の報酬は、重複利用を防ぐため支払いに使えません。確認できない残高は「未確認」と表示します。
-              </p>
-              <button id="city" type="button">City公式ショップで使う →</button>
-            </details>
-          </section>
-          <button id="quoteButton" class="primary" type="submit" disabled>
-            料金と条件を確認する
-          </button>
-        </form>
-        <div id="approval" hidden>
-          <h3>依頼の確認</h3>
-          <p id="quoteTerms"></p>
-          <ol id="executionPlan"></ol>
-          <label class="check"
+          <label id="balanceOption" class="check"
             ><input
-              id="paymentConsent"
               type="checkbox"
-            />料金と返却条件を確認し、未受取EMUERから5
-            EMUERを支払います。</label
-          ><label class="check"
-            ><input id="aiConsent" type="checkbox" /><span id="aiConsentText"
-              >目的の種類と対象の公開資料をGoogle
-              Geminiへ送信することに同意します。</span
-            ><a href="/privacy.html" target="_blank" rel="noopener"
-              >データの取り扱い</a
-            ></label
+              id="balanceConsent"
+            />利用可能なEMUERで商品候補を絞ることを許可する</label
           >
-          <div class="actions">
-            <button id="pay" class="primary" type="button">
-              5 EMUERで依頼する</button
-            ><button id="cancel" type="button">やめる</button>
-          </div>
-        </div>
-        <details>
-          <summary>利用上限・無料AI枠について</summary>
+          <label id="achievementsOption" class="check"
+            ><input
+              type="checkbox"
+              id="achievementsConsent"
+            />自分の星・クエスト証明書の記録件数を確認することを許可する</label
+          >
+          <button id="inspectContext" type="button">
+            許可した本人情報を確認する（決済なし）
+          </button>
+          <p id="contextPreview" role="status"></p>
+        </section>
+        <section>
+          <h2>できること・決まり</h2>
+          <p id="workScope" class="sub">
+            Emu・SchoolPark の中（知識・クエスト・ギルド・City・EMUER など）を調べて持ってきたり、下書き・計画を作って保存します。
+          </p>
+          <ul id="workTypes" class="work-types" aria-label="依頼できる仕事の範囲"></ul>
+          <p id="workLimit" class="sub">
+            正常に終わった場合は、候補が見つからなくても5 EMUERがかかります。
+          </p>
+          <p class="sub">
+            購入・参加・契約・送金・連絡を代わりに行うことはありません。開く・決めるのは本人です。氏名・連絡先・秘密は入力しないでください。
+          </p>
+          <p class="sub">
+            Plus・Pro会員向けです。Free・Light（7日間のLight体験を含む）では利用できません。年齢・提供地域などのAI利用資格の確認も必要です。
+          </p>
           <p class="sub">
             本人3依頼／日・全体20依頼／日・同時2件まで（日本時間）。依頼専用の上限は入力・出力合計100,000
             tokens／日、1依頼の予約上限5,000
-            tokensです。初期運用は設定された開始時点から7日間です。受付した依頼は失敗時も当日の枠に数えます。Cityの商品交換回数とは別枠です。
-            無料AI枠を保護するため、全体2依頼／分と、米国太平洋時間の日付でも20依頼・100,000
-            tokensの追加上限があります。無料枠を超えて有料モデルへ自動で切り替えることはありません。
+            tokensです。受付した依頼は失敗時も当日の枠に数えます。無料枠を超えて有料モデルへ自動で切り替えることはありません。
           </p>
+          <p class="sub">
+            AIの候補は関連性を保証するものではありません。参加条件や販売状況は、移動先の最新情報を確認してください。
+          </p>
+        </section>
+        <section>
+          <h2>外部交換の対応状況</h2>
+          <p class="sub">
+            現在のEMUERは自由移転を制限しているため、外部トークンへの交換には対応していません。交換レートや市場価格は表示しません。
+          </p>
+          <button id="simulate" type="button">接続の模擬確認</button>
+          <p id="simulation" role="status"></p>
+        </section>
+      </details>
+
+      <section id="operations" hidden>
+        <details id="operationsPanel">
+          <summary>運用状況（運営者のみ）</summary>
+          <p class="sub">
+            ここに表示するのは依頼専用の記録です。Googleプロジェクト全体の残り枠は、<a
+              href="https://aistudio.google.com/rate-limit"
+              target="_blank"
+              rel="noopener"
+              >AI Studio</a
+            >でも確認してください。
+          </p>
+          <p class="sub">
+            Firestore読取上限は50,000回/日（2026-11-09確認）。共有プロジェクトの使用量は
+            <a
+              href="https://console.firebase.google.com/project/emusch-2a111/firestore/usage"
+              target="_blank"
+              rel="noopener"
+              >Firebase Consoleの使用状況</a
+            >で確認してください。この画面はライブ残量を取得していません。workerはクォータ障害時に待機し、新規受付を停止します。
+          </p>
+          <button id="refreshOperations" type="button">監視状況を更新</button>
+          <pre
+            id="operationsStatus"
+            style="white-space: pre-wrap; overflow-wrap: anywhere"
+          ></pre>
         </details>
       </section>
-      <section id="historySection" aria-labelledby="historyTitle">
-        <div class="title">
-          <h2 id="historyTitle">依頼の結果・支払い履歴</h2>
-          <button id="refresh" type="button">更新</button>
-        </div>
-        <div id="history">読み込み中…</div>
-      </section>
-      <section aria-labelledby="artifactsTitle">
-        <h2 id="artifactsTitle">保存した計画</h2>
-        <p class="sub">
-          本人専用です。公開投稿・Knowledge
-          Labの下書きとは別に保存します。原則30日間、最新20件を表示します。
-        </p>
-        <button id="loadArtifacts" type="button">保存した計画を開く</button>
-        <div id="artifactList"></div>
-      </section>
+
       <dialog id="artifactDialog" aria-labelledby="artifactHeading">
         <div class="title">
           <h2 id="artifactHeading">保存した計画</h2>
@@ -286,19 +297,6 @@
           投稿画面を開く（自動入力・公開はしません）
         </button>
       </dialog>
-      <section
-        id="practiceSection"
-        hidden
-        aria-labelledby="practiceSectionTitle"
-      >
-        <h2 id="practiceSectionTitle">実践して、知識として届ける</h2>
-        <p>
-          保存した計画から、やってみる → 記録する → 振り返る →
-          知識として届ける。実践の開始・記録・手動整理は追加料金なしです。
-        </p>
-        <button id="loadPractice" type="button">実践記録を開く</button>
-        <div id="practiceList"></div>
-      </section>
       <dialog id="practiceDialog" aria-labelledby="practiceHeading">
         <div class="title">
           <h2 id="practiceHeading">やってみる・実践の記録</h2>
@@ -417,46 +415,6 @@
           ><button id="polygonClose" type="button">閉じる</button>
         </div>
       </dialog>
-      <section id="operations" hidden>
-        <details id="operationsPanel">
-          <summary>運用状況（運営者のみ）</summary>
-          <p class="sub">
-            ここに表示するのは依頼専用の記録です。Googleプロジェクト全体の残り枠は、<a
-              href="https://aistudio.google.com/rate-limit"
-              target="_blank"
-              rel="noopener"
-              >AI Studio</a
-            >でも確認してください。
-          </p>
-          <p class="sub">
-            Firestore読取上限は50,000回/日（2026-11-09確認）。共有プロジェクトの使用量は
-            <a
-              href="https://console.firebase.google.com/project/emusch-2a111/firestore/usage"
-              target="_blank"
-              rel="noopener"
-              >Firebase Consoleの使用状況</a
-            >で確認してください。この画面はライブ残量を取得していません。workerはクォータ障害時に待機し、新規受付を停止します。
-          </p>
-          <button id="refreshOperations" type="button">監視状況を更新</button>
-          <pre
-            id="operationsStatus"
-            style="white-space: pre-wrap; overflow-wrap: anywhere"
-          ></pre>
-        </details>
-      </section>
-      <section>
-        <details>
-          <summary>外部交換の対応状況</summary>
-          <p>
-            現在のEMUERは自由移転を制限しているため、外部トークンへの交換には対応していません。交換レートや市場価格は表示しません。
-          </p>
-          <button id="simulate" type="button">接続の模擬確認</button>
-          <p id="simulation" role="status"></p>
-        </details>
-      </section>
-      <p class="sub">
-        AIの候補は関連性を保証するものではありません。参加条件や販売状況は、移動先の最新情報を確認してください。
-      </p>
     </main>
   </body>
 </html>

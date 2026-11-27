@@ -37,14 +37,14 @@ async function page(width=390){
   return r.fulfill({json:{ok:true,...data}});
  });
  await p.goto(base+'/shell');const f=p.frameLocator('iframe');await f.locator('#spendable').filter({hasText:'100 EMUER'}).waitFor();
- return {c,p,f,state,async submit(){await f.locator('#goal').fill('学んだ知識を実際に試すギルドを探したい');await f.locator('#quoteButton').click();await f.locator('#paymentConsent').check();await f.locator('#aiConsent').check();await f.locator('#pay').click();await f.locator('#history article').filter({hasText:'支払い済み・実行待ち'}).waitFor();await f.locator('#pay').waitFor({state:'hidden'});},async tick(ms=5100){await p.clock.runFor(ms);}};
+ return {c,p,f,state,async submit(){await f.locator('#goal').fill('学んだ知識を実際に試すギルドを探したい');await f.locator('#quoteButton').click();await f.locator('#pay').click();await f.locator('#history article').filter({hasText:'支払い済み・もうすぐ始めます'}).waitFor();await f.locator('#pay').waitFor({state:'hidden'});},async tick(ms=5100){await p.clock.runFor(ms);}};
 }
-test('completion and result appear automatically without resubmission, losing a new draft/consent, or extra polling',async()=>{
+test('completion and result appear automatically without resubmission, losing a new draft/confirmation, or extra polling',async()=>{
  const t=await page();try{
- await t.submit();assert.equal(t.state.payments,1);assert.equal(t.state.operations,0);assert.ok((await t.f.locator('#history').innerText()).includes('15:48:46（日本時間）'));
- await t.f.locator('#goal').fill('次の依頼の下書き');await t.f.locator('#quoteButton').click();await t.f.locator('#paymentConsent').check();await t.f.locator('#goal').focus();
+ await t.submit();assert.equal(t.state.payments,1);assert.equal(t.state.operations,0);assert.ok((await t.f.locator('#history').innerText()).includes('15:48:46'));
+ await t.f.locator('#goal').fill('次の依頼の下書き');await t.f.locator('#quoteButton').click();await t.f.locator('#approval').waitFor();await t.f.locator('#goal').focus();
  t.state.jobState='completed';await t.tick();await t.f.locator('#history h3').filter({hasText:'LEARN Guild'}).waitFor();
- assert.equal(await t.f.locator('#goal').inputValue(),'次の依頼の下書き');assert.equal(await t.f.locator('#paymentConsent').isChecked(),true);
+ assert.equal(await t.f.locator('#goal').inputValue(),'次の依頼の下書き');assert.equal(await t.f.locator('#approval').isVisible(),true,'確認の札は消えない');
  assert.equal(await t.f.locator('#goal').evaluate(e=>document.activeElement===e),true);assert.equal(t.state.payments,1);
  await t.f.locator('#spendable').filter({hasText:'95 EMUER'}).waitFor();const polls=t.state.polls;await t.tick(16000);assert.equal(t.state.polls,polls);
  if(evidence){await t.f.locator('#historySection').scrollIntoViewIfNeeded();await t.p.screenshot({path:path.join(evidence,'auto-result-390.png'),fullPage:true});}
@@ -54,9 +54,9 @@ test('completion and result appear automatically without resubmission, losing a 
 test('an in-flight old-account poll cannot display another account result or continue polling it',async()=>{
  const t=await page();let release;try{
  await t.submit();t.state.hold=new Promise(r=>{release=r;});await t.tick();
- await t.p.evaluate(()=>testSignIn('bob'));await t.tick(1100);await t.f.locator('#history').filter({hasText:'まだ依頼はありません'}).waitFor();
+ await t.p.evaluate(()=>testSignIn('bob'));await t.tick(1100);await t.f.locator('#history').filter({hasText:'頼んだ結果がここに出ます'}).waitFor();
  t.state.jobState='completed';release();await t.p.waitForTimeout(50);
- assert.equal(await t.f.locator('#history').innerText(),'まだ依頼はありません。');assert.equal(await t.f.locator('#goal').inputValue(),'');
+ assert.equal(await t.f.locator('#history').innerText(),'頼んだ結果がここに出ます。');assert.equal(await t.f.locator('#goal').inputValue(),'');
  const polls=t.state.polls;await t.tick(11000);assert.equal(t.state.polls,polls);assert.equal(t.state.payments,1);
  }finally{release?.();await t.c.close();}
 });
