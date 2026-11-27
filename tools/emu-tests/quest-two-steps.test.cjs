@@ -125,5 +125,6 @@ test('完走までの手順は ① と ② の2つ。クエストの詳細のボ
   assert.ok(DAO.includes("finish: () => { try { window.parent.spQuestFinish(e.id, this); } catch (err) {} },"));
   assert.ok(!DAO.includes('{{ cur.logStuck }}') && !DAO.includes('{{ cur.logFound }}'), '3回に分けるボタンは出さない');
   assert.ok(!DAO.includes('onClick="{{ cur.wisdom }}"'), '知恵カードだけを置くボタンは出さない（② で置く）');
+  assert.ok(DAO.includes('value="{{ cur.canFinishLate }}"'), '締め切ったあとも ② を出せる');
   assert.ok(DAO.includes('>4</div>') && DAO.includes('運営が確認して完走'));
 });

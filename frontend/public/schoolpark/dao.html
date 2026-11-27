@@ -759,6 +759,11 @@ if (window.top === window.self) window.location.replace('/');
                 </div>
                 <section class="sp-ux-before-accept" data-tour="quest-before-join"><b>参加前に確認</b><p>内容を見るだけでは参加になりません。「受ける」を押すと、あなたの名前が参加者一覧に載り、報告を書けるようになります。</p><dl><div><dt>締切</dt><dd>{{ cur.due }}</dd></div><div><dt>所要時間</dt><dd>要確認（本文・提出物・手順を確認）</dd></div><div><dt>配分予算</dt><dd>{{ cur.budget }}</dd></div></dl><p>完走には、3種類の報告と知恵カード、運営の確認が必要です。個別のやること・評価・手順も確認してください。受けるだけで報酬は確定しません。</p></section>
                 <button type="button" class="sp-ux-accept" onClick="{{ cur.commit }}" style="text-align:center; padding:14px; border-radius:8px; font-size:15px; font-weight:700; cursor:pointer; background:{{ cur.btnBg2 }}; color:{{ cur.btnFg2 }}; border:1px solid #ffb366">{{ cur.btnLabel }}</button>
+                <!-- 11/27：締め切ったあとも ② を出せる（締切のあとに書き上げる人がいるため。前の「知恵カードを置く」と同じ）。
+                     受付中は、報告欄の ② ボタンから出す -->
+                <sc-if value="{{ cur.canFinishLate }}">
+                  <div onClick="{{ cur.finish }}" style="text-align:center; padding:12px; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; background:transparent; color:var(--emu-brand-soft); border:1px solid rgba(208,226,190,.45)" style-hover="background:rgba(208,226,190,.12)">② つまずいたところと学び</div>
+                </sc-if>
                 <sc-if value="{{ cur.canClose }}">
                   <div onClick="{{ cur.close }}" style="text-align:center; padding:12px; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; background:transparent; color:rgba(244,241,234,.66); border:1px solid rgba(244,241,234,.28)" style-hover="background:rgba(244,241,234,.08)">クエストを完了にする</div>
                 </sc-if>
@@ -2262,6 +2267,7 @@ class Component extends DCLogic {
       /* 知恵カードは「やった人」が置く。だから受けたかどうかだけを見る。
          閉じたあとも置ける。締切のあとに書き上げる人がいるため。 */
       canWisdom: !e.isFounder && !!e.iTook,
+      canFinishLate: !e.isFounder && !!e.iTook && e.status === 'CLOSED',
       canLog: !e.isFounder && !!e.iTook && e.status !== 'CLOSED',
       /* やってみた記録（1枚）。受けていなくても出せる（出すときに受ける） */
       canTry: !e.isFounder && e.status !== 'CLOSED' && e.oneSheet !== false,
