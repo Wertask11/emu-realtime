@@ -3219,13 +3219,14 @@ body.emu-profile-open #emuValueProfile { display:grid; }
 /* ── SchoolPark パスポート ──
    ログインすると作られる CHESアドレスに、名前と居場所を与えたもの。
    SchoolPark からも Emu からも開くので、どちらの色にも寄せず暗い札にする。 */
-#spPassport, #spVoteSheet, #spQuestSheet, #spWisdomSheet, #spLogSheet, #spTrySheet, #spMobileMenu { display:none; position:fixed; inset:0; z-index:1800; }
+#spPassport, #spVoteSheet, #spQuestSheet, #spWisdomSheet, #spLogSheet, #spTrySheet, #spFinishSheet, #spMobileMenu { display:none; position:fixed; inset:0; z-index:1800; }
 body.sp-passport-open #spPassport,
 body.sp-vote-open #spVoteSheet,
 body.sp-quest-open #spQuestSheet,
 body.sp-wisdom-open #spWisdomSheet,
 body.sp-log-open #spLogSheet,
 body.sp-try-open #spTrySheet,
+body.sp-finish-open #spFinishSheet,
 body.sp-menu-open #spMobileMenu { display:flex; align-items:center; justify-content:center; }
 .spp-veil { position:absolute; inset:0; background:rgba(10,9,7,.62); }
 /* 議題を出す入力欄。札と同じ見た目にそろえる */
@@ -3249,7 +3250,7 @@ body.sp-menu-open #spMobileMenu { display:flex; align-items:center; justify-cont
 .smm-row:hover { background:rgba(244,241,234,.1); }
 .smm-go { font-size:12px; font-weight:400; color:rgba(244,241,234,.5); }
 .smm-label { font-size:11px; letter-spacing:.06em; color:rgba(244,241,234,.5); margin:16px 0 2px; }
-#spPassport .spp-card, #spVoteSheet .spp-card, #spQuestSheet .spp-card, #spWisdomSheet .spp-card, #spLogSheet .spp-card, #spTrySheet .spp-card, #spMobileMenu .spp-card {
+#spPassport .spp-card, #spVoteSheet .spp-card, #spQuestSheet .spp-card, #spWisdomSheet .spp-card, #spLogSheet .spp-card, #spTrySheet .spp-card, #spFinishSheet .spp-card, #spMobileMenu .spp-card {
   position:relative; width:min(420px, calc(100vw - 32px)); max-height:calc(100vh - 48px);
   overflow-y:auto; background:#141310; color:#F4F1EA; border-radius:16px;
   padding:26px 24px 22px; box-shadow:0 30px 70px -20px rgba(0,0,0,.7);
@@ -3262,7 +3263,7 @@ body.sp-menu-open #spMobileMenu { display:flex; align-items:center; justify-cont
    この指定は広い画面のときだけ効くので、スマホの見え方は変わらない。 */
 @media (min-width:900px) {
   #spQuestSheet .spp-card, #spVoteSheet .spp-card,
-  #spWisdomSheet .spp-card, #spLogSheet .spp-card, #spTrySheet .spp-card {
+  #spWisdomSheet .spp-card, #spLogSheet .spp-card, #spTrySheet .spp-card, #spFinishSheet .spp-card {
     width:min(720px, calc(100vw - 80px));
     max-height:calc(100vh - 64px);
     padding:32px 34px 28px;
@@ -13875,10 +13876,12 @@ const editingId = editingPostId;
        届いていなかった。初投稿キャンペーンは、公開できたあとに emu-post-published で
        知らせて、wallet-success-ui.js がサーバーに送る（初めてかどうかはサーバーが決める）。 */
 
+    let _shownId = '';
     if (editingId) {
       // 【更新モード】
       const postRef = window.fbLib.doc(window.db, "posts", editingId);
       await window.fbLib.updateDoc(postRef, postData);
+      _shownId = editingId;
       emuRecordPostAudit(editingId, "edit");
       window.emuLabSyncIndex?.(editingId);
       console.log("✅ 投稿を更新しました:", editingId);
@@ -13899,6 +13902,7 @@ const editingId = editingPostId;
          「ちょうど1つ増えていること」と食い違って、書き込みごと弾かれる。 */
       if (!_questId) await _emuAddUsage(_postBatch, 'post');
       await _postBatch.commit();
+      _shownId = _labPostRef.id;
       window.emuLabSyncIndex?.(_labPostRef.id);
       window.EmuAnalytics?.track('post_publish', { surface:'feed' }, _labPostRef.id);
       window.dispatchEvent(new CustomEvent("emu-post-published", { detail: { postId: _labPostRef.id, address: authorAddress } }));
@@ -13922,10 +13926,14 @@ const editingId = editingPostId;
     // ✅ 正しい関数名で閉じる
     closePostForm();
 
-    // 💡 location.reload() の代わりにこれを入れる！
-console.log("🔄 画面をリロードせずに投稿一覧を更新します...");
-    await refreshAllPosts();
+    /* 11/27 オーナー：「投稿し終わったあとはすぐに反映して。閉じるのも遅い」。
+       前は一覧の読み直し（refreshAllPosts）が全部終わってから「書けました」を返していたので、
+       書く画面が閉じるまで数秒〜十数秒かかっていた（裏の読み直しが走っていると、その後ろに並ぶのでもっと）。
+       書けた時点で返して閉じ、書いた投稿はすぐ一覧の先頭に出す。読み直しは裏で続ける。 */
+    if (_shownId) window.emuKnowledgeShowPost?.(_shownId, postData, !!editingId);
     finishKnowledgeRequest(true, "");
+    console.log("🔄 画面をリロードせずに投稿一覧を更新します...");
+    refreshAllPosts().catch(e => console.warn('投稿一覧の読み直しに失敗', e));
 
 // ★ room2に投稿アクションを通知（開いていない場合は累積）
     const room2Frame = document.getElementById("room2Frame");
@@ -19851,6 +19859,13 @@ function spQuestReportGuide(q) {
   }, wisdom: wisdomAsk || 'やってみて分かったことを、一文に削る。' };
 }
 
+/* ① の報告の呼び名（11/27）。日を分けて出すクエストは「何をやるか」を先に書く。
+   案件もの（#002 WORK）は提出物を出し、#001 LEARN などは試したことを書く。 */
+function spQuestFirstStep(q) {
+  const kind = spQuestReportGuide(q).kind;
+  return kind === 'listed' ? '① 何をやるか' : kind === 'case' ? '① 提出物を出す' : '① やったこと';
+}
+
 /* クエスト1件を、枠の中で使える形にする。
    受けた人と途中報告は、その場で数える。 */
 async function _spShapeQuest(q, p, mine, gdefs, app) {
@@ -20021,23 +20036,32 @@ async function _spShapeQuest(q, p, mine, gdefs, app) {
     /* 完走までの手順。報告の3つが、このクエストで何を指すか。
        受けている人には、自分が出した報告に ✓ を付ける。 */
     reportSteps: (function () {
+      /* 11/27 オーナー：「三回も報告はめんどい」。手順は2つにした。
+         ① はじめに「何をやるか」（やってみた）
+         ② 終わったら「つまずいたところと学び」（つまずいた・気づいた・知恵カードを一度に）
+         報告3種と知恵カードが残るのは今までと同じなので、完走の確かめ方は変わらない。 */
       const g = spQuestReportGuide(q);
-      const done = {};
-      if (mine) logs.forEach(function (l) {
-        if (String(l.author || '').toLowerCase() === mine) done[l.kind] = true;
-      });
-      return SP_LOG_KINDS.map(function (k, i) {
-        const s = g.steps[k];
-        return { no: String(i + 2), head: k + '（' + s.as + '）', ask: s.ask,
-          mark: iTook && done[k] ? '✓ 出した' : '', markShow: iTook && done[k] ? 'inline' : 'none' };
-      }).concat([{ no: '5', head: '知恵カードを1枚置く', ask: g.wisdom || 'やってみて分かったことを、一文に削る。',
-        mark: iWisdom ? '✓ 置いた' : '', markShow: iWisdom ? 'inline' : 'none' }]);
+      const did = !!(mine && logs.some(function (l) {
+        return String(l.author || '').toLowerCase() === mine && l.kind === 'やってみた';
+      }));
+      const stuckAsk = g.steps['つまずいた'] ? g.steps['つまずいた'].ask : '';
+      /* ① の中身はクエストの形で違う。日を分けるクエストは「何をやるか（開始宣言）」、
+         案件もの（#002 WORK）は提出物、#001 LEARN は試したこと。 */
+      return [
+        { no: '2', head: spQuestFirstStep(q) + (g.kind === 'listed' ? '（' + g.steps['やってみた'].as + '）' : ''), ask: g.steps['やってみた'].ask,
+          mark: iTook && did ? '✓ 出した' : '', markShow: iTook && did ? 'inline' : 'none' },
+        { no: '3', head: '② ' + (g.kind === 'listed' ? '終わったら：' : '') + 'つまずいたところと学び（知恵カード）',
+          ask: (stuckAsk ? 'つまずいたところ：' + stuckAsk + '\n' : '') + '学び：' + (g.wisdom || 'やってみて分かったことを、一文に削る。'),
+          mark: iWisdom ? '✓ 出した' : '', markShow: iWisdom ? 'inline' : 'none' }
+      ];
     })(),
     /* やってみた記録（1枚）で出してよいクエストか（11/20）。
        #001 LEARN（試す）と #002 WORK（提出もの）は、やったあとに一度で書ける。
        #003 PLAY・#004・#005・特殊は「開始宣言 → 中間 → 最終」と日を分けて出す決まりなので、1枚では出させない
        （始める前に「分かったこと」と知恵カードまで書かせることになる）。 */
     oneSheet: spQuestReportGuide(q).kind !== 'listed',
+    /* ① のボタンの名前（11/27） */
+    firstStepLabel: spQuestFirstStep(q),
     /* 報告欄の頭の一言。案件ものは、提出物をどこに出すかを先に言う。 */
     logLead: spQuestReportGuide(q).kind === 'case'
       ? '提出物は「やってみた」で出します'
@@ -20119,7 +20143,7 @@ window.spQuestToggle = async function (questId, app) {
       }) });
     }
     alert(joined
-      ? 'クエストを受けました。詳細から「やってみた／つまずいた／気づいた」を記録できます。'
+      ? 'クエストを受けました。詳細から、はじめに「①」を出してください。終わったら「② つまずいたところと学び」を出します。'
       : 'クエストから降りました。');
   } catch (e) {
     alert('参加状態を確認・更新できませんでした。通信を確かめて、もう一度お試しください。');
@@ -20778,7 +20802,7 @@ window.openSpTryForm = async function (questId, app, pick) {
   if (!q) { alert('クエストが見つかりませんでした。'); return; }
   const requiresPost = q.series === 'general' && Number(q.questNumber) === 1;
   if (spQuestReportGuide(q).kind === 'listed') {
-    alert('このクエストは「開始宣言 → 中間 → 最終」と、日を分けて報告します。\n\nクエストの詳細の「やってみた／つまずいた／気づいた」から、その時々に出してください。');
+    alert('このクエストは日を分けて出します。はじめに「① 何をやるか」、終わったら「② つまずいたところと学び」です。\n\nクエストの詳細の「①」「②」から出してください。');
     return;
   }
   _spTry = { quest: q, app: app || null, pick: pick && pick.id ? { id: String(pick.id), title: String(pick.title || '（Emuの投稿）') } : null, requiresPost: requiresPost };
@@ -20933,10 +20957,10 @@ async function spTrySubmit() {
     const stage = e && e.stage;
     if (stage === 'wisdom') {
       alert('報告は3つとも残しました。\n\n知恵カードは置けませんでした：\n' + e.message
-        + '\n\nクエストの詳細の「知恵カードを置く」から、あとで置けます。');
+        + '\n\nクエストの詳細の「② つまずいたところと学び」から、あとで置けます。');
       closeSpTryForm();
     } else if (stage === 'log') {
-      alert((e.created ? '報告を' + e.created + 'つ残したところで止まりました（「' + e.kind + '」を残せませんでした）。\n\n残りは、クエストの詳細の「1つずつ書く」から出してください。'
+      alert((e.created ? '報告を' + e.created + 'つ残したところで止まりました（「' + e.kind + '」を残せませんでした）。\n\n残りは、クエストの詳細の「①」「② つまずいたところと学び」から出してください。'
         : '記録を残せませんでした。もう一度お試しください。'));
       if (e.created) closeSpTryForm();
     } else {
@@ -20957,6 +20981,134 @@ async function spTrySubmit() {
   }
 }
 window.spTrySubmit = spTrySubmit;
+
+/* ───── クエストの ②「つまずいたところと学び」（11/27） ─────
+   11/27 オーナー：「何をやるかを先に書いて、後でつまずいた所と経験から得た学び（知恵カード）を出せばいい。
+   三回も報告はめんどい。もっとシンプルにしたい」。
+   前は「やってみた」「つまずいた」「気づいた」を別々に3回出し、そのあと別の画面で知恵カードを置いていた。
+   いまは ① はじめに「何をやるか」（やってみた）を出し、② 終わったらこの1枚で
+   つまずいたところと学びを書く。② で「つまずいた」「気づいた」の報告と知恵カードを一度に残すので、
+   完走の確かめ方（サーバーの quest-completion.js とルール）は今までのまま変えない。 */
+let _spFinish = null, _spFinishBusy = false;
+function closeSpFinishForm() { if (!_spFinishBusy) document.body.classList.remove('sp-finish-open'); }
+window.closeSpFinishForm = closeSpFinishForm;
+window.spQuestFinish = async function (questId, app) {
+  if (questId === SpQuestStore.FOUNDER_ID || _spFinishBusy) return;
+  const p = await spPassportLoad();
+  if (!p) { alert('出すにはログインが必要です。'); return; }
+  if (!p.spid) { alert('知恵カードを置くには、SchoolParkパスポートが必要です。\n\n右上のアカウントからパスポートを開いて番号ができているか確かめてから、もう一度お試しください。'); return; }
+  let q = null, took = null, logs = null;
+  try {
+    [q, took, logs] = await Promise.all([
+      _spRestDoc('sp_quests/' + encodeURIComponent(questId), true),
+      _spRestDoc('sp_quests/' + encodeURIComponent(questId) + '/commits/' + encodeURIComponent(p.addr), true, true),
+      _spReadLogs(questId, true)
+    ]);
+  } catch (e) {
+    alert('クエストの記録を読めませんでした。通信を確かめて、もう一度お試しください。'); return;
+  }
+  if (!q) { alert('クエストが見つかりませんでした。'); return; }
+  q = Object.assign({ id: questId }, q);
+  if (!took) { alert('先にこのクエストを受けて、「' + spQuestFirstStep(q) + '」を出してください。'); return; }
+  const me = String(p.addr || '').toLowerCase();
+  const did = (logs || []).filter(function (l) {
+    return l && l.kind === 'やってみた' && String(l.author || '').toLowerCase() === me;
+  }).sort(function (a, b) { return (Number(b.at) || 0) - (Number(a.at) || 0); })[0];
+  if (!did) { alert('先に「' + spQuestFirstStep(q) + '」を出してください。\n\nそのあと、ここで、つまずいたところと学びを出します。'); return; }
+  /* 前の周がまだ認められていないなら止める（報告だけ残って知恵カードで断られないように） */
+  const approved = took.approved === true ? Math.max(0, Number(took.approvedRounds) || 0) : 0;
+  let placed = 0;
+  try {
+    (await _spAllWisdom(true) || []).forEach(function (w) {
+      if (w.questId === questId && String(w.author || '').toLowerCase() === me) placed++;
+    });
+  } catch (e) {}
+  if (placed > approved) {
+    alert('このクエストは、出した記録を運営が確かめているところです。\n\n確かめ終わる（完走として認められる）と、次の周を出せます。');
+    return;
+  }
+  _spFinish = { quest: q, app: app || null, did: did, logged: false };
+  const rg = spQuestReportGuide(q);
+  const text = function (id, v) { const el = document.getElementById(id); if (el) { el.textContent = v || ''; if (el.tagName === 'P' && el.id.endsWith('Guide')) el.hidden = !v; } };
+  const set = function (id, v) { const el = document.getElementById(id); if (el) el.value = v || ''; };
+  set('sfStuck', ''); set('sfInsight', '');
+  text('sfQuest', 'クエスト：' + (q.fullTitle || q.title || ''));
+  text('sfDid', 'はじめに書いたこと：' + String(did.body || '').slice(0, 120) + (String(did.body || '').length > 120 ? '…' : ''));
+  text('sfStuckGuide', rg && rg.kind !== 'trial' && rg.steps['つまずいた'] ? rg.steps['つまずいた'].ask : '');
+  text('sfInsightGuide', (rg && rg.wisdom) || '');
+  const btn = document.getElementById('sfSubmit');
+  if (btn) { btn.disabled = false; btn.textContent = '出す'; }
+  document.body.classList.add('sp-finish-open');
+};
+async function spFinishSubmit() {
+  if (_spFinishBusy || !_spFinish) return;
+  const val = function (id) { const el = document.getElementById(id); return el ? el.value.trim() : ''; };
+  const stuck = val('sfStuck'), insight = val('sfInsight');
+  if (!insight) { alert('経験から得た学びを書いてください（知恵カードになります）。'); return; }
+  const p = await spPassportLoad();
+  if (!p) { alert('出すにはログインが必要です。'); return; }
+  const f = _spFinish, q = f.quest, questId = q.id, did = f.did;
+  const btn = document.getElementById('sfSubmit');
+  const step = function (t) { if (btn) btn.textContent = t; };
+  _spFinishBusy = true;
+  if (btn) btn.disabled = true;
+  const done = function () { _spFinishBusy = false; if (btn) { btn.disabled = false; btn.textContent = '出す'; } };
+  try {
+    /* 報告2つ（つまずいた・気づいた）。知恵カードで断られて出し直すときは、もう書かない（二重にしない）。 */
+    if (!f.logged) {
+      const at = Date.now();
+      const base = { author: p.addr, authorName: p.name,
+        fromPostId: String(did.fromPostId || '').slice(0, 80), fromPostTitle: String(did.fromPostTitle || '').slice(0, 120),
+        sourceLogId: String(did.id || '') };
+      const rows = [{ kind: 'つまずいた', body: stuck || '（特になし）' }, { kind: '気づいた', body: insight }];
+      const created = [];
+      for (let i = 0; i < rows.length; i++) {
+        step('記録しています…（' + (i + 1) + '/3）');
+        const data = Object.assign({}, base, { kind: rows[i].kind, body: rows[i].body.slice(0, 2000), at: at + i });
+        const s = await _spLogSave(questId, data);
+        created.push(Object.assign({ id: s.id }, data));
+      }
+      f.logged = true;
+      try { _spMemoDrop('readall:sp_quests/' + encodeURIComponent(questId) + '/logs'); } catch (e) {}
+      const pending = _spPendingQuestLogs.get(questId) || [];
+      created.forEach(function (c) { pending.push(c); });
+      _spPendingQuestLogs.set(questId, pending);
+    }
+    /* 知恵カード（置くのはサーバー。3種類そろっているかをそこで確かめる） */
+    step('知恵カードを置いています…（3/3）');
+    const r = await fetch('https://emu-realtime.onrender.com/api/schoolpark/quest-completions/'
+      + encodeURIComponent(questId) + '/wisdom',
+      { method: 'POST', headers: await emuAuthHeaders(true), body: JSON.stringify({
+        fromPostId: String(did.fromPostId || '').slice(0, 80),
+        fromPostTitle: String(did.fromPostTitle || '').slice(0, 120),
+        knowledge: String(did.fromPostTitle || q.knowledge || '').slice(0, 200),
+        experiment: _spTryFirstSentence(String(did.body || ''), 200),
+        insight: insight.slice(0, 200),
+        authorName: p.name
+      }) });
+    const data = await r.json().catch(function () { return {}; });
+    if (!r.ok) {
+      alert('つまずいたところと学びは記録に残しました。\n\n知恵カードは置けませんでした：\n' + _spWisdomErrorText(data)
+        + '\n\nもう一度「出す」を押すと、知恵カードだけ置き直します。');
+      return done();
+    }
+  } catch (e) {
+    alert(f.logged ? '知恵カードを置けませんでした。通信を確かめて、もう一度「出す」を押してください。'
+      : '記録を残せませんでした。通信を確かめて、もう一度お試しください。');
+    return done();
+  }
+  done();
+  _spFinish = null;
+  document.body.classList.remove('sp-finish-open');
+  try { _spMemoDrop('readall:sp_wisdom'); } catch (e) {}
+  window.EmuAnalytics?.track('quest_finish_done', {}, questId + ':' + Date.now());
+  spWisdomCelebrate(insight, f.app);
+  if (f.app) {
+    window.spDaoLoadQuests(f.app).catch(function () {});
+    window.spDaoLoadWisdom(f.app).catch(function () {});
+  }
+}
+window.spFinishSubmit = spFinishSubmit;
 
 /* クエストを出す。
    道は2つある。どちらも残す。
@@ -30928,6 +31080,18 @@ async function sendEmuFeedback() {
     return run;
   }
   window.syncKnowledgeFrame = syncKnowledgeFrame;
+  /* 11/27 オーナー：「投稿し終わったあとはすぐに反映して」。
+     書けた投稿を、一覧の読み直し（数秒〜十数秒かかる）を待たずに、すぐ一覧の先頭へ出す。
+     読み直しはこのあと裏で走り、届いたら置き換わる。 */
+  window.emuKnowledgeShowPost = function (id, data, edited) {
+    try {
+      if (!id || !data) return;
+      const row = plainKnowledgePost({ id, data: () => ({ ...data,
+        createdAt: data.createdAt instanceof Date ? data.createdAt.toISOString() : (data.createdAt || new Date().toISOString()) }) });
+      const addrs = knowledgeAuthorAddrs([row]);
+      sendKnowledge({ type:'emu-knowledge-post-added', post: row, edited: !!edited, authors: knowledgeAuthorsKnown(addrs) });
+    } catch (e) { console.warn('書いた投稿をすぐ出せませんでした', e); }
+  };
 
   /* ───── 新しい知識が届いたら、その場で出す ─────
 
@@ -31591,7 +31755,33 @@ async function sendEmuFeedback() {
     </div>
 
     <button type="button" class="spp-cta" id="stSubmit" onclick="spTrySubmit()">記録する</button>
-    <p class="spp-note">出すと、このクエストを受けたことになります。出した記録は書き換えも削除もできません。<br>画像を添えたいときは、クエストの詳細の「1つずつ書く」から出せます。</p>
+    <p class="spp-note">出すと、このクエストを受けたことになります。出した記録は書き換えも削除もできません。<br>画像を添えたいときは、クエストの詳細の「①」から出せます。</p>
+  </div>
+</div>
+
+<!-- 11/27 オーナー：「何をやるかを先に書いて、後でつまずいた所と経験から得た学び（知恵カード）を出せばいい。三回も報告はめんどい」。
+     クエストの報告は2回にした。① はじめに「何をやるか」（やってみた）。② 終わったら、この1枚。
+     ここで出すと「つまずいた」「気づいた」の報告と知恵カードが一度に残る（完走の確かめ方はサーバーもルールも今までと同じ）。 -->
+<div id="spFinishSheet" role="dialog" aria-modal="true" aria-labelledby="sfTitleLabel">
+  <div class="spp-veil" onclick="closeSpFinishForm()"></div>
+  <div class="spp-card">
+    <div class="spp-head">
+      <div class="spp-head-text">
+        <div class="spp-kicker">STEP 2</div>
+        <div class="spp-title" id="sfTitleLabel">つまずいたところと学び</div>
+      </div>
+      <button type="button" class="spp-close" onclick="closeSpFinishForm()" aria-label="閉じる">✕</button>
+    </div>
+    <p class="spp-note" id="sfQuest" style="margin:0"></p>
+    <p class="spp-note" id="sfDid" style="margin:6px 0 0"></p>
+    <label class="spv-label" for="sfStuck">つまずいたところ（なければ空のままで大丈夫）</label>
+    <p class="spp-note" id="sfStuckGuide" hidden style="margin:0 0 6px"></p>
+    <textarea class="spv-in spv-area" id="sfStuck" maxlength="2000" placeholder="何をしようとして、どこで止まったか。"></textarea>
+    <label class="spv-label" for="sfInsight">経験から得た学び（知恵カードになります・200字まで）</label>
+    <p class="spp-note" id="sfInsightGuide" hidden style="margin:0 0 6px"></p>
+    <textarea class="spv-in spv-area" id="sfInsight" maxlength="200" placeholder="やってみて分かったことを、一文に削る"></textarea>
+    <button type="button" class="spp-cta" id="sfSubmit" onclick="spFinishSubmit()">出す</button>
+    <p class="spp-note">出すと、知恵ライブラリに知恵カードが置かれます。運営が確かめると完走です。出した記録は書き換えも削除もできません。</p>
   </div>
 </div>
 

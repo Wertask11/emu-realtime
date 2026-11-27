@@ -69,6 +69,7 @@ test('unified navigation preserves existing auth, contracts, Quest business logi
  const withoutErrorReporter=src=>src.replace(/[ \t]*<script src="\/client-errors\.js"><\/script><!--[^\n]*-->\n/,'');
  // 11/7: knowledge.html のマイライブラリー（下書きを30件ずつ・Knowledge Lab の下書きも並べる）、投稿画面の「詳しく整理する（任意）」、投稿のあとの案内、下書きの一覧（置き場所をひとつに）、左の列（並び替え・マイライブラリーを外し、冷蔵庫くんとプロフィールを置く）を変えた。
  // 同じ日、創業者の決定で見学の「新着20件」を廃止した（membership-policy.js の readerScope を全段 all-public に）。
+ // 11/27 オーナー（「投稿し終わったあとはすぐに反映して」）：書いた投稿をすぐ一覧の先頭へ出す受け口（emu-knowledge-post-added）を足した。approved-2026-11-07.json の6つ目に含めて戻す（tools/emu-tests/post-instant.test.cjs）。
  // 認めた変更（approved-2026-11-07.json）をそれぞれちょうど1か所だけ元に戻してから比べる。ほかの変更は今までどおり落ちる。
  const undoApproved=(file,src)=>{for(const [now,was] of (require('./approved-2026-11-07.json')[file.replace('frontend/public/','')]||[])){assert.equal(src.split(now).length,2,file+': 認めた変更が見つからない');src=src.replace(now,was);}return src;};
  const before=readBefore('frontend/public/index.html'),current=fs.readFileSync(path.join(root,'frontend/public/index.html'),'utf8');
@@ -89,7 +90,9 @@ test('unified navigation preserves existing auth, contracts, Quest business logi
  // Only the "leave this Quest?" question moved from the browser's confirm() (which automation tools auto-cancel)
  // to the in-page emuAsk. Undo exactly that one line, then the whole function must still equal the baseline.
  const QUEST_LEAVE_NOW="if (!(await emuAsk('このクエストから降りますか？', { ok: '降りる' }))) return;", QUEST_LEAVE_WAS="if (!confirm('このクエストから降りますか？')) return;";
- const pinned=(src,fn)=>{let g=grab(src,fn);if(src===current&&fn==='spQuestToggle'){assert.equal(g.split(QUEST_LEAVE_NOW).length,2,'spQuestToggle: 認めた変更が見つからない');g=g.replace(QUEST_LEAVE_NOW,QUEST_LEAVE_WAS);}return g;};
+ // 11/27 オーナー（「三回も報告はめんどい」）：報告を ①・② の2回にしたので、受けたときの案内の1行だけを2回の言い方に変えた。これも1か所だけ戻して比べる。
+ const QUEST_JOIN_NOW="'クエストを受けました。詳細から、はじめに「①」を出してください。終わったら「② つまずいたところと学び」を出します。'", QUEST_JOIN_WAS="'クエストを受けました。詳細から「やってみた／つまずいた／気づいた」を記録できます。'";
+ const pinned=(src,fn)=>{let g=grab(src,fn);if(src===current&&fn==='spQuestToggle'){for(const [now,was] of [[QUEST_LEAVE_NOW,QUEST_LEAVE_WAS],[QUEST_JOIN_NOW,QUEST_JOIN_WAS]]){assert.equal(g.split(now).length,2,'spQuestToggle: 認めた変更が見つからない');g=g.replace(now,was);}}return g;};
  for(const fn of ['spEnsureSchoolParkAccess','emuAuthHeaders','accountGo','spQuestToggle','spQuestLog','spQuestWisdom','spWisdomSubmit','spOpenPlay']) assert.equal(pinned(current,fn),grab(before,fn),fn);
  for(const file of ['firestore.rules','backend/identity.js','backend/entitlement.js','backend/membership-policy.js','backend/quest-completion.js','frontend/public/knowledge.html','frontend/public/Emu_room2/echo-field.html','frontend/public/ringo-game.html','frontend/public/daily-gods/index.html','frontend/public/daily-gods/game.js','frontend/public/schoolpark/south-elevator.html']) assert.equal(withoutErrorReporter(undoApproved(file,fs.readFileSync(path.join(root,file),'utf8'))),readBefore(file),file);
  const retired=fs.readFileSync(path.join(root,'frontend/public/schoolpark/dao.html'),'utf8');

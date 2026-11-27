@@ -302,7 +302,11 @@ test('出した人が受けていれば、完了のあとそのまま置ける',
 test('画面に、受けた人ぶんの入口がある', () => {
   assert.ok(DAO.indexOf('canWisdom:') >= 0, '結び付けが無い');
   assert.ok(DAO.indexOf('spQuestWisdom(e.id') >= 0, '呼び出しが無い');
-  assert.ok(DAO.indexOf('>知恵カードを置く<') >= 0, 'ボタンが無い');
+  /* 11/27 オーナー（「三回も報告はめんどい」）：知恵カードは ②「つまずいたところと学び」で一緒に置く。
+     受付中は報告欄の ②、締め切ったあとは横の ② から出せる（締切のあとに書き上げる人がいるため） */
+  assert.ok(DAO.indexOf('>② つまずいたところと学び<') >= 0, 'ボタンが無い');
+  assert.ok(DAO.indexOf("spQuestFinish(e.id") >= 0, '② の呼び出しが無い');
+  assert.ok(DAO.indexOf("canFinishLate: !e.isFounder && !!e.iTook && e.status === 'CLOSED',") >= 0, '締め切ったあとの入口が無い');
   /* 受けたかどうかだけを見る（閉じたあとも置ける） */
   assert.ok(DAO.indexOf("canWisdom: !e.isFounder && !!e.iTook,") >= 0,
     'canWisdom が status を見てしまっている');
