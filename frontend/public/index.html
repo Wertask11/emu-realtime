@@ -4129,6 +4129,7 @@ html, body { -webkit-tap-highlight-color: rgba(0,0,0,0); }
 <script src="/illustrations/sp-illustrations.js" defer></script>
 <script src="/economy/entry.js" defer></script>
 <script src="/reizo-float.js" defer></script><!-- 冷蔵庫くんの窓を本文の近くに出し、つかんで動かせるようにする（11/7） -->
+<script src="/economy/targets.js" defer></script><script src="/reizo/request-chat.js" defer></script><!-- 11/28 頼むも、聞くと同じ会話の窓で（reizo/request-chat.js） -->
 <script src="/reizo/mode-switch.js" defer></script><!-- 冷蔵庫くんを開くとまず「聞く」。左上の名前から 聞く・頼む・ガイド を切り替える（11/10） -->
 </head>
 <body>
@@ -11859,6 +11860,8 @@ async function spReizoSend() {
   const userAtSend = window.auth && window.auth.currentUser;
   input.value = '';
   _spReizoAppendMsg(q, true);
+  /* 11/28：左上で「📋 頼む」を選んでいるときは、ここで頼む（reizo/request-chat.js）。聞くと同じ窓のまま */
+  if (window.ReizoAsk && window.ReizoAsk.handle(q)) return;
   /* 11/10：「気づいたことを知識にしたい」を選んだあとは、冷蔵庫くんが聞き役になる（reizo/interview.js）。 */
   if (window.ReizoSeed && window.ReizoSeed.handle(q)) return;
   // Keep existing explicit skills and deterministic FAQ ahead of AI.
