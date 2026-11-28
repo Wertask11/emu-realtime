@@ -223,9 +223,33 @@
       row(bubbleOf(m), [button('📂 これまでの依頼を見る', 'rq-sub', function () { openEconomy(''); })]);
       return;
     }
-    if (job.state === 'refunded' || (job.payment && job.payment.refunded)) { say('うまくいかなかったので、5 EMUERは全額戻したよ🧊 言い方を変えて、もう一度頼んでみてね。'); return; }
+    if (job.state === 'refunded' || (job.payment && job.payment.refunded)) { say('うまくいかなかったので、5 EMUERは全額戻したよ🧊 言い方を変えて、もう一度頼んでみてね。'); showPosts(goal, userAt); return; }
     if (job.state !== 'completed') { say(ERRORS[job.error] || 'うまくいかなかったみたい🧊 「これまでの依頼」で確かめてね。'); return; }
     showResult(job);
+    if (!job.artifactId) showPosts(goal, userAt);
+  }
+  /* 11/28 オーナー：「私に合う」が当たるように。知識を読むの投稿からも、合いそうなものを出す（reizo/post-match.js）。
+     投稿はAIへ送らず、この端末で言葉とテーマの重なりで並べるだけ。料金はかからない */
+  async function showPosts(goal, userAt) {
+    if (!window.EmuPostMatch) return;
+    var found = null;
+    try { found = await window.EmuPostMatch.find(goal, 3); } catch (_) { found = null; }
+    if (userAt !== (window.auth && window.auth.currentUser) || !found || !found.length) return;
+    var msg = say('📖 知識を読むから、あなたに合いそうな投稿も見つけたよ');
+    var b = bubbleOf(msg);
+    found.forEach(function (f) {
+      var p = f.post, card = document.createElement('div'); card.className = 'rq-card';
+      var k = document.createElement('span'); k.className = 'rq-kind'; k.textContent = '知識を読む'; card.appendChild(k);
+      var t = document.createElement('b'); t.textContent = p.title; card.appendChild(t);
+      var who = document.createElement('div'); who.className = 'rq-next'; who.textContent = (p.displayName ? p.displayName + ' さん・' : '') + f.why; card.appendChild(who);
+      var body = String(p.body || '').replace(/\s+/g, ' ').trim();
+      if (body) { var d = document.createElement('div'); d.className = 'rq-why'; d.textContent = body.length > 80 ? body.slice(0, 80) + '…' : body; card.appendChild(d); }
+      card.appendChild(button('読む →', 'rq-open', function () { if (typeof window.spReizoClose === 'function') window.spReizoClose(); if (window.closeSpRoom) window.closeSpRoom(); if (typeof window.emuSearchKnowledge === 'function') window.emuSearchKnowledge(p.title); }));
+      b.appendChild(card);
+    });
+    var note = document.createElement('div'); note.className = 'rq-note';
+    note.textContent = '頼んだ言葉と、あなたが書いた投稿・役に立ったを押した投稿のテーマから選んだよ。投稿はAIには送っていないよ。';
+    b.appendChild(note); scroll();
   }
   function showResult(job) {
     if (job.artifactId) {
