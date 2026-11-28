@@ -77,6 +77,10 @@
     closeMenus();
     if (mode === 'ask') {
       closeRequestWin();
+      if (window.ReizoAsk && window.ReizoAsk.active()) {
+        var chatOpen = !!(document.getElementById('spReizoPanel') && document.getElementById('spReizoPanel').classList.contains('open'));
+        window.ReizoAsk.leave(!chatOpen);
+      }
       if (typeof window.spReizoOpen === 'function') window.spReizoOpen();
       /* 11/27 オーナー：「冷蔵庫くんを押したとき、勝手に文字入力の画面になってストレス」。
          入力欄には置かない（スマホでキーボードが勝手に出る）。開いたら候補が見えるまま。
@@ -86,6 +90,14 @@
       return;
     }
     if (mode === 'request') {
+      /* 11/28 オーナー：「頼むにタブかえる→聞くと同じ画面で、頼める」。会話の窓のまま「頼む」にする（reizo/request-chat.js）。
+         これまでの依頼・保存した計画は、会話の中のボタンから /economy/ を開いて見る */
+      if (window.ReizoAsk) {
+        closeRequestWin();
+        if (typeof window.spReizoOpen === 'function') window.spReizoOpen();
+        if (!window.ReizoAsk.active()) window.ReizoAsk.enter();
+        return;
+      }
       closeChat();
       if (typeof window.openReizoRequest === 'function') window.openReizoRequest(invoker);
       else if (window.ReizoTour && window.ReizoTour.announce) window.ReizoTour.announce('依頼画面を開けませんでした。再読み込みしてからお試しください。');
@@ -129,7 +141,7 @@
       var open = menu.hidden;
       closeMenus();
       if (!open) return;
-      menu.innerHTML = menuHtml(current);
+      menu.innerHTML = menuHtml(typeof current === 'function' ? current() : current);
       menu.style.top = anchorTop() + 'px'; menu.style.left = '10px';
       menu.hidden = false; button.setAttribute('aria-expanded', 'true');
       var first = menu.querySelector('[aria-checked="true"]') || menu.querySelector('[data-mode]'); if (first) first.focus();
@@ -139,7 +151,7 @@
       e.stopPropagation();
       if (item.getAttribute('aria-disabled') === 'true') return;
       var mode = item.getAttribute('data-mode');
-      if (mode === current) { closeMenus(); button.focus(); return; }
+      if (mode === (typeof current === 'function' ? current() : current)) { closeMenus(); button.focus(); return; }
       go(mode, button);
     });
     menu.addEventListener('keydown', function (e) {
@@ -164,7 +176,8 @@
     btn.appendChild(img); btn.appendChild(names);
     var now = document.createElement('span'); now.className = 'sp-reizo-mode-now'; now.textContent = '💬 聞く';
     title.appendChild(now);
-    attach(panel, btn, 'ask', function () { return header.offsetTop + header.offsetHeight - 2; });
+    /* いま聞くか頼むか（会話の窓は同じ。頼むは reizo/request-chat.js） */
+    attach(panel, btn, function () { return window.ReizoAsk && window.ReizoAsk.active() ? 'request' : 'ask'; }, function () { return header.offsetTop + header.offsetHeight - 2; });
   }
   /* 頼む窓の左上にも同じ切り替え。頼む窓は開くときに作られるので、見張って付ける。 */
   function mountRequest() {

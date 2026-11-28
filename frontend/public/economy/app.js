@@ -1094,7 +1094,11 @@
   });
   $("openPosting").onclick = openPosting;
   reset();
-  refresh();
+  /* 11/28 会話の窓の「頼む」で作った下書き・計画を、ここで開く（?artifact=ID） */
+  refresh().then(() => {
+    const id = new URLSearchParams(location.search).get("artifact");
+    if (id && /^[A-Za-z0-9_-]{1,100}$/.test(id) && user()) artifactUI.open(id);
+  });
   setInterval(() => {
     if (user() !== identityKey) {
       reset();
