@@ -51,7 +51,7 @@
       + '<span class="lk-quote-who">🔁 ' + esc(nameOf(q)) + ' さんの投稿</span>'
       + '<b class="lk-quote-title">' + esc(q.title) + '</b>'
       + '<span class="lk-quote-body">' + esc(snippet(q.body, 90)) + '</span>'
-      + '<span class="lk-quote-full" hidden>' + esc(q.body) + '</span></button>';
+      + '<span class="lk-quote-full" hidden>' + esc(q.body) + (q.imageUrl && /^(https:|data:image\/)/.test(q.imageUrl) ? '<img class="lk-quote-img" alt="" loading="lazy" src="' + esc(q.imageUrl) + '">' : '') + '</span></button>';
   }
   function decorate() {
     document.querySelectorAll('#posts article.card').forEach(function (card) {
@@ -92,14 +92,21 @@
     var title = document.getElementById('title'), field = title && title.closest ? title.closest('.field') : null;
     if (title) title.required = !link;
     if (field) field.hidden = !!link;
+    /* 11/28 オーナー：「引用の時はテーマもいらない」。テーマの欄も出さず、投稿にもテーマを付けない */
+    var theme = document.getElementById('composeThemeFold');
+    if (theme) { theme.hidden = !!link; theme.style.display = link ? 'none' : ''; }
     if (!link) { if (box) box.remove(); return; }
     if (!box) {
       box = document.createElement('div'); box.setAttribute('data-link-preview', ''); box.className = 'lk-preview';
       var after = form.querySelector('#composerTitle');
       form.insertBefore(box, after ? after.nextSibling : form.firstChild);
     }
+    var q = byId(link.id) || {};
     box.innerHTML = '<div class="lk-preview-k">🔁 この投稿を引用します</div>'
-      + '<div class="lk-preview-t"><b>' + esc(link.name) + '</b> さん「' + esc(snippet(link.title, 60)) + '」</div>'
+      + '<button type="button" class="lk-preview-t" data-link-expand aria-expanded="false" title="押すと全文">'
+      + '<b>' + esc(link.name) + '</b> さん「' + esc(snippet(link.title, 60)) + '」'
+      + '<span class="lk-quote-body">' + esc(snippet(q.body, 60)) + '</span>'
+      + '<span class="lk-quote-full" hidden>' + esc(q.body || '') + '</span></button>'
       + '<small>ふだんの投稿と同じく、1回の投稿に数えます。</small>'
       + '<button type="button" class="lk-preview-x" data-link-clear aria-label="引用を外す">外す</button>';
   }
@@ -124,6 +131,8 @@
       if (link && d) {
         d.quotePostId = link.id;
         if (!d.title) d.title = autoTitle(d.body);
+        var tagInput = document.getElementById('tags');
+        d.tags = tagInput ? String(tagInput.value || '').trim() : '';
       }
       return d;
     };
@@ -158,9 +167,10 @@
     '.lk-quote-title{display:block;margin-top:2px;font-size:14px}',
     '.lk-quote-body,.lk-quote-full{display:block;margin-top:4px;font-size:13px;line-height:1.7;color:#5c554c;white-space:pre-wrap;overflow-wrap:anywhere}',
     '.lk-quote-full[hidden],.lk-quote-body[hidden]{display:none}',
+    '.lk-quote-img{display:block;max-width:100%;max-height:320px;margin-top:8px;border-radius:10px}',
     '.lk-preview{position:relative;margin:0 0 12px;padding:10px 64px 10px 12px;border:1px solid #f0c98a;border-radius:12px;background:#fff8ea}',
     '.lk-preview-k{font-size:12px;font-weight:800;color:#a15c00}',
-    '.lk-preview-t{margin-top:2px;font-size:14px;overflow-wrap:anywhere}',
+    '.lk-preview-t{display:block;width:100%;margin-top:2px;padding:0;border:0;background:none;font:inherit;font-size:14px;color:inherit;text-align:left;cursor:pointer;overflow-wrap:anywhere}',
     '.lk-preview small{display:block;margin-top:2px;color:#8a8070;font-size:12px}',
     '.lk-preview-x{position:absolute;top:8px;right:8px;padding:4px 10px;border:1px solid #d8cdbb;border-radius:999px;background:#fff;font:inherit;font-size:12px;cursor:pointer}'
   ].join('\n');
