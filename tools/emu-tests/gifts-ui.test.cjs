@@ -17,7 +17,7 @@ const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '
 /* 親の EmuGifts の偽物。呼ばれた中身を残す。 */
 const FAKE_GIFTS = `window.calls=[];window.EmuGifts={
   signedIn:()=>true, petals:()=>{window.petaled=(window.petaled||0)+1;},
-  me:async ()=>({ok:true,balance:6,sentToday:0,dailyLimit:100}),
+  me:async ()=>({ok:true,balance:window.spendable??6,sentToday:0,dailyLimit:100}),
   on:fn=>{window.giftListener=fn;return ()=>{};},
   cheerCounts:async ids=>{window.calls.push(['counts',ids]);return {ok:true,counts:{p1:{people:2,total:8}}};},
   cheer:async (id,n)=>{window.calls.push(['cheer',id,n]);return {ok:true,people:3,total:8+n,balance:42};},
@@ -111,18 +111,39 @@ test('知識を読む：応援のボタン（自分の投稿には出さない�
 
 test('クエスト：協賛の袋を出す・協賛する・完走した人はご褒美を受け取る', async () => {
   const page = await browser.newPage();
+  await page.addInitScript(() => { window.spendable = 60; });
   page.on('dialog', (d) => d.accept());
   try {
     await page.goto(base + '/quest.html');
     const d = page.frameLocator('#d');
     await d.locator('[data-quest-sponsor]').getByText('あと 3人分').waitFor();
     assert.equal(await d.locator('.sp-quest-side > *').nth(1).getAttribute('data-quest-sponsor'), '', '黒い箱のすぐ下に置く');
+    /* 11/28：協賛に使えるアプリ内EMUERを、押す前に出す */
+    await d.locator('[data-sponsor-spend]').getByText('60 EMUER').waitFor();
     await d.locator('[data-sponsor-amount="10"]').click();
     await d.locator('[data-quest-sponsor]').getByText('協賛 3人').waitFor();
     assert.deepEqual((await page.evaluate(() => window.calls)).find((c) => c[0] === 'sponsor'), ['sponsor', 'q1', 10]);
     await d.locator('[data-sponsor-claim]').click();
     await d.locator('[data-quest-sponsor]').getByText('10 EMUER を受け取りました').waitFor();
     assert.equal(await d.locator('[data-sponsor-claim]').count(), 0);
+  } finally { await page.close(); }
+});
+
+/* 11/28 オーナー：「パソコン版で協賛しようとしたけど失敗した」。実EMUER（ウォレットの分）しか無い人は、送る前に分かるように */
+test('クエスト：協賛に使えるアプリ内EMUERが足りないときは、送らずに理由を出す（実EMUERは使えない）', async () => {
+  const page = await browser.newPage();
+  const said = [];
+  page.on('dialog', (d) => { said.push(d.message()); d.accept(); });
+  await page.addInitScript(() => { window.spendable = 0; });
+  try {
+    await page.goto(base + '/quest.html');
+    const d = page.frameLocator('#d');
+    await d.locator('[data-sponsor-spend]').getByText('0 EMUER').waitFor();
+    assert.match(await d.locator('[data-sponsor-spend]').textContent(), /実EMUER（ウォレットにある分）は協賛に使えません/);
+    await d.locator('[data-sponsor-amount="5"]').click();
+    await page.waitForTimeout(200);
+    assert.match(said.join('\n'), /足りません（いま 0 EMUER）/);
+    assert.equal((await page.evaluate(() => window.calls)).filter((c) => c[0] === 'sponsor').length, 0, 'サーバーへは送らない');
   } finally { await page.close(); }
 });
 

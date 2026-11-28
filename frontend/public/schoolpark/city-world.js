@@ -2,6 +2,9 @@ import * as T from './vendor/city-three.min.js';
 import { isBlocked, slideMove } from './city-motion.js';
 import { buildProduct, PLACEMENTS } from './city-products-3d.js';
 import { createAtmosphere, PLAZA } from './city-atmosphere.js';
+import { buildAvatar } from './city-avatar.js';
+import { createWeather } from './city-weather.js';
+import { createWish, WISH_NEAR } from './city-wish.js';
 
 const VIEWPOINTS = {
   street:{x:7,z:11,lookX:0,lookZ:1}, entrance:{x:0,z:2.6,lookX:0,lookZ:-3,lookY:1.25},
@@ -14,7 +17,9 @@ const VIEWPOINTS = {
   // 広場（朝は噴水、昼はクリスタル、夜はやぐら）を、少し見上げる
   plaza:{x:PLAZA.x+9.5,z:PLAZA.z+5.5,lookX:PLAZA.x,lookZ:PLAZA.z,lookY:3.4},
   // あそび場（ゲームセンター）の前。ゲーム機の画面が見える高さ
-  arcade:{x:-7.7,z:4.3,lookX:-12.3,lookZ:4.6,lookY:1.33}
+  arcade:{x:-7.7,z:4.3,lookX:-12.3,lookZ:4.6,lookY:1.33},
+  // 願いの泉（広場のまんなかの置物：朝は噴水・昼はクリスタル・夜はやぐらの太鼓）の前
+  wish:{x:PLAZA.x+4,z:PLAZA.z+3.9,lookX:PLAZA.x,lookZ:PLAZA.z,lookY:2.8}
 };
 /* 11/26 オーナー：City の中に遊ぶ場所を作る（ゲームセンターのような所）。近づいたらボタンが出て遊べる。
    公式店舗の左どなり。朝・夜の屋台（x=-14）、広場、旗のロープ、植木とぶつからない所に置く。
@@ -30,7 +35,7 @@ const ARCADE_NEAR = 3.9;
    sideSign があるときは、公式店舗と同じ大きさ・同じつくりの店を右どなり（x=+13.5）に建て、
    sideProducts をその店の中の台に並べる（選べる）。 */
 const SIDE_X = 13.5;
-export function createWorld(canvas, { products = [], sideProducts = [], mainSign = 'THE FIELD STORE', sideSign = '', time = 'day', plays = [], onSelect = () => {}, onFocus = () => {}, onNear = () => {}, onLost = () => {} } = {}) {
+export function createWorld(canvas, { products = [], sideProducts = [], mainSign = 'THE FIELD STORE', sideSign = '', time = 'day', plays = [], view: startView = 'first', onSelect = () => {}, onFocus = () => {}, onNear = () => {}, onLost = () => {} } = {}) {
   const renderer = new T.WebGLRenderer({canvas,antialias:true,alpha:false,powerPreference:'low-power'});
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1,1.5));
   renderer.outputColorSpace=T.SRGBColorSpace;
@@ -40,7 +45,7 @@ export function createWorld(canvas, { products = [], sideProducts = [], mainSign
   const camera=new T.PerspectiveCamera(64,1,.08,240);camera.rotation.order='YXZ';
   // 店の南の広場まで歩ける（前は x±10・z15 まで）
   const bounds={minX:-16,maxX:sideSign?20:12,minZ:-8,maxZ:24}, boxes=[], disposables=new Set();
-  let yaw=0,pitch=0,drag=null,joystick={x:0,y:0},moveTarget=null,blockedFrames=0,raf=0,last=0,dead=false,paused=false,visible=true,frames=0,near=null;
+  let yaw=0,pitch=0,drag=null,joystick={x:0,y:0,run:false},moveTarget=null,blockedFrames=0,raf=0,last=0,dead=false,paused=false,visible=true,frames=0,near=null;
   const keys=new Set(), ray=new T.Raycaster(), pointer=new T.Vector2(), abort=new AbortController();
   const options={signal:abort.signal};
   const mat=(color,more={}) => {const m=new T.MeshStandardMaterial({color,roughness:.85,...more});disposables.add(m);return m;};
@@ -258,11 +263,60 @@ export function createWorld(canvas, { products = [], sideProducts = [], mainSign
   let atmosphere=null;
   try{atmosphere=createAtmosphere(T,{scene,camera,renderer,lights:{hemi,sun,fill},texture,label,obstacle,disposables},time);canvas.dataset.time=atmosphere.mode;}
   catch(error){console.warn('City atmosphere unavailable',error);}
-  function resize(){const r=canvas.getBoundingClientRect();if(r.width<1||r.height<1)return;renderer.setSize(r.width,r.height,false);camera.aspect=r.width/r.height;camera.updateProjectionMatrix();}
+  /* 11/28 オーナー：「アバターの追加」「リアルタイム天気の同期と、カスタム天候の追加」「没入感のある世界観に」。
+     camera は「自分の目」（歩く・ぶつかる・位置の記録はこれまでどおりこれで決める）。
+     アバター視点では、うしろ斜め上のカメラ（viewCam）から自分（冷蔵庫くん）を映す。画面の真ん中は、目の先にある物に合わせる。 */
+  const viewCam=new T.PerspectiveCamera(60,1,.08,240);
+  let viewMode=startView==='third'?'third':'first',snapView=true,cameraReach=1,pace='stop',aimDistance=6,aimFrame=0,bob=0,runBlend=0;
+  const avatar=buildAvatar(T,{disposables});scene.add(avatar.group);avatar.show(viewMode==='third');
+  const roofs=[{minX:-5.3,maxX:5.3,minZ:-8.3,maxZ:4.3}];
+  if(sideSign)roofs.push({minX:-5.3+SIDE_X,maxX:5.3+SIDE_X,minZ:-8.3,maxZ:4.3});
+  if(plays.length)roofs.push({minX:ARCADE.x-2.1,maxX:ARCADE.x+2.1,minZ:ARCADE.z-2.9,maxZ:ARCADE.z+2.9});
+  const floorAt=(x,z)=>roofs.some(r=>x>r.minX&&x<r.maxX&&z>r.minZ&&z<r.maxZ)?.06:-.03;
+  let weather=null;
+  try{weather=createWeather(T,{scene,lights:{hemi,sun,fill},disposables,mode:atmosphere?.mode||time,roofs});canvas.dataset.weather=weather.kind;}
+  catch(error){console.warn('City weather unavailable',error);}
+  const activeCam=()=>viewMode==='third'?viewCam:camera;
+  /* 11/28：願いの泉。広場のまんなかの置物（時間帯で変わる）に近づくと、願いを書ける（city-wish.js） */
+  let wish=null,cinema=null;
+  if(atmosphere){try{wish=createWish(T,{scene,disposables,texture,at:PLAZA,mode:atmosphere.mode,viewCamera:activeCam});}catch(error){console.warn('City wish unavailable',error);}}
+  const forward=new T.Vector3(),rightward=new T.Vector3(),pivot=new T.Vector3(),wanted=new T.Vector3(),aimPoint=new T.Vector3();
+  function measureAim(){
+    // 目の先に何があるか（画面の真ん中をそこに合わせる）
+    ray.set(camera.position,forward);ray.far=30;
+    const hits=ray.intersectObjects(scene.children,true);ray.far=Infinity;
+    let d=20;for(const hit of hits){if(hit.object.material?.transparent&&hit.object.material.opacity<.3&&!hit.object.userData.walkable)continue;if(hit.object.userData.navigationMarker)continue;d=hit.distance;break;}
+    return Math.max(.9,Math.min(25,d));
+  }
+  function placeViewCam(dt){
+    forward.set(-Math.sin(yaw)*Math.cos(pitch),Math.sin(pitch),-Math.cos(yaw)*Math.cos(pitch));
+    rightward.set(Math.cos(yaw),0,-Math.sin(yaw));
+    if(viewMode!=='third')return;
+    if(snapView||++aimFrame%3===0){const d=measureAim();aimDistance=snapView?d:aimDistance+(d-aimDistance)*.35;}
+    pivot.set(camera.position.x,1.5,camera.position.z);
+    // 縦長の画面（スマホ）は横が狭いので、少しうしろから映す
+    const back=(viewCam.aspect<.8?3.4:2.8)+runBlend*.45;
+    wanted.copy(pivot).addScaledVector(forward,-back).addScaledVector(rightward,viewCam.aspect<.8?.3:.42);wanted.y+=.45;
+    // 壁・棚の向こうへカメラが入らないよう、手前で止める（低い台の上は越えてよい）
+    if(snapView||aimFrame%2===0){
+      const length=pivot.distanceTo(wanted);aimPoint.subVectors(wanted,pivot).normalize();
+      ray.set(pivot,aimPoint);ray.far=length+.3;const hits=ray.intersectObjects(scene.children,true);ray.far=Infinity;
+      let reach=1;for(const hit of hits){if(hit.object.userData.walkable||hit.object.userData.navigationMarker)continue;if(hit.object.material?.transparent&&hit.object.material.opacity<.3)continue;reach=Math.max(0,(hit.distance-.3)/length);break;}
+      cameraReach=snapView?reach:Math.min(reach,cameraReach+.08);
+    }
+    wanted.lerpVectors(pivot,wanted,cameraReach);
+    wanted.y=Math.max(.35,wanted.y);if(roofs.some(r=>wanted.x>r.minX&&wanted.x<r.maxX&&wanted.z>r.minZ&&wanted.z<r.maxZ))wanted.y=Math.min(3.35,wanted.y);
+    if(snapView)viewCam.position.copy(wanted);else viewCam.position.lerp(wanted,Math.min(1,dt*14));
+    aimPoint.copy(camera.position).addScaledVector(forward,aimDistance);viewCam.lookAt(aimPoint);
+    // カメラが自分のすぐうしろまで寄ったら（せまい所）、アバターは消して目の高さから見る
+    avatar.group.visible=avatar.visible&&viewCam.position.distanceTo(pivot)>.9;
+    snapView=false;
+  }
+  function resize(){const r=canvas.getBoundingClientRect();if(r.width<1||r.height<1)return;renderer.setSize(r.width,r.height,false);camera.aspect=viewCam.aspect=r.width/r.height;camera.updateProjectionMatrix();viewCam.updateProjectionMatrix();}
   function look(){camera.rotation.set(pitch,yaw,0,'YXZ');}
   function publishPose(){canvas.dataset.position=JSON.stringify({x:+camera.position.x.toFixed(3),z:+camera.position.z.toFixed(3),yaw:+yaw.toFixed(3)});}
   function cancelWalk(state='idle'){moveTarget=null;blockedFrames=0;canvas.dataset.navigation=state;delete canvas.dataset.navigationTarget;publishPose();}
-  function view(v){camera.position.set(v.x,1.68,v.z);yaw=Math.atan2(v.x-v.lookX,v.z-v.lookZ);pitch=Math.atan2((v.lookY??1.68)-1.68,Math.hypot(v.x-v.lookX,v.z-v.lookZ));look();keys.clear();joystick={x:0,y:0};cancelWalk();moveMarker.visible=false;}
+  function view(v){camera.position.set(v.x,1.68,v.z);yaw=Math.atan2(v.x-v.lookX,v.z-v.lookZ);pitch=Math.atan2((v.lookY??1.68)-1.68,Math.hypot(v.x-v.lookX,v.z-v.lookZ));look();keys.clear();joystick={x:0,y:0,run:false};cancelWalk();moveMarker.visible=false;snapView=true;avatar?.face(yaw);}
   function waypoint(name){const v=VIEWPOINTS[name];if(v)view(v);}
   function focusProduct(id){
     // 公式ショップの品は、その正面（模型の +z の向き）1.3m から見る
@@ -272,18 +326,20 @@ export function createWorld(canvas, { products = [], sideProducts = [], mainSign
     const [k,off]=seats[i];   // となりの店の品は、同じ見方を右へずらす
     const from=[[-2,.4],[2,.5],[2,-2.8],[1.6,-2.3]][k];view({x:from[0]+off,z:from[1],lookX:x,lookZ:z,lookY:y+.18});}
   function productAt(x,y){
-    pointer.set(x,y);ray.setFromCamera(pointer,camera);
+    pointer.set(x,y);ray.setFromCamera(pointer,activeCam());
     const hits=ray.intersectObjects(scene.children,true);
     for(const hit of hits){
       // Ignore the nearly-transparent windows, but never select through walls.
       if(hit.object.material?.transparent && hit.object.material.opacity<.3)continue;
       let o=hit.object;while(o&&!o.userData.productId)o=o.parent;
-      return o?.userData.productId && hit.distance<5 ? o.userData.productId : null;
+      // 近さは「自分の目」から測る（アバター視点でも、手の届く所の物だけ選べる）
+      const near=viewMode==='third'?hit.point.distanceTo(camera.position)<5:hit.distance<5;
+      return o?.userData.productId && near ? o.userData.productId : null;
     }
     return null;
   }
   function walkPointAt(x,y) {
-    pointer.set(x,y);ray.setFromCamera(pointer,camera);
+    pointer.set(x,y);ray.setFromCamera(pointer,activeCam());
     const hits=ray.intersectObjects(scene.children,true);
     for(const hit of hits){
       if(hit.object.userData.navigationMarker)continue;
@@ -335,10 +391,10 @@ export function createWorld(canvas, { products = [], sideProducts = [], mainSign
   },options);
   canvas.addEventListener('pointercancel',()=>{drag=null;canvas.style.cursor='grab';},options);
   canvas.addEventListener('pointerleave',()=>{if(!drag&&!moveTarget)moveMarker.visible=false;},options);
-  const supported=new Set(['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','KeyE']);
+  const supported=new Set(['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','KeyE','ShiftLeft','ShiftRight']);
   canvas.addEventListener('keydown',e=>{if(paused||!supported.has(e.code))return;e.preventDefault();keys.add(e.code);if(e.code==='KeyE'&&!e.repeat)selectCenter();},options);
   window.addEventListener('keyup',e=>keys.delete(e.code),options);
-  function release(){keys.clear();drag=null;joystick={x:0,y:0};canvas.style.cursor='grab';}
+  function release(){keys.clear();drag=null;joystick={x:0,y:0,run:false};canvas.style.cursor='grab';}
   canvas.addEventListener('blur',release,options);window.addEventListener('blur',release,options);
   canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();release();cancelAnimationFrame(raf);raf=0;onLost();},options);
   function loop(ms){
@@ -350,8 +406,13 @@ export function createWorld(canvas, { products = [], sideProducts = [], mainSign
       let side=(keys.has('KeyD')?1:0)-(keys.has('KeyA')?1:0)+joystick.x;
       const length=Math.max(1,Math.hypot(forward,side));forward/=length;side/=length;
       if(forward||side){cancelWalk('manual');moveMarker.visible=false;}
-      let dx=(-Math.sin(yaw)*forward+Math.cos(yaw)*side)*dt*2.7;
-      let dz=(-Math.cos(yaw)*forward-Math.sin(yaw)*side)*dt*2.7;
+      /* 走る：スティックを外側まで倒す／Shift を押しながら。歩く速さの2倍 */
+      const running=!!(joystick.run||keys.has('ShiftLeft')||keys.has('ShiftRight'));
+      const stride=2.7*(running?2:1);
+      // アバター視点では、スティックを横へ倒すと、カメラもゆっくりそちらへ回る（片手で曲がれる）
+      if(viewMode==='third'&&joystick.x&&!drag)yaw-=joystick.x*dt*1.15;
+      let dx=(-Math.sin(yaw)*forward+Math.cos(yaw)*side)*dt*stride;
+      let dz=(-Math.cos(yaw)*forward-Math.sin(yaw)*side)*dt*stride;
       if(moveTarget&&!drag){
         const tx=moveTarget.x-camera.position.x,tz=moveTarget.z-camera.position.z,distance=Math.hypot(tx,tz);
         if(distance<.07){cancelWalk();moveMarker.visible=false;}
@@ -362,7 +423,16 @@ export function createWorld(canvas, { products = [], sideProducts = [], mainSign
           yaw+=turn*Math.min(1,dt*7);pitch+=(0-pitch)*Math.min(1,dt*4);
         }
       }
+      const fromX=camera.position.x,fromZ=camera.position.z;
       if(dx||dz){const p=slideMove(camera.position,dx,dz,boxes,bounds);camera.position.x=p.x;camera.position.z=p.z;}
+      const movedX=camera.position.x-fromX,movedZ=camera.position.z-fromZ,speedNow=dt>0?Math.hypot(movedX,movedZ)/dt:0;
+      runBlend+=((running&&speedNow>3?1:0)-runBlend)*Math.min(1,dt*5);pace=speedNow>.2?(running?'run':'walk'):'stop';
+      // 一人称：歩くと少しだけ目線がゆれる。走ると視野が少し広がる
+      if(viewMode==='first'){bob+=speedNow*dt*2.3;camera.position.y+=((1.68+(speedNow>.2?Math.sin(bob*2)*.028*Math.min(1.5,speedNow/2.7):0))-camera.position.y)*Math.min(1,dt*12);}
+      const fov=64+runBlend*7;if(Math.abs(camera.fov-fov)>.01){camera.fov=fov;camera.updateProjectionMatrix();}
+      const vfov=60+runBlend*6;if(Math.abs(viewCam.fov-vfov)>.01){viewCam.fov=vfov;viewCam.updateProjectionMatrix();}
+      avatar.place(camera.position.x,camera.position.z);
+      avatar.update(dt,speedNow,speedNow>.15?Math.atan2(-movedX,-movedZ):null,floorAt(camera.position.x,camera.position.z),viewMode==='third'&&(cinema||viewCam.position.distanceTo(pivot)<1.6)?.4:1,ms/1000);
       if(moveTarget){
         const distance=Math.hypot(moveTarget.x-camera.position.x,moveTarget.z-camera.position.z);
         blockedFrames=distance>=moveTarget.lastDistance-.001?blockedFrames+1:0;moveTarget.lastDistance=distance;
@@ -372,13 +442,23 @@ export function createWorld(canvas, { products = [], sideProducts = [], mainSign
     }
     if(moveMarker.visible&&markerPulseUntil>ms){const phase=1-(markerPulseUntil-ms)/520;moveMarker.scale.setScalar(1+phase*.7);markerMaterial.opacity=.82*(1-phase);}
     else if(markerPulseUntil&&markerPulseUntil<=ms){markerPulseUntil=0;markerMaterial.opacity=.82;if(!moveTarget&&matchMedia('(pointer:coarse)').matches)moveMarker.visible=false;}
+    if(paused){avatar.place(camera.position.x,camera.position.z);avatar.update(dt,0,null,floorAt(camera.position.x,camera.position.z),1,ms/1000);}
+    placeViewCam(dt);
     atmosphere?.update(ms);
-    renderer.render(scene,camera);
+    weather?.update(ms/1000,dt,camera.position);
+    if(wish){
+      wish.update(ms/1000);
+      // 願いを届けているあいだは、置物の上の空へ目を向ける（さわったら、そこで止める）
+      if(cinema&&!drag){const turn=Math.atan2(Math.sin(cinema.yaw-yaw),Math.cos(cinema.yaw-yaw));yaw+=turn*Math.min(1,dt*2.5);pitch+=(cinema.pitch-pitch)*Math.min(1,dt*2.5);look();}
+      else if(cinema&&drag)cinema=null;
+    }
+    renderer.render(scene,activeCam());
     if(frames===0){renderer.shadowMap.autoUpdate=false;canvas.dataset.ready='true';}
     if(++frames%10===0){
-      publishPose();
+      publishPose();canvas.dataset.pace=paused?'stop':pace;
       /* あそび場の前に来たら知らせる（ボタンを出す）。離れたら消す */
-      const nowNear=plays.length&&Math.hypot(camera.position.x-(ARCADE.x+1.2),camera.position.z-ARCADE.z)<ARCADE_NEAR?'arcade':null;
+      const nowNear=plays.length&&Math.hypot(camera.position.x-(ARCADE.x+1.2),camera.position.z-ARCADE.z)<ARCADE_NEAR?'arcade'
+        :wish&&Math.hypot(camera.position.x-PLAZA.x,camera.position.z-PLAZA.z)<WISH_NEAR?'wish':null;
       if(nowNear!==near){near=nowNear;canvas.dataset.near=near||'';onNear(near);}
       canvas.dataset.drawCalls=String(renderer.info.render.calls);canvas.dataset.triangles=String(renderer.info.render.triangles);
       onFocus(paused?null:productAt(0,0));
@@ -389,11 +469,26 @@ export function createWorld(canvas, { products = [], sideProducts = [], mainSign
   const ro=new ResizeObserver(resize);ro.observe(canvas);
   const io=new IntersectionObserver(entries=>{visible=entries[0]?.isIntersecting!==false;if(visible)start();else{release();cancelAnimationFrame(raf);raf=0;}});io.observe(canvas);
   document.addEventListener('visibilitychange',()=>{release();if(document.hidden){cancelAnimationFrame(raf);raf=0;}else start();},options);
-  canvas.style.cursor='grab';canvas.dataset.navigation='idle';resize();waypoint(sideSign?'streetBoth':'street');start();
+  canvas.style.cursor='grab';canvas.dataset.navigation='idle';canvas.dataset.view=viewMode;resize();waypoint(sideSign?'streetBoth':'street');start();
   return {
     waypoint, selectCenter, focusProduct,
     focus(){canvas.focus({preventScroll:true});},
-    setJoystick(x,y){joystick={x:Math.max(-1,Math.min(1,x)),y:Math.max(-1,Math.min(1,y))};},
+    /* run … スティックを外側まで倒したとき（走る） */
+    setJoystick(x,y,run=false){if(paused)return;joystick={x:Math.max(-1,Math.min(1,x)),y:Math.max(-1,Math.min(1,y)),run:!!run};if(joystick.x||joystick.y){cancelWalk('manual');moveMarker.visible=false;}},
+    setView(mode){viewMode=mode==='third'?'third':'first';avatar.show(viewMode==='third');canvas.dataset.view=viewMode;camera.position.y=1.68;snapView=true;},
+    get view(){return viewMode;},
+    /* 願いを届ける。終わると true（願いが無い・届けている途中・置物が無いときは false） */
+    makeWish(text){
+      if(!wish||wish.busy||!String(text||'').trim())return Promise.resolve(false);
+      const c=wish.center,dx=c.x-camera.position.x,dz=c.z-camera.position.z;
+      const done=wish.play(text,{x:dx,z:dz});
+      // のぼっていく先の空へ目を向ける（少し下に置いて、置物も入るように）
+      const s=wish.sky,far=Math.hypot(s.x-camera.position.x,s.z-camera.position.z);
+      cinema={yaw:Math.atan2(-(s.x-camera.position.x),-(s.z-camera.position.z)),pitch:Math.min(.95,Math.atan2(s.y-1.68,far)-.12)};
+      canvas.dataset.wish='playing';
+      return done.then(ok=>{cinema=null;canvas.dataset.wish=ok?'done':'';return ok;});
+    },
+    setWeather(kind){if(!weather)return;weather.set(kind);canvas.dataset.weather=weather.kind;},
     pause(value){paused=!!value;release();if(paused)cancelWalk();},
     destroy(){if(dead)return;dead=true;release();cancelAnimationFrame(raf);abort.abort();ro.disconnect();io.disconnect();
       scene.traverse(o=>{if(o.geometry)disposables.add(o.geometry);if(o.material){for(const m of [].concat(o.material)){disposables.add(m);if(m.map)disposables.add(m.map);}}});

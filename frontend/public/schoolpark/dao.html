@@ -153,7 +153,9 @@
 .sp-cn-notice{font-size:13px;padding:8px 12px;border-radius:8px;background:#fff4e6;color:#8a4a00}
 .sp-cn-post{background:#FBF9F3;border:1px solid rgba(20,19,16,.12);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:8px;min-width:0}
 .sp-cn-head{display:flex;align-items:center;gap:8px;min-width:0}.sp-cn-head b{font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.sp-cn-head small{font-size:12px;color:#6E695C;flex:1}
-.sp-cn-avatar{flex:none;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:#E7E2D6;font-size:13px;font-weight:700}
+.sp-cn-avatar{flex:none;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:#E7E2D6;font-size:13px;font-weight:700;overflow:hidden}
+/* 11/28：たまり場もプロフィール画像（知識を読むと同じ）。無い人は名前の1文字目 */
+.sp-cn-avatar img{width:100%;height:100%;object-fit:cover;display:block}
 .sp-cn-more{appearance:none;border:0;background:none;font:inherit;font-size:18px;line-height:1;padding:4px 8px;cursor:pointer;color:#6E695C}
 .sp-cn-body{font-size:15px;line-height:1.8;white-space:pre-wrap;overflow-wrap:anywhere}.sp-cn-body[data-deleted="true"]{color:#8A8474;font-size:13px}
 .sp-cn-flag{font-size:12px;color:#8a4a00}
@@ -281,6 +283,10 @@ html, body                 { height: 100%; width:100%; overflow-x:hidden; }
    列の上側が見出しの下に潜って切れた。それで止めるのをやめていた。
    止める高さは見出しの高さから決める（描くたびに測って --sp-head-h に入れる）。
    画面が低くて列が収まらないときは、列の中だけで動かせるようにする。 */
+/* 11/28 オーナー：「PLAYのクエスト受けたいのに（ACCEPT の）枠が見切れて何もできない」。
+   右の列は画面の高さで止めてあり、カードは絵本の見た目で overflow:hidden。列に入りきらないとき、
+   カードが縮められて下（参加前に確認・受けるボタン）が切れていた。カードは縮めず、列の中を動かせるようにする。 */
+.sp-quest-side > * { flex-shrink:0; }
 @media (min-width:1351px) {
   .sp-quest-detail-grid > .sp-quest-side {
     position:sticky;
@@ -1115,7 +1121,7 @@ if (window.top === window.self) window.location.replace('/');
                   <sc-if value="{{ gs.tNoPosts }}"><div class="sp-wk-empty">まだ書き込みはありません。ひとことでも、最初の書き込みをどうぞ。</div></sc-if>
                   <sc-for list="{{ gs.tPosts }}" as="p" hint-placeholder-count="2">
                     <article class="sp-cn-post">
-                      <div class="sp-cn-head"><span class="sp-cn-avatar">{{ p.initial }}</span><b>{{ p.name }}</b><small>{{ p.ago }}</small>
+                      <div class="sp-cn-head"><span class="sp-cn-avatar"><sc-if value="{{ p.hasAvatar }}"><img src="{{ p.avatar }}" alt=""></sc-if><sc-if value="{{ p.noAvatar }}">{{ p.initial }}</sc-if></span><b>{{ p.name }}</b><small>{{ p.ago }}</small>
                         <button type="button" class="sp-cn-more" aria-label="ほかの操作" onClick="{{ p.toggleMenu }}">…</button></div>
                       <sc-if value="{{ p.flag }}"><div class="sp-cn-flag">{{ p.flag }}</div></sc-if>
                       <div class="sp-cn-body" data-deleted="{{ p.isDeleted }}">{{ p.text }}</div>
@@ -1127,7 +1133,7 @@ if (window.top === window.self) window.location.replace('/');
                         <div class="sp-cn-replies">
                           <sc-for list="{{ p.replies }}" as="r" hint-placeholder-count="1">
                             <div class="sp-cn-reply">
-                              <div class="sp-cn-head"><span class="sp-cn-avatar">{{ r.initial }}</span><b>{{ r.name }}</b><small>{{ r.ago }}</small>
+                              <div class="sp-cn-head"><span class="sp-cn-avatar"><sc-if value="{{ r.hasAvatar }}"><img src="{{ r.avatar }}" alt=""></sc-if><sc-if value="{{ r.noAvatar }}">{{ r.initial }}</sc-if></span><b>{{ r.name }}</b><small>{{ r.ago }}</small>
                                 <button type="button" class="sp-cn-more" aria-label="ほかの操作" onClick="{{ r.toggleMenu }}">…</button></div>
                               <sc-if value="{{ r.flag }}"><div class="sp-cn-flag">{{ r.flag }}</div></sc-if>
                               <div class="sp-cn-body" data-deleted="{{ r.isDeleted }}">{{ r.text }}</div>
@@ -1812,6 +1818,8 @@ const TAMA_ERRORS = {
   BODY_TOO_LONG: '400字までで書いてください。', BODY_REQUIRED: '何か書いてから送ってください。', RATE_LIMITED: '少し時間をおいて、もう一度どうぞ。',
   NOT_FOUND: 'この書き込みは、もう見られません。'
 };
+/* プロフィール画像として出してよい形（知識を読むと同じ決まり） */
+function tamaAvatarOk(v) { return typeof v === 'string' && v.length <= 300000 && /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+\/]+=*$/.test(v); }
 function tamaAgo(ms) {
   const d = Math.max(0, Date.now() - Number(ms || 0)) / 1000;
   if (d < 60) return 'いま';
@@ -2028,6 +2036,8 @@ class Component extends DCLogic {
       const it = Object.assign({}, x, { isReply });
       return Object.assign(it, {
         ago: tamaAgo(x.createdAtMs), initial: String(x.name || '?').slice(0, 1),
+        avatar: tamaAvatarOk((t.avatars || {})[x.authorKey]) ? t.avatars[x.authorKey] : '',
+        hasAvatar: tamaAvatarOk((t.avatars || {})[x.authorKey]), noAvatar: !tamaAvatarOk((t.avatars || {})[x.authorKey]),
         text: x.deleted ? '（書いた人か運営が消しました）' : x.body, isDeleted: !!x.deleted,
         flag: x.hidden ? (x.hiddenByReports ? '通報が多いため、いまは本人と運営にだけ見えています' : '運営が隠しています') : '',
         menuOpen: t.menu === key, toggleMenu: () => this.setState(st => ({ tama: Object.assign({}, st.tama, { menu: st.tama.menu === key ? '' : key }) })),
@@ -2075,6 +2085,18 @@ class Component extends DCLogic {
       return j;
     } finally { clearTimeout(timer); }
   }
+  /* 書き手のプロフィール画像を、まだ聞いていない人の分だけまとめて聞く（無い人は '' で覚える） */
+  async tamaAvatars(list){
+    this._tamaAvatars = this._tamaAvatars || {};
+    const keys = [...new Set((list || []).map(x => x && x.authorKey).filter(k => /^a[0-9a-f]{15}$/.test(String(k || '')) && !(k in this._tamaAvatars)))].slice(0, 40);
+    if (!keys.length) return;
+    keys.forEach(k => { this._tamaAvatars[k] = ''; });
+    try {
+      const j = await this.tamaFetch('/avatars?keys=' + keys.join(','));
+      Object.entries(j.avatars || {}).forEach(([k, v]) => { if (tamaAvatarOk(v)) this._tamaAvatars[k] = v; });
+      this.tamaSet({ avatars: Object.assign({}, this._tamaAvatars) });
+    } catch (e) { keys.forEach(k => { delete this._tamaAvatars[k]; }); }
+  }
   tamaMsg(e){ return TAMA_ERRORS[e && e.code] || 'たまり場に届きませんでした。少し時間をおいて、もう一度どうぞ。'; }
   tamaSet(patch){ this.setState(st => ({ tama: Object.assign({}, st.tama || {}, patch) })); }
   async tamaRooms(){
@@ -2094,6 +2116,7 @@ class Component extends DCLogic {
       if ((this.state.tama || {}).room !== room) return;
       const prev = before ? ((this.state.tama || {}).posts || []) : [];
       this.tamaSet({ posts: prev.concat(j.posts || []), next: j.next || null, postsLoading: false });
+      this.tamaAvatars(j.posts || []);
     } catch (e) { this.tamaSet({ postsLoading: false, notice: this.tamaMsg(e) }); }
   }
   async tamaPost(){
@@ -2120,6 +2143,7 @@ class Component extends DCLogic {
     try {
       const j = await this.tamaFetch('/rooms/' + encodeURIComponent(t.room) + '/posts/' + pid + '/replies');
       this.setState(st => ({ tama: Object.assign({}, st.tama, { replies: Object.assign({}, st.tama.replies || {}, { [pid]: j.replies || [] }) }) }));
+      this.tamaAvatars(j.replies || []);
     } catch (e) { this.tamaSet({ notice: this.tamaMsg(e) }); }
   }
   async tamaReply(pid){
@@ -2135,6 +2159,7 @@ class Component extends DCLogic {
         replies: (this._tamaReplyDraft && (this._tamaReplyDraft[pid] = ''), Object.assign({}, st.tama.replies || {}, { [pid]: j.replies || [] })),
         posts: (st.tama.posts || []).map(p => p.id === pid ? Object.assign({}, p, { replyCount: (j.replies || []).length }) : p),
         notice: '' }) }));
+      this.tamaAvatars(j.replies || []);
     } catch (e) { this.tamaSet({ notice: this.tamaMsg(e) }); }
     finally { this._tamaReplying = false; }
   }

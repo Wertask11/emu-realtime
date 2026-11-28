@@ -8,7 +8,17 @@
   try { G = window.parent && window.parent !== window ? window.parent.EmuGifts : null; } catch (_) { G = null; }
   if (!G) return;
   var AMOUNTS = [5, 10, 30, 50];
-  var state = { questId: '', pot: null, mine: null, loading: false };
+  var state = { questId: '', pot: null, mine: null, loading: false, spend: null };
+  function fmt(n) { n = Number(n) || 0; return Math.round(n * 100) / 100 + ''; }
+  /* 11/28 オーナー：「協賛しようとしたけど失敗した」。協賛に使えるのはアプリ内EMUER（まだ実EMUERに換えていない分）だけ。
+     左下の数字は実EMUER（ウォレットの分）を含むので、押す前に「いま協賛に使える数」を出しておく */
+  async function loadSpend(id) {
+    if (!G.signedIn() || typeof G.me !== 'function') return;
+    var d = await G.me();
+    if (state.questId !== id || !d || !d.ok) return;
+    state.spend = { balance: Number(d.balance) || 0, sentToday: Number(d.sentToday) || 0, limit: Number(d.dailyLimit) || 100 };
+    paint();
+  }
   var timer = null;
 
   function questId() {
@@ -30,6 +40,7 @@
       + (m && m.claimed ? '<div style="margin-top:10px;font-size:13px;font-weight:700;color:#0F5C3F">🎉 協賛のご褒美 ' + m.amount + ' EMUER を受け取りました</div>' : '')
       + '<div style="margin-top:12px;font-size:13px;font-weight:700">このクエストに協賛する</div>'
       + '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">' + AMOUNTS.map(function (n) { return '<button type="button" data-sponsor-amount="' + n + '" style="' + BTN + '">' + n + ' EMUER</button>'; }).join('') + '</div>'
+      + (state.spend ? '<div data-sponsor-spend style="font-size:12px;line-height:1.7;margin-top:8px;padding:8px 10px;border-radius:8px;background:' + (state.spend.balance >= AMOUNTS[0] ? '#F1F6EC;color:#2F5B33' : '#FFF1E6;color:#9A4B12') + '">協賛に使えるアプリ内EMUER：<b>' + fmt(state.spend.balance) + ' EMUER</b>' + (state.spend.balance >= AMOUNTS[0] ? '' : '<br>左下のEMUERのうち、実EMUER（ウォレットにある分）は協賛に使えません。ログインボーナス・評価・懸賞でたまるアプリ内EMUERを使います。') + '</div>' : '')
       + '<div style="font-size:11px;line-height:1.7;color:#6E695C;margin-top:6px">アプリ内EMUER（公式ショップと同じEMUER）から出します。出したEMUERは袋に入り、完走した人へ届きます（返りません）。応援と合わせて1日100 EMUERまで。</div>';
   }
   function card() {
@@ -52,8 +63,9 @@
     if (el.getAttribute('data-for') !== state.questId || el.innerHTML !== h) { el.innerHTML = h; el.setAttribute('data-for', state.questId); }
   }
   async function load(id) {
-    state = { questId: id, pot: null, mine: null, loading: true };
+    state = { questId: id, pot: null, mine: null, loading: true, spend: null };
     paint();
+    loadSpend(id);
     var res = await Promise.all([G.pot(id), G.signedIn() ? G.mine(id) : Promise.resolve(null)]);
     if (state.questId !== id) return;
     state.pot = res[0] && res[0].ok ? res[0] : { pot: 0, total: 0, sponsors: 0, paidOut: 0, bonusCount: 0, bonus: 10, peopleLeft: 0 };
@@ -74,11 +86,16 @@
     if (a) {
       if (!G.signedIn()) { window.alert('協賛するには、ログインしてね🧊'); return; }
       var n = Number(a.getAttribute('data-sponsor-amount'));
+      if (state.spend && state.spend.balance < n) {
+        window.alert('協賛に使えるアプリ内EMUERが足りません（いま ' + fmt(state.spend.balance) + ' EMUER）。\n\n協賛に使えるのは、まだ実EMUERに換えていないアプリ内EMUERだけです。左下のEMUERのうち、実EMUER（ウォレットにある分）は使えません。\nログインボーナス・知識への評価・懸賞でたまります。');
+        return;
+      }
       if (!window.confirm('このクエストに ' + n + ' EMUER 協賛します。\nアプリ内EMUERから出し、完走した人へのご褒美になります（返りません）。よろしいですか？')) return;
       a.disabled = true;
       var d = await G.sponsor(state.questId, n);
-      if (!d.ok) { a.disabled = false; window.alert(d.error); return; }
+      if (!d.ok) { a.disabled = false; window.alert(d.error); loadSpend(state.questId); return; }
       state.pot = Object.assign({}, state.pot || {}, d);
+      if (typeof d.balance === 'number') state.spend = Object.assign({}, state.spend || {}, { balance: d.balance });
       paint();
       G.petals(document.querySelector('[data-quest-sponsor]'));
       return;
