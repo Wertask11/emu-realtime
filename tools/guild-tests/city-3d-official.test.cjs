@@ -363,6 +363,37 @@ for (const time of ['night', 'morning']) test(`願いの泉（${time}）：置�
   } finally { await ctx.close(); server.removeAllListeners('request'); server.on('request', origin); }
 });
 
+/* 11/28 オーナー：12月の挑戦納めカレンダー。12/24・25 は雪とクリスマスツリー、12/31 は年越しの願いと除夜の鐘、12/22 は冬至のひとこと */
+for (const [day, season] of [['2026-12-25', 'xmas'], ['2026-12-31', 'newyear'], ['2026-12-22', 'toji'], ['2026-12-10', '']]) test(`12月の City（${day}）：季節の催し「${season || 'なし'}」`, async () => {
+  const origin = server.listeners('request')[0];
+  server.removeAllListeners('request');
+  server.on('request', (req, res) => (new URL(req.url, 'http://x').pathname === '/t/unified' ? res.end(unifiedPage) : origin(req, res)));
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 800 }, isMobile: true, hasTouch: true });
+  await ctx.addInitScript(d => { window.__SP_CITY_TIME = 'night'; window.__SP_CITY_DATE = d; window.__WEATHER = 'real'; }, day);
+  await ctx.route('https://api.open-meteo.com/**', route => route.fulfill({ json: { current: { weather_code: 0, temperature_2m: 8 } } }));
+  const pg = await ctx.newPage();
+  const errors = []; pg.on('pageerror', e => errors.push(e.message));
+  try {
+    await pg.goto(base + '/t/unified');
+    await pg.waitForSelector('.cs-canvas[data-ready="true"]', { timeout: 60000 });
+    assert.equal(await pg.getAttribute('.cs-canvas', 'data-season'), season);
+    await pg.waitForFunction(() => document.querySelector('.cs-canvas').dataset.weather, null, { timeout: 10000 });
+    await pg.waitForTimeout(300);
+    assert.equal(await pg.getAttribute('.cs-canvas', 'data-weather'), season === 'xmas' ? 'snow' : 'clear', 'クリスマスはリアルでも雪');
+    const toast = await pg.textContent('.cs-toast');
+    if (season === 'xmas') assert.match(toast, /メリークリスマス/);
+    if (season === 'newyear') assert.match(toast, /大晦日/);
+    if (season === 'toji') assert.match(toast, /冬至/);
+    if (!season) assert.equal(toast.trim(), '');
+    await openMenu(pg); await pg.click('.cs-menu [data-shop="waypoint"][data-value="wish"]');
+    await pg.locator('.cs-wish').waitFor({ state: 'visible', timeout: 20000 });
+    assert.match(await pg.textContent('.cs-wish'), season === 'newyear' ? /年越しの願いを書く/ : /太鼓に願いを書く/);
+    await pg.click('.cs-wish');
+    assert.equal(await pg.textContent('[data-shop="wish-go"]'), season === 'newyear' ? '🔔 鐘を鳴らす' : '🥁 太鼓を叩く');
+    assert.deepEqual(errors, []);
+  } finally { await ctx.close(); server.removeAllListeners('request'); server.on('request', origin); }
+});
+
 test('あそび場：お試し表示（遊びが無い）では建てず、ボタンも出さない', async () => {
   const { pg, errors } = await open('/t/official');
   try {

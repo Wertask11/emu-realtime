@@ -130,6 +130,65 @@ const wsDone=new Set();
    一覧（/rewards）には出てこない。毎日のぶんは押したときに作られるので、
    押す前は「待っている報酬」として存在しないため。
    だから一覧が空でも、ここは受け取れることがある。 */
+/* 12月の「挑戦納めカレンダー」（11/28）：今日のぶんの額はサーバーが返す（12月は日付で 2〜20 EMUER）。
+   ボタンの下に「今日は〇〇｜次は12/25に+10」を1行出す */
+let wsTodayAmount="1";
+function wsCalendarLine(cal){
+  const b=wsLoginBtn();if(!b)return;
+  let el=document.getElementById("wsCalendarLine");
+  if(!cal){if(el)el.hidden=true;return;}
+  if(!el){el=document.createElement("p");el.id="wsCalendarLine";el.style.cssText="margin:8px 0 0;padding:8px 12px;border-radius:10px;background:#fff4e3;color:#8a3a12;font-size:13px;line-height:1.7;font-weight:700";b.insertAdjacentElement("afterend",el);}
+  const md=d=>Number(d.slice(5,7))+"/"+Number(d.slice(8,10));
+  const plus=x=>"+"+x.emuer+" EMUER"+(x.jpyc?" ＋ "+x.jpyc+" JPYC":"");
+  const today=cal.active?("🎄 挑戦納めカレンダー：今日は "+plus(cal.today)+(cal.today.special?"（"+cal.today.special+"）":"")):"🎄 12月は「挑戦納めカレンダー」。毎日のぶんが増え、特別な日は JPYC も";
+  el.textContent=today+(cal.next?"｜次は "+md(cal.next.date)+" に "+plus(cal.next)+"（"+cal.next.special+"）":"");
+  wsJpycPanel();
+  el.hidden=false;
+}
+/* 12月の JPYC（11/28）：特別な日にログインボーナスを受け取ると、JPYC も「受け取る予定」に入る。運営があとでまとめてウォレットへ送る。
+   LINE・Google で入った人のアドレスは鍵が無いので、JPYC を受け取る自分のウォレットのアドレスを登録してもらう */
+function wsJpycSaid(j){
+  if(!j)return"";
+  if(j.soldOut)return" 今月の JPYC は予定の数に達したので、配り終わりました。";
+  if(!j.amountJpyc)return"";
+  return j.needsAddress?" 🎁 さらに "+j.amountJpyc+" JPYC を受け取れます。下で、JPYC を受け取るウォレットのアドレスを登録してください。"
+    :" 🎁 さらに "+j.amountJpyc+" JPYC を受け取る予定に入れました。運営がまとめてウォレット（"+j.address+"）へ送ります。";
+}
+async function wsJpycPanel(){
+  const b=wsLoginBtn();if(!b)return;
+  let el=document.getElementById("wsJpycPanel");
+  try{
+    const r=await fetch(EMUER_V2_API+"/jpyc/mine?address="+encodeURIComponent(wsAccount()),{headers:await wsHeaders(false)});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok||!Array.isArray(d.gifts)||!d.gifts.length){if(el)el.hidden=true;return;}
+    if(!el){el=document.createElement("div");el.id="wsJpycPanel";el.style.cssText="margin:8px 0 0;padding:10px 12px;border-radius:10px;background:#eef7ff;color:#173f63;font-size:13px;line-height:1.7";
+      (document.getElementById("wsCalendarLine")||b).insertAdjacentElement("afterend",el);}
+    const sum=st=>d.gifts.filter(g=>st.includes(g.status)).reduce((n,g)=>n+g.amountJpyc,0);
+    const need=sum(["needs_address"]),wait=sum(["pending"]),sent=sum(["sent"]);
+    el.innerHTML="";
+    const p=document.createElement("p");p.style.margin="0";p.style.fontWeight="700";
+    p.textContent="🎁 12月の JPYC："+(wait?"送る予定 "+wait+" JPYC":"")+(need?(wait?"・":"")+"アドレス待ち "+need+" JPYC":"")+(sent?((wait||need)?"・":"")+"送り済み "+sent+" JPYC":"");
+    el.appendChild(p);
+    if(need){
+      const t=document.createElement("p");t.style.margin="4px 0";t.textContent="LINE・Google で入ったアドレスには JPYC を送れません。JPYC を受け取る自分のウォレット（Polygon）のアドレスを入れてください。";el.appendChild(t);
+      const f=document.createElement("div");f.style.cssText="display:flex;gap:6px;flex-wrap:wrap";
+      const i=document.createElement("input");i.id="wsJpycAddress";i.placeholder="0x…（Polygon のウォレットのアドレス）";i.autocomplete="off";i.spellcheck=false;i.style.cssText="flex:1 1 220px;min-width:0;padding:8px 10px;border:1px solid #9fb6cc;border-radius:8px;font:inherit";
+      const s=document.createElement("button");s.type="button";s.textContent="このアドレスで受け取る";s.style.cssText="padding:8px 12px;border-radius:8px;border:0;background:#173f63;color:#fff;font-weight:700";
+      s.onclick=async()=>{
+        const v=String(i.value||"").trim();
+        if(!/^0x[0-9a-fA-F]{40}$/.test(v)){alert("0x から始まる42文字のアドレスを入れてください。");return;}
+        s.disabled=true;
+        try{const rr=await fetch(EMUER_V2_API+"/jpyc/address?address="+encodeURIComponent(wsAccount()),{method:"POST",headers:await wsHeaders(true),body:JSON.stringify({address:wsAccount(),jpycAddress:v})});
+          const dd=await rr.json().catch(()=>({}));
+          if(!rr.ok)throw new Error(dd.error==="INVALID_JPYC_ADDRESS"?"このアドレスには送れません。自分で鍵を持っているウォレットのアドレスを入れてください。":"登録できませんでした。");
+          await wsJpycPanel();}
+        catch(e){s.disabled=false;alert(e.message);}
+      };
+      f.appendChild(i);f.appendChild(s);el.appendChild(f);
+    }
+    el.hidden=false;
+  }catch(_){if(el)el.hidden=true;}
+}
 async function wsDaily(){
   const b=wsLoginBtn(); if(!b)return;
   if(!emuerV2Config||!emuerV2Config.enabled){b.hidden=true;return;}
@@ -141,16 +200,18 @@ async function wsDaily(){
     const d=await r.json().catch(()=>({}));
     if(!r.ok){b.hidden=true;return;}
     b.hidden=false;
+    wsTodayAmount=/^\d{1,3}$/.test(String(d.amount||""))?String(d.amount):"1";
+    wsCalendarLine(d.calendar||null);
     const app=wsLoginAppBtn();
     /* サーバーが返すのは claimedToday。claimed を見ていたので、
        受け取り済みでも「受け取れます」と出ていた。 */
     if(d.claimedToday){b.disabled=true;b.textContent="今日のぶんは受け取り済み";b.onclick=null;if(app)app.hidden=true;}
     else if(wsCanSign()&&app){
       /* ウォレットへ移せるところでは、どちらで受け取るかを選んでもらう */
-      b.disabled=false;b.textContent="今日のぶん +1 EMUER を実EMUERでウォレットへ";b.onclick=claimEmuV2LoginReward;
-      app.hidden=false;app.disabled=false;app.textContent="今日のぶん +1 EMUER をアプリ内EMUERで受け取る";app.onclick=claimEmuV2LoginRewardApp;
+      b.disabled=false;b.textContent="今日のぶん +"+wsTodayAmount+" EMUER を実EMUERでウォレットへ";b.onclick=claimEmuV2LoginReward;
+      app.hidden=false;app.disabled=false;app.textContent="今日のぶん +"+wsTodayAmount+" EMUER をアプリ内EMUERで受け取る";app.onclick=claimEmuV2LoginRewardApp;
     }
-    else{b.disabled=false;b.textContent="今日のぶん +1 EMUER を受け取る";b.onclick=claimEmuV2LoginReward;if(app)app.hidden=true;}
+    else{b.disabled=false;b.textContent="今日のぶん +"+wsTodayAmount+" EMUER を受け取る";b.onclick=claimEmuV2LoginReward;if(app)app.hidden=true;}
     wsChoiceNote();
   }catch(_){b.hidden=true;const app=wsLoginAppBtn();if(app)app.hidden=true;wsChoiceNote();}
 }
@@ -253,7 +314,8 @@ async function wsRecordLoginReward(b){
   b.disabled=true;b.textContent="今日のぶんは受け取り済み";b.onclick=null;
   const app=wsLoginAppBtn();if(app)app.hidden=true;wsChoiceNote();
   const st=document.getElementById("wsStatus");
-  if(st)st.textContent="1 EMUER を受け取りました。ウォレットに移す前のEMUERとしてたまり、City の公式ショップでそのまま使えます。";
+  if(st)st.textContent=(/^\d{1,3}$/.test(String(d.amount||""))?d.amount:wsTodayAmount)+" EMUER を受け取りました。ウォレットに移す前のEMUERとしてたまり、City の公式ショップでそのまま使えます。"+wsJpycSaid(d.jpyc);
+  if(d.jpyc&&d.jpyc.amountJpyc)wsJpycPanel();
   try{if(typeof window.emuerV2RefreshBalance==="function")await window.emuerV2RefreshBalance();}catch(_){}
   if(typeof wsRenderBreakdown==="function")wsRenderBreakdown(true);
 }
@@ -285,7 +347,8 @@ async function claimEmuV2LoginReward(){
     await(await c.claimReward(x.claimId,x.totalAmount,x.deadline,x.authorization)).wait();
     b.disabled=true;b.textContent="今日のぶんは受け取り済み";b.onclick=null;
     const st=document.getElementById("wsStatus");
-    if(st)st.textContent="1 EMUER を受け取りました";
+    if(st)st.textContent=(/^\d{1,3}$/.test(String(d.amount||""))?d.amount:wsTodayAmount)+" EMUER を受け取りました"+wsJpycSaid(d.jpyc);
+    if(d.jpyc&&d.jpyc.amountJpyc)wsJpycPanel();
     /* 毎日のぶんは、押したときに「待っている報酬」として作られる。
        受け取ったあともサーバーの一覧にしばらく残るので、こちらで外す。
        外さないと、すぐ下の一覧に同じものが出て、押すと鎖が
@@ -296,7 +359,7 @@ async function claimEmuV2LoginReward(){
     await wsRewards();
   }catch(e){
     /* 断った・失敗したときは、2つの選び方をもう一度出す */
-    try{await wsDaily();}catch(_){const b=wsLoginBtn();if(b){b.disabled=false;b.textContent="今日のぶん +1 EMUER を受け取る";b.onclick=claimEmuV2LoginReward;}}
+    try{await wsDaily();}catch(_){const b=wsLoginBtn();if(b){b.disabled=false;b.textContent="今日のぶん +"+wsTodayAmount+" EMUER を受け取る";b.onclick=claimEmuV2LoginReward;}}
     alert(e.message||"ログイン報酬の受取に失敗しました");
   }
 }

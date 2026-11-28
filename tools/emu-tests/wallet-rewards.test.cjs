@@ -71,6 +71,57 @@ async function open(api, context) {
   return { page, calls, errors, alerts, context, close: () => context.close() };
 }
 
+/* 11/28 オーナー：12月の「挑戦納めカレンダー」。今日のぶんの額はサーバーが返し（12/25 は +10）、ボタンの下に今日と次の特別な日を出す */
+test('12月のカレンダー：今日のぶんの額をサーバーの値で出し、今日と次の特別な日を1行で出す', async () => {
+  let claimed = false;
+  const cal = { name: '挑戦納めカレンダー', active: true, today: { date: '2026-12-25', emuer: 10, special: 'クリスマス' }, next: { date: '2026-12-31', emuer: 20, special: '挑戦納め' } };
+  const w = await open({
+    'GET /daily/login/status': () => ({ json: { claimedToday: claimed, amount: '10', calendar: cal } }),
+    'POST /daily/login': () => { claimed = true; return { json: { ok: true, recorded: true, amount: '10' } }; },
+    'GET /rewards': () => ({ json: { rewards: [] } })
+  });
+  try {
+    await w.page.evaluate(() => window.wsOpenRewards());
+    await w.page.waitForFunction(() => document.getElementById('wsLogin').textContent === '今日のぶん +10 EMUER を受け取る');
+    assert.equal(await w.page.locator('#wsCalendarLine').innerText(), '🎄 挑戦納めカレンダー：今日は +10 EMUER（クリスマス）｜次は 12/31 に +20 EMUER（挑戦納め）');
+    await w.page.locator('#wsLogin').click();
+    await w.page.waitForFunction(() => document.getElementById('wsLogin').textContent === '今日のぶんは受け取り済み');
+    assert.match(await w.page.locator('#wsStatus').innerText(), /^10 EMUER を受け取りました。/);
+    assert.deepEqual(w.errors, []);
+  } finally { await w.close(); }
+});
+
+/* 11/28 オーナー：12月の特別な日は JPYC も。LINE・Google の人は鍵の無いアドレスなので、JPYC を受け取るアドレスを登録してもらう */
+test('12月の JPYC：特別な日は JPYC も受け取る予定に入り、アドレスが無い人は登録できる', async () => {
+  let claimed = false, saved = '';
+  const cal = { name: '挑戦納めカレンダー', active: true, today: { date: '2026-12-31', emuer: 20, jpyc: 50, special: '挑戦納め' }, next: null };
+  const gifts = () => claimed ? [{ day: '2026-12-31', amountJpyc: 50, status: saved ? 'pending' : 'needs_address', needsAddress: !saved, address: saved ? '0xabcd…ef01' : '', sent: false }] : [];
+  const w = await open({
+    'GET /daily/login/status': () => ({ json: { claimedToday: claimed, amount: '20', calendar: cal, jpycToday: 50 } }),
+    'POST /daily/login': () => { claimed = true; return { json: { ok: true, recorded: true, amount: '20', jpyc: { day: '2026-12-31', amountJpyc: 50, status: 'needs_address', needsAddress: true, address: '', sent: false } } }; },
+    'GET /rewards': () => ({ json: { rewards: [] } }),
+    'GET /jpyc/mine': () => ({ json: { ok: true, gifts: gifts(), walletOk: false } }),
+    'POST /jpyc/address': () => { saved = '0x' + 'ab'.repeat(20); return { json: { ok: true, filled: 1 } }; }
+  });
+  try {
+    await w.page.evaluate(() => window.wsOpenRewards());
+    await w.page.waitForFunction(() => document.getElementById('wsLogin').textContent === '今日のぶん +20 EMUER を受け取る');
+    assert.equal(await w.page.locator('#wsCalendarLine').innerText(), '🎄 挑戦納めカレンダー：今日は +20 EMUER ＋ 50 JPYC（挑戦納め）');
+    await w.page.locator('#wsLogin').click();
+    await w.page.waitForFunction(() => document.getElementById('wsLogin').textContent === '今日のぶんは受け取り済み');
+    assert.match(await w.page.locator('#wsStatus').innerText(), /さらに 50 JPYC を受け取れます。下で、JPYC を受け取るウォレットのアドレスを登録してください。/);
+    await w.page.locator('#wsJpycAddress').waitFor();
+    assert.match(await w.page.locator('#wsJpycPanel').innerText(), /アドレス待ち 50 JPYC/);
+    await w.page.fill('#wsJpycAddress', '0x' + 'ab'.repeat(20));
+    await w.page.click('#wsJpycPanel button');
+    await w.page.waitForFunction(() => /送る予定 50 JPYC/.test(document.getElementById('wsJpycPanel').textContent));
+    const sent = w.calls.find(c => c.key === 'POST /jpyc/address');
+    assert.equal(sent.body.jpycAddress, '0x' + 'ab'.repeat(20));
+    assert.equal(await w.page.locator('#wsJpycAddress').count(), 0, '登録したら入力欄は消える');
+    assert.deepEqual(w.errors, []);
+  } finally { await w.close(); }
+});
+
 test('MetaMask が無いとき：今日のぶんは「作るだけ」で受け取り、公式ショップで使えると伝える', async () => {
   let claimed = false;
   const w = await open({

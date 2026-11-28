@@ -35,7 +35,7 @@ const ARCADE_NEAR = 3.9;
    sideSign があるときは、公式店舗と同じ大きさ・同じつくりの店を右どなり（x=+13.5）に建て、
    sideProducts をその店の中の台に並べる（選べる）。 */
 const SIDE_X = 13.5;
-export function createWorld(canvas, { products = [], sideProducts = [], mainSign = 'THE FIELD STORE', sideSign = '', time = 'day', plays = [], view: startView = 'first', onSelect = () => {}, onFocus = () => {}, onNear = () => {}, onLost = () => {} } = {}) {
+export function createWorld(canvas, { products = [], sideProducts = [], mainSign = 'THE FIELD STORE', sideSign = '', time = 'day', plays = [], season = '', view: startView = 'first', onSelect = () => {}, onFocus = () => {}, onNear = () => {}, onLost = () => {} } = {}) {
   const renderer = new T.WebGLRenderer({canvas,antialias:true,alpha:false,powerPreference:'low-power'});
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1,1.5));
   renderer.outputColorSpace=T.SRGBColorSpace;
@@ -279,7 +279,23 @@ export function createWorld(canvas, { products = [], sideProducts = [], mainSign
   const activeCam=()=>viewMode==='third'?viewCam:camera;
   /* 11/28：願いの泉。広場のまんなかの置物（時間帯で変わる）に近づくと、願いを書ける（city-wish.js） */
   let wish=null,cinema=null;
-  if(atmosphere){try{wish=createWish(T,{scene,disposables,texture,at:PLAZA,mode:atmosphere.mode,viewCamera:activeCam});}catch(error){console.warn('City wish unavailable',error);}}
+  if(atmosphere){try{wish=createWish(T,{scene,disposables,texture,at:PLAZA,mode:atmosphere.mode,viewCamera:activeCam,bell:season==='newyear'});}catch(error){console.warn('City wish unavailable',error);}}
+  /* 12/24・25：お店の前（街に入って最初に見える所）にクリスマスツリー（11/28 オーナー：12月の挑戦納めカレンダー） */
+  canvas.dataset.season=season||'';
+  if(season==='xmas'){try{
+    const tx=4,tz=7.2,tree=new T.Group();tree.position.set(tx,0,tz);scene.add(tree);
+    const leaf=mat('#2f6b3a',{roughness:.8}),trunk=mat('#6b4a2e'),gold=mat('#ffd25a',{emissive:'#ffb020',emissiveIntensity:.9,metalness:.4,roughness:.3});
+    cylinder(0,.35,0,.18,.22,.7,trunk,tree);
+    [[1.55,1.4,1.1],[1.25,1.2,2.0],[.92,1.05,2.8],[.58,.9,3.5]].forEach(([r,h,y])=>mesh(new T.CylinderGeometry(0,r,h,10),leaf,0,y,0,tree));
+    const star=mesh(new T.SphereGeometry(.2,5,4),gold,0,4.05,0,tree);star.scale.set(1,1.3,1);
+    const colors=['#ff4d4d','#ffd25a','#5fb7ff','#ffffff','#ff8ad1'];let k=0;
+    for(const [r,y,n] of [[1.3,1.0,9],[1.05,1.8,8],[.78,2.6,7],[.48,3.3,5]])for(let i=0;i<n;i++){
+      const a=i/n*Math.PI*2+y,c=colors[k++%colors.length];
+      mesh(new T.SphereGeometry(.07,8,6),mat(c,{emissive:c,emissiveIntensity:.8,roughness:.3}),Math.cos(a)*r,y,Math.sin(a)*r,tree);}
+    tree.traverse(o=>{o.castShadow=false;o.receiveShadow=false;});
+    const treeLight=new T.PointLight('#ffd9a0',atmosphere?.mode==='night'?8:2,8,2);treeLight.position.set(tx,2.6,tz);scene.add(treeLight);
+    obstacle(tx,tz,2.4,2.4);
+  }catch(error){console.warn('City tree unavailable',error);}}
   const forward=new T.Vector3(),rightward=new T.Vector3(),pivot=new T.Vector3(),wanted=new T.Vector3(),aimPoint=new T.Vector3();
   function measureAim(){
     // 目の先に何があるか（画面の真ん中をそこに合わせる）
