@@ -708,7 +708,8 @@ test('本人情報の読み取りは、返ってこなければ見切る', () =>
 test('左下は、DAOのトレジャリーではなく本人の EMUER を出す（共通ナビの欄）', () => {
   assert.equal(DAO.indexOf('{{ treasury.total }}'), -1, 'まだDAOの額を出している');
   assert.ok(INDEX.indexOf('<span class="esn-foot-val" id="esnBalance">') > 0, '共通ナビに本人の EMUER の欄が無い');
-  assert.ok(INDEX.indexOf("set('esnBalance', from('emuTodayBalance') || '0');") > 0, '本人の残高から写していない');
+  /* 11/28：読めていないあいだは 0 ではなく「—」 */
+  assert.ok(INDEX.indexOf("set('esnBalance', from('emuTodayBalance') || '—');") > 0, '本人の残高から写していない');
 });
 
 test('本人の分配は、パスポートの名義で引く', () => {

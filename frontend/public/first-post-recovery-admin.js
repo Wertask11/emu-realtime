@@ -16,7 +16,8 @@
     const tab = document.getElementById("tab-schoolpark");
     if (!tab) return;
     const html = '<div id="emuerV2FirstPostPanel" class="card">'
-      + '<h3>EMUER：取りこぼした初投稿キャンペーンの報酬（100 EMUER）</h3>'
+      + '<h3>EMUER：取りこぼした初投稿キャンペーンの報酬（100 EMUER）<small style="font-weight:500;color:var(--muted)">　キャンペーンは 11/28 で終了</small></h3>'
+      + '<p class="empty" style="text-align:left;margin:0 0 6px;color:#b45309">初投稿キャンペーン（10/29〜11/28）は終わりました。ここは、期間中に取りこぼした人の分をあとから作るときだけ使います。新しく始まる人には作りません。</p>'
       + '<p class="empty" style="text-align:left;margin:0 0 10px">Knowledge Lab で最初に公開した人などに、初投稿の報酬が届いていませんでした。'
       + '「数える」で、パスポートの最初の投稿が期間内（10/29〜11/28）で、まだ報酬が無い人を数えます。数を確かめてから「作る」を押すと、本人の「報酬を受け取る」に出ます。'
       + 'もう受け取っている人には二重に作りません。最初の投稿を取り下げた人・パスポートが決められない人は「要確認」として出し、作りません。</p>'

@@ -2912,17 +2912,19 @@ async function renderSchoolPark() {
       });
     }
     /* 誰が何本ログを書いたか。承認するときの判断材料として画面に出す。 */
-    const logCount = {};
+    const logCount = {}, logKinds = {};
     if (ls) {
       ls.forEach(l => {
         const a = String((l && l.author) || "").toLowerCase();
-        if (a) logCount[a] = (logCount[a] || 0) + 1;
+        if (a) { logCount[a] = (logCount[a] || 0) + 1; (logKinds[a] = logKinds[a] || new Set()).add(String((l && l.kind) || "")); }
       });
     }
-    took.forEach(t => { t.logs = logCount[String(t.addr).toLowerCase()] || 0; });
+    /* 11/27 から、利用者が出すのは「① 何をやるか（やってみた）」と「② つまずいたところと学び（つまずいた・気づいた＋知恵カード）」の2回。
+       承認待ちでも ① ② で見せる（11/28 オーナー：管理画面を今の仕様に合わせて） */
+    took.forEach(t => { const k = String(t.addr).toLowerCase(); t.logs = logCount[k] || 0; t.kinds = logKinds[k] || new Set(); });
     /* そのクエストで、その人が置いた知恵カードの枚数。
 
-       完走条件は「報告3回＋知恵カード1枚＋運営の確認」なのに、
+       完走条件は「① 何をやるか と ② つまずいたところと学び（知恵カード）＋運営の確認」なのに、
        画面には報告の数しか出ていなかった。知恵カードを置いたかどうかは
        SchoolPark 側の知恵ライブラリを別に見に行くしかなく、
        認めるかどうかの判断がここだけでは付かなかった。 */
@@ -2932,7 +2934,12 @@ async function renderSchoolPark() {
       const a = String(d.author || "").toLowerCase();
       if (a) wisdomCount[a] = (wisdomCount[a] || 0) + 1;
     });
-    took.forEach(t => { t.wisdom = wisdomCount[String(t.addr).toLowerCase()] || 0; });
+    took.forEach(t => {
+      t.wisdom = wisdomCount[String(t.addr).toLowerCase()] || 0;
+      const kinds = t.kinds || new Set();
+      t.step1 = kinds.has("やってみた");
+      t.step2 = t.wisdom >= 1 && (kinds.has("つまずいた") || kinds.has("気づいた"));
+    });
     q.tookList = took;
     q.approvedCount = took.filter(t => t.approved).length;
     /* 完走＝運営が認めた人だけ。SchoolPark 側の分配とまったく同じ条件。 */
@@ -3195,8 +3202,9 @@ async function renderSchoolPark() {
        しかも判断材料は報告の数だけで、知恵カードを置いたかは出ていない。
 
        ここに、クエストを横断して「まだ認めていない人」を集める。
-       完走条件（報告3回＋知恵カード1枚）を満たした人を上に、
-       まだ足りない人は下に、何があと何本足りないかを添えて出す。 */
+       完走条件（① 何をやるか と ② つまずいたところと学び（知恵カード）を出したこと）を満たした人を上に、
+       まだ足りない人は下に、①・②のどちらがまだかを添えて出す。
+       11/27 より前に「報告3本＋知恵カード1枚」の形で出した人も、これまでどおり満たしたと数える。 */
     + (function () {
         const rows = [];
         quests.filter(q => !SpQuestStore.isFounder(q)).forEach(q => {
@@ -3207,7 +3215,7 @@ async function renderSchoolPark() {
             const left = Math.max(0, t.wisdom - Math.max(t.rounds, t.approved ? 1 : 0));
             if (t.approved && left <= 0) return;
             rows.push({ q: q, t: t, round: Math.max(t.rounds, t.approved ? 1 : 0) + 1,
-              ready: t.logs >= 3 && t.wisdom >= 1 && (!t.approved || left > 0) });
+              ready: ((t.step1 && t.step2) || (t.logs >= 3 && t.wisdom >= 1)) && (!t.approved || left > 0) });
           });
         });
         /* 条件を満たした人が先。その中では報告の多い順。 */
@@ -3217,8 +3225,10 @@ async function renderSchoolPark() {
           const name = esc(r.t.name || (String(r.t.addr).slice(0,6) + "…" + String(r.t.addr).slice(-4)));
           const label = esc((SpQuestStore.fullLabel(r.q) ? SpQuestStore.fullLabel(r.q) + " " : "") + (r.q.title || ""));
           const need = [];
-          if (r.t.logs < 3) need.push("報告あと" + (3 - r.t.logs) + "本");
-          if (r.t.wisdom < 1) need.push("知恵カードあと1枚");
+          if (!r.ready) {
+            if (!r.t.step1 && r.t.logs < 1) need.push("① 何をやるか がまだ");
+            if (!r.t.step2) need.push(r.t.wisdom < 1 ? "② つまずいたところと学び（知恵カード）がまだ" : "② のつまずいた・学びの報告がまだ");
+          }
           /* まとめて認める（11/25）。1人ずつ押すと8人で8回、確かめの窓も8回出る。
              条件を満たした人には最初から印を付けておき、足りない人は付けない。 */
           return '<div class="row" style="border-top:1px solid var(--line);padding-top:10px;margin-top:10px">'
@@ -3228,9 +3238,9 @@ async function renderSchoolPark() {
             + (r.ready ? ' checked' : '') + '>'
             + '<span><b>' + name + '</b>　' + label
             + (r.round > 1 ? '　<b style="color:#0F5C3F">' + r.round + '周目</b>' : '') + '<br>'
-            + '<small style="color:var(--muted)">報告 ' + r.t.logs + '本'
-            + (r.t.logs >= 3 ? ' ✓' : '')
-            + ' · 知恵カード ' + r.t.wisdom + '枚' + (r.t.wisdom >= 1 ? ' ✓' : '')
+            + '<small style="color:var(--muted)">① 何をやるか' + (r.t.step1 || r.t.logs >= 1 ? ' ✓' : ' —')
+            + ' · ② つまずいたところと学び' + (r.t.step2 || (r.t.logs >= 3 && r.t.wisdom >= 1) ? ' ✓' : ' —')
+            + '（報告 ' + r.t.logs + '本・知恵カード ' + r.t.wisdom + '枚）'
             + (need.length ? ' · <b style="color:#b45309">' + esc(need.join("、")) + '</b>' : '')
             + '</small></span></label>'
             + '<span><button class="act ' + (r.ready ? 'ok' : 'neutral') + '" data-qapprove="'
@@ -3239,7 +3249,8 @@ async function renderSchoolPark() {
         return '<div class="card"' + (ready ? ' style="border:2px solid #0F5C3F"' : '') + '>'
           + '<h3>承認待ち' + (ready ? '（' + ready + '人が完走条件を満たしています）' : '') + '</h3>'
           + '<p class="empty" style="text-align:left;margin:0 0 10px">'
-          + '完走条件は<b>報告3回＋知恵カード1枚＋運営の確認</b>です（11/27から、利用者は「① 何をやるか」と「② つまずいたところと学び」の2回で出します。②で報告2本と知恵カードが一度に入ります）。'
+          + '完走条件は<b>「① 何をやるか」と「② つまずいたところと学び（知恵カード）」を出したこと＋運営の確認</b>です。'
+          + '②を出すと、報告（つまずいた・気づいた）と知恵カードが一度に入ります。11/27 より前に報告3本＋知恵カードで出した人も、満たしたと数えます。'
           + 'ここで認めると、信用スコアの「完走」とパスポートの記録、星空の星に入ります。<br>'
           + 'EMUERは別です。下の「EMUERの予算と貢献」で渡します。</p>'
           + (rows.length

@@ -276,9 +276,13 @@ test('条件を満たした人が先に並ぶ', () => {
   assert.ok(ADMIN.indexOf('rows.sort((a, b) => (b.ready - a.ready)') >= 0, '並び順が条件で決まっていない');
 });
 
-test('あと何が足りないかを出す', () => {
-  assert.ok(ADMIN.indexOf('"報告あと" + (3 - r.t.logs) + "本"') >= 0);
-  assert.ok(ADMIN.indexOf('"知恵カードあと1枚"') >= 0);
+/* 11/28 オーナー：管理画面を今の仕様に合わせる。利用者が出すのは ① 何をやるか と ② つまずいたところと学び（知恵カード）の2回 */
+test('あと何が足りないかを ①・② で出す（前の「報告3本＋知恵カード」で出した人も満たしたと数える）', () => {
+  assert.ok(ADMIN.indexOf('need.push("① 何をやるか がまだ")') >= 0);
+  assert.ok(ADMIN.indexOf('"② つまずいたところと学び（知恵カード）がまだ"') >= 0);
+  assert.ok(ADMIN.indexOf('t.step2 = t.wisdom >= 1 && (kinds.has("つまずいた") || kinds.has("気づいた"));') >= 0);
+  assert.ok(ADMIN.indexOf('ready: ((t.step1 && t.step2) || (t.logs >= 3 && t.wisdom >= 1)) && (!t.approved || left > 0) });') >= 0);
+  assert.ok(ADMIN.indexOf('"報告あと"') < 0, '「報告あと〇本」の言い方はやめた');
 });
 
 test('知恵カードの枚数を、人ごと・クエストごとに数えている', () => {
