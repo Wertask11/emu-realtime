@@ -539,6 +539,33 @@ function createGiftsRouter({ db, requireFirebaseUser, requireOwner, now = () => 
     } catch (e) { return fail(res, e); }
   });
 
+  /* 運営：協賛の袋（クエストごと）と応援の合計（11/28 管理画面の点検）。読むだけ。だれが贈ったかは出さない。 */
+  router.get("/admin/summary", requireOwner, async (req, res) => {
+    try {
+      const [quests, posts] = await Promise.all([
+        db.collection(TARGETS).where("kind", "==", "quest").limit(300).get(),
+        db.collection(TARGETS).where("kind", "==", "post").limit(1000).get()
+      ]);
+      const pots = quests.docs.map((d) => d.data() || {}).filter((t) => DOC_ID.test(String(t.questId || "")));
+      const titles = await Promise.all(pots.map((t) => db.collection("sp_quests").doc(t.questId).get()
+        .then((s) => (s.exists ? String((s.data() || {}).title || "") : "")).catch(() => "")));
+      const cheered = posts.docs.map((d) => d.data() || {}).filter((t) => DOC_ID.test(String(t.postId || "")));
+      const top = cheered.slice().sort((a, b) => num(b.total) - num(a.total)).slice(0, 10);
+      const topTitles = await Promise.all(top.map((t) => db.collection("posts").doc(t.postId).get()
+        .then((s) => (s.exists ? String((s.data() || {}).title || "") : "")).catch(() => "")));
+      return res.json({ ok: true,
+        sponsor: {
+          pots: pots.map((t, i) => ({ questId: t.questId, title: titles[i].slice(0, 80), ...potView(t), updatedAtMs: num(t.updatedAtMs) }))
+            .sort((a, b) => b.total - a.total),
+          total: pots.reduce((n, t) => n + num(t.total), 0), paidOut: pots.reduce((n, t) => n + num(t.paidOut), 0)
+        },
+        cheer: {
+          posts: cheered.length, total: cheered.reduce((n, t) => n + num(t.total), 0),
+          top: top.map((t, i) => ({ postId: t.postId, title: topTitles[i].slice(0, 80), total: num(t.total), people: num(t.people) }))
+        } });
+    } catch (e) { return fail(res, e); }
+  });
+
   /* 運営：投票を作る・締める。 */
   router.get("/admin/polls", requireOwner, async (req, res) => {
     try {

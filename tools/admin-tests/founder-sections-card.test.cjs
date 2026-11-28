@@ -88,7 +88,7 @@ test('別のところで書き換わっていたら、上書きされなかっ�
   await page.close();
 });
 
-test('タブの名前に SchoolPark と Emu が出ている', () => {
-  assert.ok(ADMIN.includes('<button data-tab="schoolpark">SchoolPark（ギルド・クエスト・#000）</button>'));
-  assert.ok(ADMIN.includes('<button data-tab="emu">Emu（知識を読む・探す）</button>'));
+test('タブの名前が本番のメニューと同じ（知識を読む・探す／知識を試す・City）', () => {
+  assert.ok(ADMIN.includes('<button data-tab="schoolpark">知識を試す・City（クエスト・たまり場・12月カレンダー）</button>'));
+  assert.ok(ADMIN.includes('<button data-tab="emu">知識を読む・探す</button>'));
 });
