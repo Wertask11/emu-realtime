@@ -30866,9 +30866,10 @@ async function sendEmuFeedback() {
       /* 11/18：知識を読むの「分類で絞る」用。Knowledge Lab で付けた分類（分野・業種など）の ID だけを渡す */
       facets: knowledgeFacetIds(data),
       /* 11/27 オーナー：「Xみたいに投稿の引用を。スレッド機能とか」。引用した投稿・返信先・スレッドの最初の投稿（どれも投稿のID） */
-      quotePostId: emuPostLinkId(data.quotePostId),
-      replyToPostId: emuPostLinkId(data.replyToPostId),
-      threadRootId: emuPostLinkId(data.threadRootId),
+      /* IDの形の確かめ（emuPostLinkId と同じ）は、ここに書く。この関数だけを取り出して使う試験があるため */
+      quotePostId: /^[A-Za-z0-9_-]{1,80}$/.test(String(data.quotePostId || '')) ? String(data.quotePostId) : '',
+      replyToPostId: /^[A-Za-z0-9_-]{1,80}$/.test(String(data.replyToPostId || '')) ? String(data.replyToPostId) : '',
+      threadRootId: /^[A-Za-z0-9_-]{1,80}$/.test(String(data.threadRootId || '')) ? String(data.threadRootId) : '',
       createdAt: created
     };
   }

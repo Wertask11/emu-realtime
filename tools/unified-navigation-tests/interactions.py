@@ -1,5 +1,6 @@
 """Interaction regression in the isolated native fixture; no production calls or payments."""
 from playwright.sync_api import sync_playwright
+import re
 import json,pathlib,urllib.parse,urllib.request,os
 BASE=os.environ.get('UNIFIED_BASE','http://127.0.0.1:4220');OUT=pathlib.Path(os.environ.get('UNIFIED_OUTPUT','/workspace/outputs/unified-emu-20261102'))
 assert urllib.parse.urlparse(BASE).hostname in ['127.0.0.1','localhost'], 'Local emulator only'
@@ -74,7 +75,8 @@ with sync_playwright() as p:
   # 11/20 知識の投稿の「これを試す」→ やってみた記録（1枚）。受ける・3つの報告・知恵カードまでが1回で残る
   g.evaluate('closeSpWisdomCelebrate(false)');g.locator('#spWisdomCelebrate').wait_for(state='hidden')
   g.locator('#esnFeed').click();kf=g.frame_locator('#emuKnowledgeFrame')
-  card=kf.locator('article.card',has_text='LOCAL 導線検証の知識').first;card.wait_for()
+  # 11/27 引用した投稿にも元の題名が出るので、題名（h3）で探す
+  card=kf.locator('article.card',has=kf.locator('h3',has_text=re.compile(r'^LOCAL 導線検証の知識$'))).first;card.wait_for()
   card.locator('.try-btn').click();g.locator('#spTrySheet').wait_for(state='visible')
   assert 'LOCAL 導線検証の知識' in g.locator('#stPicked').inner_text(),g.locator('#stPicked').inner_text()
   assert 'やってみる' in g.locator('#stQuest').inner_text(),g.locator('#stQuest').inner_text()
