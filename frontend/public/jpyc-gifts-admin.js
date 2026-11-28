@@ -60,6 +60,12 @@
     const text = byAddress(last.pending).map(([a, n]) => a + "," + n).join("\n");
     try { await navigator.clipboard.writeText(text); alert("コピーしました（アドレス,JPYC の形）"); } catch (_) { prompt("コピーしてください", text); }
   }
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", panel); else panel();
-  setTimeout(panel, 1500);
+  /* 「知識を試す・City」タブは開くたびに描き直されるので、消えたら付け直す（11/28 点検：開くと消えていた） */
+  function watch() {
+    panel();
+    const tab = document.getElementById("tab-schoolpark");
+    if (tab && !tab.dataset.jpycWatch) { tab.dataset.jpycWatch = "1"; new MutationObserver(panel).observe(tab, { childList: true }); }
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", watch); else watch();
+  setTimeout(watch, 1500);
 })();

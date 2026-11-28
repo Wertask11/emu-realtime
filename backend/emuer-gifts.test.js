@@ -123,6 +123,23 @@ test("協賛：袋に積む。完走した人だけが1人10ずつ1回受け取�
   try { assert.equal((await empty.call("POST", "/sponsor/q1/claim", "carol")).body.error, "POT_EMPTY"); } finally { await empty.close(); }
 });
 
+test("運営：協賛の袋と応援の合計を見られる（運営でない人は見られない）", async () => {
+  const s = await serve(seed());
+  try {
+    await s.call("POST", "/sponsor", "alice", { questId: "q1", amount: 30, requestId: "spon-0101" });
+    await s.call("POST", "/cheer", "alice", { postId: "p1", amount: 5, requestId: "req-00101" });
+    await s.call("POST", "/sponsor/q1/claim", "carol");
+    const r = await s.call("GET", "/admin/summary", "alice");
+    assert.equal(r.status, 200);
+    assert.deepEqual(r.body.sponsor.pots.map((p) => [p.questId, p.title, p.total, p.pot, p.sponsors, p.paidOut]), [["q1", "一般 #001 入門", 30, 20, 1, 10]]);
+    assert.deepEqual([r.body.sponsor.total, r.body.sponsor.paidOut], [30, 10]);
+    assert.deepEqual([r.body.cheer.posts, r.body.cheer.total], [1, 5]);
+    assert.deepEqual(r.body.cheer.top, [{ postId: "p1", title: "朝の音読", total: 5, people: 1 }]);
+    assert.equal(JSON.stringify(r.body).includes(A), false, "贈った人のアドレスは出さない");
+    assert.equal((await s.call("GET", "/admin/summary", "bob")).status, 403);
+  } finally { await s.close(); }
+});
+
 test("投票：運営が作る。1人1票。決めた分の EMUER を使う。締めたら入れられない", async () => {
   const s = await serve(seed());
   try {

@@ -135,6 +135,10 @@ test("通報：同じ人は1回だけ。自分のものは通報できない。�
     assert.equal(reports.status, 200);
     assert.equal(reports.json.reports.length, 3);
     assert.ok(!JSON.stringify(reports.json).includes(B), "通報した人の番号は運営の一覧にも出さない");
+    assert.equal(reports.json.targets.length, 1, "同じものへの通報は1件にまとめる");
+    const t = reports.json.targets[0];
+    assert.deepEqual([t.room, t.postId, t.body, t.hidden, t.reportCount, t.reviewedAtMs], ["together", id, "一緒に何かしよう", true, 3, null]);
+    assert.deepEqual(t.reasons, { spam: 1, harass: 1, other: 1 });
     assert.equal((await f.call("bob", "GET", "/admin/reports")).status, 403, "運営だけ");
     assert.equal((await f.call("boss", "POST", "/admin/hide", { room: "together", postId: id, hidden: false })).status, 200);
     assert.equal((await f.call("bob", "GET", "/rooms/together/posts")).json.posts.length, 1, "運営が戻した");

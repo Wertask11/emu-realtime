@@ -349,10 +349,28 @@ function createTamaribaRouter({ db, identity, entitlement, requireFirebaseUser, 
   router.get("/admin/reports", ownerOnly, async (req, res) => {
     try {
       const snap = await db.collection(C_REPORTS).orderBy("createdAtMs", "desc").limit(50).get();
-      return res.json({ ok: true, reports: snap.docs.map(d => {
+      const reports = snap.docs.map(d => {
         const r = d.data() || {};
         return { target: r.target, room: r.room, postId: r.postId, replyId: r.replyId, reason: r.reason, createdAtMs: r.createdAtMs };
-      }) });
+      });
+      /* 11/28：管理画面で判断できるように、通報されたもの1件ずつに本文と今の状態をつける（通報した人はここでも出さない） */
+      const byTarget = new Map();
+      reports.forEach(r => {
+        if (!okRoom(r.room) || !okId(r.postId) || (r.replyId && !okId(r.replyId))) return;
+        const t = byTarget.get(r.target) || { target: r.target, room: r.room, postId: r.postId, replyId: r.replyId || "", reasons: {}, lastAtMs: 0 };
+        t.reasons[r.reason] = (t.reasons[r.reason] || 0) + 1;
+        t.lastAtMs = Math.max(t.lastAtMs, Number(r.createdAtMs) || 0);
+        byTarget.set(r.target, t);
+      });
+      const targets = await Promise.all([...byTarget.values()].map(async t => {
+        try {
+          const s = await (t.replyId ? repliesCol(t.room, t.postId).doc(t.replyId) : postsCol(t.room).doc(t.postId)).get();
+          const d = s.exists ? (s.data() || {}) : {};
+          return Object.assign(t, { exists: s.exists, body: String(d.body || "").slice(0, MAX_BODY), authorName: String(d.authorName || ""),
+            hidden: !!d.hidden, deleted: !!d.deleted, reportCount: Number(d.reportCount || 0), reviewedAtMs: Number(d.reviewedAtMs || 0) || null });
+        } catch (_) { return Object.assign(t, { exists: false }); }
+      }));
+      return res.json({ ok: true, reports, targets });
     } catch (e) { return fail(res, e, "TAMARIBA_UNAVAILABLE"); }
   });
   router.post("/admin/hide", ownerOnly, async (req, res) => {
