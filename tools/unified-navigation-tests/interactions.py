@@ -25,7 +25,7 @@ with sync_playwright() as p:
   g.locator('#esnCity').click();f=g.frame_locator('#spDaoFrame');f.locator('.city-hero [data-action="walk"]:not([disabled])').wait_for()
   # 11/21: the games live in the 3D City (top bar "遊ぶ"), not as cards on the City top page.
   assert f.locator('.city-play-card').count()==0
-  f.locator('.city-hero [data-action="walk"]').click();f.locator('#city-explorer [data-shop="plays"]').click();f.locator('#city-explorer [data-shop="play"]').nth(3).wait_for()
+  f.locator('.city-hero [data-action="walk"]').click();f.locator('#city-explorer [data-shop="menu"]').click();f.locator('#city-explorer [data-shop="plays"]').click();f.locator('#city-explorer [data-shop="play"]').nth(3).wait_for()
   g.evaluate("localStorage.setItem('sp_elev_badges',JSON.stringify(['1F']));localStorage.setItem('sp_elev_secret_unlocked','1')")
   # Every card opens its original implementation through the unchanged plan gate.
   for kind,frameid,path in [('echo','room2Frame','/Emu_room2/echo-field.html'),('ringo','ringoFrame','/ringo-game.html'),('gods','spRoomFrame','/daily-gods/index.html'),('elevator','spRoomFrame','/schoolpark/south-elevator.html')]:

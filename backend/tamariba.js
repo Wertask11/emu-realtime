@@ -47,6 +47,13 @@ const C_ROOMS = "sp_tamariba_rooms";
 const C_REPORTS = "sp_tamariba_reports";
 const C_BLOCKS = "sp_tamariba_blocks";
 const C_DAILY = "sp_tamariba_daily";
+/* 11/28 オーナー：「たまり場も画像（プロフィールのやつ）反映させて。投稿の時みたいに」。
+   書き手の印（authorKey）→ その人のアドレス を、サーバーだけが読める所に控える（画面には出さない）。
+   画面には「印ごとのプロフィール画像」だけを返す。アドレス・パスポート番号は出さない。 */
+const C_PEOPLE = "sp_tamariba_people";
+const AVATAR_TTL_MS = 10 * 60 * 1000;
+const MAX_AVATAR_KEYS = 40;
+function okAvatar(v) { return typeof v === "string" && v.length <= 300000 && /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+\/]+=*$/.test(v); }
 
 function isSchoolParkId(v) { return /^SP-[0-9A-Z]{4}-[0-9A-Z]{4}-[0-9A-Z]{4}-[0-9A-Z]{4}$/.test(String(v || "")); }
 function authorKeyOf(spid) { return "a" + crypto.createHash("sha256").update("tamariba:" + spid).digest("hex").slice(0, 15); }
@@ -61,6 +68,8 @@ function newId(now) { return now().toString(36) + crypto.randomBytes(6).toString
 function createTamaribaRouter({ db, identity, entitlement, requireFirebaseUser, rateLimit,
   ownerAddresses = [], now = Date.now }) {
   const router = express.Router();
+  const registered = new Set();          // このサーバーで控え済みの印
+  const avatarCache = new Map();         // 印 → { at, avatar }
   const limited = (key, max) => (rateLimit ? rateLimit({ key, max, windowMs: 60000 }) : (_q, _s, n) => n());
   router.use((_req, res, next) => { res.set("Cache-Control", "private, no-store"); next(); });
   router.use(requireFirebaseUser);
@@ -90,6 +99,12 @@ function createTamaribaRouter({ db, identity, entitlement, requireFirebaseUser, 
       if (!name) name = String(account.displayName || "").trim();
       if (!name) name = "メンバー" + spid.slice(-4);
       req.tama = { spid, isOwner, name: name.slice(0, 40), key: authorKeyOf(spid) };
+      /* 画像を引けるよう、印とアドレスを控える（このサーバーで1人1回。失敗しても入場は止めない） */
+      if (!registered.has(req.tama.key) && addrs.length) {
+        registered.add(req.tama.key);
+        avatarCache.delete(req.tama.key);
+        db.collection(C_PEOPLE).doc(req.tama.key).set({ addrs, updatedAtMs: now() }, { merge: true }).catch(() => registered.delete(req.tama.key));
+      }
       next();
     } catch (_) {
       return res.status(503).json({ error: "TAMARIBA_UNAVAILABLE" });
@@ -145,6 +160,33 @@ function createTamaribaRouter({ db, identity, entitlement, requireFirebaseUser, 
       }));
       return res.json({ ok: true, rooms: rows, me: { name: req.tama.name, key: req.tama.key, isOwner: req.tama.isOwner },
         limits: { maxBody: MAX_BODY, dailyPosts: DAILY_POSTS, dailyReplies: DAILY_REPLIES } });
+    } catch (e) { return fail(res, e, "TAMARIBA_UNAVAILABLE"); }
+  });
+
+  /* 書き手のプロフィール画像（知識を読むと同じ user_profiles/{アドレス}.avatar）。印ごとに返す */
+  async function avatarOf(key) {
+    const hit = avatarCache.get(key);
+    if (hit && now() - hit.at < AVATAR_TTL_MS) return hit.avatar;
+    let avatar = "";
+    try {
+      const ps = await db.collection(C_PEOPLE).doc(key).get();
+      const addrs = ps.exists ? ((ps.data() || {}).addrs || []).filter(a => typeof a === "string" && a) : [];
+      for (const a of addrs) {
+        const p = await db.collection("user_profiles").doc(a).get();
+        const v = p.exists ? (p.data() || {}).avatar : "";
+        if (okAvatar(v)) { avatar = v; break; }
+      }
+    } catch (_) { return ""; }
+    if (avatarCache.size > 2000) avatarCache.clear();
+    avatarCache.set(key, { at: now(), avatar });
+    return avatar;
+  }
+  router.get("/avatars", async (req, res) => {
+    const keys = [...new Set(String(req.query.keys || "").split(",").filter(k => /^a[0-9a-f]{15}$/.test(k)))].slice(0, MAX_AVATAR_KEYS);
+    try {
+      const out = {};
+      await Promise.all(keys.map(async k => { const v = await avatarOf(k); if (v) out[k] = v; }));
+      return res.json({ ok: true, avatars: out });
     } catch (e) { return fail(res, e, "TAMARIBA_UNAVAILABLE"); }
   });
 

@@ -17920,16 +17920,25 @@ async function _spShapeVote(v, mine, canGuild, p, app, defs) {
   const fb = window.fbLib;
   /* 票は1件ずつ数える。数を別に持つと、書き換えられる余地ができる。 */
   let counts = {}, total = 0, myPick = '';
-  try {
-    const bs = await fb.getDocs(fb.collection(window.db, 'sp_votes', v.id, 'ballots'));
-    bs.forEach(function (b) {
-      const opt = String((b.data() || {}).optionId || '');
-      if (!opt) return;
-      counts[opt] = (counts[opt] || 0) + 1;
-      total++;
-      if (mine && b.id.toLowerCase() === mine.toLowerCase()) myPick = opt;
-    });
-  } catch (e) { /* 読めなくても議題は出す */ }
+  /* 11/28 オーナー：「投票できたのかどうかもわかりにくい」。
+     前は SDK だけで票を読んでいた。SDK の常時接続が切れていると（パソコンで起きやすい）票が読めず、
+     入れたのに「選ぶと投票されます」のままに見えていた。普通の通信でも読み直す（_spReadAll）。
+     それでも読めないときは、この端末で入れた票（入れた直後に覚える）を出す。 */
+  const rows = await _spReadAll('sp_votes/' + v.id + '/ballots', 6000, true);
+  (rows || []).forEach(function (b) {
+    const opt = String(b.optionId || '');
+    if (!opt) return;
+    counts[opt] = (counts[opt] || 0) + 1;
+    total++;
+    if (mine && String(b.id).toLowerCase() === mine.toLowerCase()) myPick = opt;
+  });
+  const remembered = _spMyBallot(mine, v.id);
+  if (!myPick && remembered) {
+    myPick = remembered;
+    if (rows) { counts[myPick] = (counts[myPick] || 0) + 1; total++; }
+  }
+  const countsKnown = !!rows;
+  const myLabel = myPick ? (((v.options || []).find(function (o) { return o.id === myPick; }) || {}).label || '') : '';
 
   const closed = _spVoteClosed(v);
   /* 一般ギルドは誰でも、特殊ギルドは関われる人だけが入れられる。
@@ -17945,9 +17954,9 @@ async function _spShapeVote(v, mine, canGuild, p, app, defs) {
     const picked = (myPick === o.id);
     const won = adoptedId && adoptedId === o.id;
     return {
-      id: o.id, label: (won ? '◎ ' : '') + o.label,
+      id: o.id, label: (won ? '◎ ' : '') + (picked ? '✓ ' : '') + o.label + (picked ? '（あなたの票）' : ''),
       /* 入れる前は数を見せない。先に結果が見えると引きずられる。 */
-      countLabel: done ? (n + '票 · ' + pct + '%') : '',
+      countLabel: done && countsKnown ? (n + '票 · ' + pct + '%') : '',
       pct: done ? pct + '%' : '0%',
       barBg: won ? 'rgba(15,92,63,.28)' : picked ? 'rgba(15,92,63,.18)' : 'rgba(20,19,16,.07)',
       border: (picked || won) ? '#f08300' : 'rgba(20,19,16,.16)',
@@ -17995,8 +18004,10 @@ async function _spShapeVote(v, mine, canGuild, p, app, defs) {
     setGuild: function () { spVoteSetGuild(v.id, app); },
     note: (!canVote && !closed && !myPick)
             ? 'この議題は特殊議題です。運営・有料の方・信用が足りている方が投票できます。'
-            : (done ? (total + '票入りました。1つのパスポートにつき1票です。')
-                    : '選ぶと投票されます。あとから変えられません。')
+            : myPick
+              ? ('✅ 投票しました：「' + myLabel + '」。' + (countsKnown ? 'いま' + total + '票入っています。' : '票の数は、いま読み込めませんでした。') + '1つのパスポートにつき1票です。')
+              : (done ? (total + '票入りました。1つのパスポートにつき1票です。')
+                      : '選ぶと投票されます。あとから変えられません。')
   };
 }
 
@@ -18541,6 +18552,29 @@ window.spVoteToQuest = async function (voteId, app) {
 };
 
 /* 1票入れる。文書のIDを自分のアドレスにする。 */
+/* この端末で入れた票（アドレスごと）。票が読めないときに「投票しました」を出すためだけに使う */
+function _spMyBallot(addr, voteId, optionId) {
+  const key = 'sp-my-ballots-v1', who = String(addr || '').toLowerCase();
+  if (!who) return '';
+  try {
+    const all = JSON.parse(localStorage.getItem(key) || '{}') || {};
+    if (optionId) { all[who] = Object.assign({}, all[who] || {}, { [voteId]: String(optionId) }); localStorage.setItem(key, JSON.stringify(all)); }
+    return String(((all[who] || {})[voteId]) || '');
+  } catch (e) { return ''; }
+}
+/* 投票できたことを、画面の上に少しのあいだ出す */
+function _spVoteToast(text) {
+  try {
+    let el = document.getElementById('spVoteToast');
+    if (!el) {
+      el = document.createElement('div'); el.id = 'spVoteToast'; el.setAttribute('role', 'status');
+      el.style.cssText = 'position:fixed;left:50%;top:84px;transform:translateX(-50%);z-index:2147483000;max-width:calc(100% - 32px);padding:12px 20px;border-radius:12px;background:#0F5C3F;color:#fff;font-weight:700;font-size:14px;box-shadow:0 10px 30px rgba(0,0,0,.2);text-align:center';
+      document.body.appendChild(el);
+    }
+    el.textContent = text; el.hidden = false;
+    clearTimeout(el._t); el._t = setTimeout(function () { el.hidden = true; }, 4500);
+  } catch (e) {}
+}
 async function spVoteCast(voteId, optionId, app) {
   if (_spVoteBusy) return;
   const p = await spPassportLoad();
@@ -18562,6 +18596,13 @@ async function spVoteCast(voteId, optionId, app) {
     return;
   }
   _spVoteBusy = false;
+  /* 入れたことを、すぐ画面に出す（票の読み直しが遅い・読めないときも分かるように） */
+  try {
+    _spMyBallot(addr, voteId, optionId);
+    const vd = (_spVoteDocs || []).find(function (x) { return x.id === voteId; }) || {};
+    const label = (((vd.options || []).find(function (o) { return o.id === optionId; }) || {}).label || '');
+    _spVoteToast('✅ 投票しました' + (label ? '：「' + label + '」' : ''));
+  } catch (e) {}
   await window.spDaoLoadVotes(app);
 }
 

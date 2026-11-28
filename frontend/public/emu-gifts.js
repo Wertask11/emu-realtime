@@ -13,7 +13,7 @@
   var POLL_MS = 20000;
 
   var WORDS = {
-    INSUFFICIENT_EMUER: 'アプリ内EMUERが足りないみたい🧊',
+    INSUFFICIENT_EMUER: 'アプリ内EMUER（まだ実EMUERに換えていない分）が足りないみたい🧊 実EMUER（ウォレットにある分）は、応援・協賛・投票には使えないよ',
     DAILY_LIMIT: '応援と協賛は、1日100 EMUERまでだよ。また明日ね🧊',
     CHAIN_UNAVAILABLE: 'いまEMUERの記録を確かめられなかったよ。少し待って、もう一度押してね（EMUERは減っていないよ）🧊',
     OWN_POST: '自分の投稿には応援できないよ🧊',
@@ -40,7 +40,8 @@
       var headers = auth ? await window.emuAuthHeaders(true) : { 'Content-Type': 'application/json' };
       var r = await fetch(BASE + path, { method: method, headers: headers, body: body ? JSON.stringify(body) : undefined });
       var d = await r.json().catch(function () { return {}; });
-      if (!r.ok) return Object.assign({ ok: false, code: String(d.error || ''), error: word(d.error, d) }, d, { ok: false });
+      /* 11/28：前は d.error（INSUFFICIENT_EMUER などの記号）が、あとから言葉を上書きしていた。画面には記号のまま出ていた */
+      if (!r.ok) return Object.assign({}, d, { ok: false, code: String(d.error || ''), error: word(d.error, d) });
       return Object.assign({ ok: true }, d);
     } catch (e) {
       return { ok: false, code: 'NETWORK', error: /ログイン/.test(String(e && e.message)) ? 'ログインしてね🧊' : 'うまくつながらなかったみたい🧊 もう一度ためしてね。' };

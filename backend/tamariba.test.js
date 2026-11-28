@@ -23,7 +23,7 @@ async function fixture() {
       boss: { walletAddress: owner, pass: true },
       unlinked: { walletAddress: "unlinked", pass: true }
     },
-    user_profiles: { alice: { displayName: "ありす" } },
+    user_profiles: { alice: { displayName: "ありす", avatar: "data:image/png;base64,QUJD" }, bob: { avatar: "javascript:alert(1)" } },
     sp_auth_links: { "fb:alice": { spid: A }, "fb:bob": { spid: B }, "fb:carol": { spid: C }, "fb:dave": { spid: D }, "fb:boss": { spid: D } },
     sp_identities: { [A]: { spid: A, status: "active" }, [B]: { spid: B, status: "active" }, [C]: { spid: C, status: "active" }, [D]: { spid: D, status: "active" } }
   });
@@ -187,5 +187,20 @@ test("新しい順に20件ずつ。続きは before で読む", async () => {
     assert.equal(second.json.posts.length, 5);
     assert.equal(second.json.posts[4].body, "n0");
     assert.equal(second.json.next, null);
+  } finally { await f.close(); }
+});
+
+test("プロフィール画像：書き手の印ごとに返す（知識を読むと同じ画像）。アドレス・番号は返さない。形の悪い画像は返さない", async () => {
+  const f = await fixture();
+  try {
+    await f.call("alice", "GET", "/rooms");
+    await f.call("bob", "GET", "/rooms");
+    await new Promise(r => setTimeout(r, 20));
+    const keys = [authorKeyOf(A), authorKeyOf(B), authorKeyOf(C), "nope"].join(",");
+    const r = await f.call("carol", "GET", "/avatars?keys=" + keys);
+    assert.equal(r.status, 200);
+    assert.deepEqual(r.json, { ok: true, avatars: { [authorKeyOf(A)]: "data:image/png;base64,QUJD" } });
+    assert.ok(!/alice|bob|SP-/.test(JSON.stringify(r.json)), "アドレス・パスポート番号は出さない");
+    assert.equal((await f.call("", "GET", "/avatars?keys=" + keys)).status, 401, "ログインしていない人には返さない");
   } finally { await f.close(); }
 });

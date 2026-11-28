@@ -26,6 +26,8 @@ async function open(width){
  });
   /* CITY_TIME=morning|day|night で、時間帯ごとの街を確かめられる（無ければ端末の時刻） */
  if(process.env.CITY_TIME)await context.addInitScript(v=>{window.__SP_CITY_TIME=v;},process.env.CITY_TIME);
+ /* 11/28 からアバター視点が標準。ここでは目の高さ（一人称）で、床・壁・商品のタップを確かめる。天気は晴れに固定（外の天気APIへはつながない） */
+ await context.addInitScript(()=>{try{localStorage.setItem('sp-city-view','first');localStorage.setItem('sp-city-weather','clear');}catch(_){}});
  const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));
  page.on('console',m=>{if(m.type()==='error'&&/WebGL|THREE|shader/i.test(m.text()))errors.push(m.text());});
  await page.goto(fixture.base+'/test/parent');
@@ -40,6 +42,8 @@ async function open(width){
  await frame.locator('.cs-canvas[data-ready="true"]').waitFor({timeout:30000});
  return {page,frame,context,touch:width<700,errors,requests,canvas:frame.locator('.cs-canvas'),close:()=>context.close()};
 }
+/* 11/28：行き先・商品・Passport は右上の「⋯」の中 */
+async function menu(f,name){if(await f.frame.locator('.cs-menu').isHidden())await f.frame.locator('[data-shop="menu"]').click();return f.frame.locator('.cs-menu').getByRole('button',{name,exact:true}).click();}
 const pose=async canvas=>JSON.parse(await canvas.getAttribute('data-position')||'{}');
 const tap=async(f,x,y)=>f.touch?f.page.touchscreen.tap(x,y):f.page.mouse.click(x,y);
 async function stablePose(f){
@@ -52,7 +56,7 @@ for(const width of [375,390,412,768,1440])test(`3D City ${width}px: click/tap mo
  try{
   const gl=await f.canvas.evaluate(c=>({width:c.width,height:c.height,gl:!!c.getContext('webgl2'),calls:Number(c.dataset.drawCalls||0)}));assert.ok(gl.gl&&gl.width>0&&gl.height>0);
   await f.page.screenshot({path:path.join(qa,`city-3d-street-${width}.png`)});
-  await f.frame.getByRole('button',{name:'入店する ↗',exact:true}).click();
+  await menu(f,'入店する ↗');
   await f.frame.waitForFunction(()=>{const p=JSON.parse(document.querySelector('.cs-canvas').dataset.position||'{}');return p.z===2.6;});
   await f.page.screenshot({path:path.join(qa,`city-3d-entrance-${width}.png`)});
   const box=await f.canvas.boundingBox(),beforeTap=await pose(f.canvas);
@@ -61,7 +65,7 @@ for(const width of [375,390,412,768,1440])test(`3D City ${width}px: click/tap mo
   await f.frame.waitForFunction(()=>document.querySelector('.cs-canvas').dataset.navigation!=='moving');
   const afterTap=await pose(f.canvas);assert.ok(Math.hypot(afterTap.x-beforeTap.x,afterTap.z-beforeTap.z)>.12,'tap walks toward visible floor');
   if(width>=700){
-   await f.frame.getByRole('button',{name:'入店する ↗',exact:true}).click();const beforeDouble=await stablePose(f);
+   await menu(f,'入店する ↗');const beforeDouble=await stablePose(f);
    await f.page.mouse.dblclick(box.x+box.width*.42,box.y+box.height*.7,{delay:70});
    await f.frame.waitForFunction(old=>{const p=JSON.parse(document.querySelector('.cs-canvas').dataset.position||'{}');return Math.hypot(p.x-old.x,p.z-old.z)>.12;},beforeDouble);
    await f.frame.waitForFunction(()=>document.querySelector('.cs-canvas').dataset.navigation!=='moving');
@@ -78,10 +82,10 @@ for(const width of [375,390,412,768,1440])test(`3D City ${width}px: click/tap mo
   assert.notEqual(await f.canvas.getAttribute('data-navigation'),'moving');
   const gestureState=await f.frame.evaluate(()=>({touchAction:getComputedStyle(document.querySelector('.cs-canvas')).touchAction,scrollY}));
   assert.equal(gestureState.touchAction,'none');assert.equal(gestureState.scrollY,0,'3D swipe does not scroll the page');
-  await f.frame.getByRole('button',{name:'入店する ↗',exact:true}).click();const beforeWall=await stablePose(f);
+  await menu(f,'入店する ↗');const beforeWall=await stablePose(f);
   await tap(f,box.x+box.width*.5,box.y+box.height*.23);await f.page.waitForTimeout(300);
   const afterWall=await pose(f.canvas);assert.ok(Math.hypot(afterWall.x-beforeWall.x,afterWall.z-beforeWall.z)<.04,'wall/object is not a destination');
-  await f.frame.getByRole('button',{name:'商品を見る',exact:true}).click();await f.frame.locator('[data-shop="product"]').first().click();
+  await menu(f,'商品を見る');await f.frame.locator('[data-shop="product"]').first().click();
   assert.equal(await f.frame.getByRole('button',{name:'販売準備中',exact:true}).isDisabled(),true);
   assert.ok((await f.frame.locator('.cs-panel').innerText()).includes('実際の注文・支払いは発生しません'));
   await f.page.screenshot({path:path.join(qa,`city-3d-product-${width}.png`)});
@@ -91,9 +95,9 @@ for(const width of [375,390,412,768,1440])test(`3D City ${width}px: click/tap mo
   await f.frame.locator('.cs-panel:not([hidden])').waitFor();assert.ok((await f.frame.locator('.cs-panel').innerText()).includes('探究ノート'));
   const afterProduct=await pose(f.canvas);assert.ok(Math.hypot(afterProduct.x-beforeProduct.x,afterProduct.z-beforeProduct.z)<.04,'product selection does not move the camera');
   await f.frame.getByRole('button',{name:'商品パネルを閉じる'}).click();
-  await f.frame.locator('[data-shop="checkin"]').click();await f.frame.getByText('✓ 記録済み',{exact:true}).waitFor();
+  if(await f.frame.locator('.cs-menu').isHidden())await f.frame.locator('[data-shop="menu"]').click();await f.frame.locator('[data-shop="checkin"]').click();await f.frame.getByText('✓ 記録済み',{exact:true}).waitFor();
   assert.equal(f.requests.filter(p=>p.endsWith('/shops/checkout')).length,0,'demo never begins checkout');
-  await f.frame.getByRole('button',{name:'カウンター',exact:true}).click();await f.page.waitForTimeout(150);
+  await menu(f,'カウンター');await f.page.waitForTimeout(150);
   await f.page.screenshot({path:path.join(qa,`city-3d-inside-${width}.png`)});
   const size=await f.frame.evaluate(()=>({width:innerWidth,body:document.body.scrollWidth,root:document.documentElement.scrollWidth,layer:document.querySelector('#city-explorer').getBoundingClientRect().toJSON()}));
   assert.ok(size.body<=size.width+1&&size.root<=size.width+1);assert.ok(size.layer.right<=size.width+1);
@@ -103,7 +107,7 @@ for(const width of [375,390,412,768,1440])test(`3D City ${width}px: click/tap mo
  }finally{await f.close();}
 });
 test('3D City logout disposes the scene and clears the product panel',async()=>{
- const f=await open(390);try{await f.frame.getByRole('button',{name:'商品を見る',exact:true}).click();await f.page.evaluate(()=>__logout());assert.equal(await f.frame.locator('#city-explorer').count(),0);assert.deepEqual(f.errors,[]);}finally{await f.close();}
+ const f=await open(390);try{await menu(f,'商品を見る');await f.page.evaluate(()=>__logout());assert.equal(await f.frame.locator('#city-explorer').count(),0);assert.deepEqual(f.errors,[]);}finally{await f.close();}
 });
 test('3D City recovers a lost context and can exit after a catalogue failure',async()=>{
  const f=await open(390);
