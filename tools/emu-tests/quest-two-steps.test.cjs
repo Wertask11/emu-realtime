@@ -130,7 +130,12 @@ test('完走までの手順は ① と ② の2つ。クエストの詳細のボ
   assert.ok(!DAO.includes('{{ cur.logStuck }}') && !DAO.includes('{{ cur.logFound }}'), '3回に分けるボタンは出さない');
   assert.ok(!DAO.includes('onClick="{{ cur.wisdom }}"'), '知恵カードだけを置くボタンは出さない（② で置く）');
   assert.ok(DAO.includes('value="{{ cur.canFinishLate }}"'), '締め切ったあとも ② を出せる');
-  assert.ok(DAO.includes('>4</div>') && DAO.includes('運営が確認して完走'));
+  assert.ok(DAO.includes('{{ cur.stepDone.num }}</div>') && DAO.includes('運営が確認して完走'));
+  /* 11/28 オーナー：「受けたときとかもチェック出して、わかりやすいように。他のクエストでもね」。4つの手順すべてに ✓、次にやるところに「次はここ」 */
+  assert.ok(DAO.includes('{{ cur.stepTake.num }}</div>') && DAO.includes('{{ cur.stepTake.mark }}') && DAO.includes('{{ s.num }}</div>'));
+  assert.equal((DAO.match(/← 次はここ/g) || []).length, 3, '受ける・①②・完走のどこにでも出せる');
+  assert.ok(DAO.includes("stepTake: Object.assign(look(0, '1'), { mark: '✓ 受けた'"));
+  assert.ok(DAO.includes("mark: e.iDone ? '✓ 完走' : '運営の確認待ち'"));
 });
 
 /* 11/27 ② で Emu の投稿を紐づける（#003 PLAY・特殊）。① で選んでいれば引き継ぎ、選んでいなければ ② で選べる */

@@ -42,7 +42,11 @@ test('Emuに入る・戻る処理（showEmuToday）は知識を読むを開き�
 test('今日のEmu の中身はどの幅でも出さず、EMUER が使う残高の欄は残っている', () => {
   assert.ok(/\n#emuTodayDashboard \{ display:none !important; \}/.test(INDEX), 'パソコンで出てしまう');
   assert.ok(INDEX.indexOf('<span id="emuTodayBalance">') >= 0, '残高の欄が無いと左下の EMUER と EMUER v2 が書く先を失う');
-  assert.ok(INDEX.indexOf("set('esnBalance', from('emuTodayBalance') || '0');") >= 0);
+  assert.ok(INDEX.indexOf("set('esnBalance', from('emuTodayBalance') || '—');") >= 0, '読めていないあいだは 0 ではなく「—」（11/28）');
+  /* 11/28 オーナー：「読み込めてないとき0はやめて」。残高・価値プロフィールは、読めるまで・読めなかったときは「—」 */
+  assert.ok(INDEX.includes("if (pair && pair.failed) return '—';") && INDEX.includes("const failed = !addr || (!isChes && !realKnown);"));
+  for (const id of ['emuWalletBalance', 'emuHelpedPeople', 'emuHelpfulCount', 'emuLearnedCount', 'emuKnowledgeDeliveredCount', 'emuElevatedCount']) assert.ok(INDEX.includes('<strong id="' + id + '">—</strong>'), id);
+  assert.ok(INDEX.includes('<span class="esn-foot-val" id="esnBalance">—</span>') && INDEX.includes('<span id="emuTodayBalance">—</span>'));
 });
 
 test('知識を読むの見出し（KNOWLEDGE FROM EXPERIENCE / 知識を読む / 説明文）を要素ごと消し、検索のすぐ下に並び替えが来る', () => {

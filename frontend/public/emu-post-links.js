@@ -51,6 +51,7 @@
       + '<span class="lk-quote-who">🔁 ' + esc(nameOf(q)) + ' さんの投稿</span>'
       + '<b class="lk-quote-title">' + esc(q.title) + '</b>'
       + '<span class="lk-quote-body">' + esc(snippet(q.body, 90)) + '</span>'
+      + '<span class="lk-quote-more" aria-hidden="true">タップで全文 ▾</span>'
       + '<span class="lk-quote-full" hidden>' + esc(q.body) + (q.imageUrl && /^(https:|data:image\/)/.test(q.imageUrl) ? '<img class="lk-quote-img" alt="" loading="lazy" src="' + esc(q.imageUrl) + '">' : '') + '</span></button>';
   }
   function decorate() {
@@ -168,6 +169,9 @@
     '.lk-quote-body,.lk-quote-full{display:block;margin-top:4px;font-size:13px;line-height:1.7;color:#5c554c;white-space:pre-wrap;overflow-wrap:anywhere}',
     '.lk-quote-full[hidden],.lk-quote-body[hidden]{display:none}',
     '.lk-quote-img{display:block;max-width:100%;max-height:320px;margin-top:8px;border-radius:10px}',
+    /* 11/28 オーナー：「スマホの引用の記事はテーマ（題名）だけ表示で、タップで全部表示」 */
+    '.lk-quote-more{display:none;margin-top:4px;font-size:12px;color:#b0621e;font-weight:700}',
+    '@media(max-width:760px){.lk-quote[aria-expanded="false"] .lk-quote-body{display:none}.lk-quote[aria-expanded="false"] .lk-quote-more{display:block}}',
     '.lk-preview{position:relative;margin:0 0 12px;padding:10px 64px 10px 12px;border:1px solid #f0c98a;border-radius:12px;background:#fff8ea}',
     '.lk-preview-k{font-size:12px;font-weight:800;color:#a15c00}',
     '.lk-preview-t{display:block;width:100%;margin-top:2px;padding:0;border:0;background:none;font:inherit;font-size:14px;color:inherit;text-align:left;cursor:pointer;overflow-wrap:anywhere}',
