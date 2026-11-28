@@ -119,6 +119,13 @@ h2{font:700 21px/1.5 Georgia,'Yu Mincho',serif; margin:0 0 14px}
   .mode-btns{overflow-x:auto; flex-wrap:nowrap; padding-bottom:4px}
   .mode-btns .card{white-space:nowrap}
 }
+/* 11/28 役に立った */
+.r1-helpful{margin-top:28px;padding-top:16px;border-top:1px solid var(--line);display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.r1-helpful button{min-height:44px;padding:10px 18px;border:1px solid #f0a6c6;border-radius:999px;background:#fff;color:#9d174d;font:inherit;font-weight:700;cursor:pointer}
+.r1-helpful button.done{background:#fdf2f8;cursor:default}
+.r1-helpful button:disabled{opacity:1}
+.r1-helpful small{color:var(--muted);font-size:13px}
+.r1-hl-count{margin-left:10px;font-size:11px;color:#9d174d;font-weight:700}
 </style>
 <script src="/economy/entry.js" defer></script>
 <script src="/emu-embedded.js"></script>
@@ -266,6 +273,7 @@ function loadContents(onDone) {
 
 // 初回ロード
 function init() {
+  loadHelpful();
   loadContents(function(data) {
     room1Contents = data;
     renderList();
@@ -416,7 +424,8 @@ function renderHitList() {
     if (h.body) {
       html += '<p style="font-size:13px;color:var(--text-sub);margin-top:6px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">' + h.body + '</p>';
     }
-    html += '<span style="font-size:11px;color:var(--text-sub);">' + new Date(h.createdAt).toLocaleString() + '</span></div>';
+    html += '<span style="font-size:11px;color:var(--text-sub);">' + new Date(h.createdAt).toLocaleString() + '</span>'
+      + (helpful.counts[h.id] ? '<span class="r1-hl-count">🫶 ' + helpful.counts[h.id] + '</span>' : '') + '</div>';
   });
   document.getElementById("detailList").innerHTML = html;
   document.getElementById("detailBody").innerHTML = "";
@@ -435,7 +444,61 @@ function openPost(index) {
     '</div><div style="line-height:1.9;margin-bottom:32px;"><strong>📘 本文</strong><br>' +
     post.body.replace(/\n/g,"<br>") + '</div>' +
     (post.note ? '<div style="border-top:1px dashed var(--border);padding-top:16px;color:var(--text-sub);font-size:13px;">⚠ 補足・注意<br>' + post.note.replace(/\n/g,"<br>") + '</div>' : "") +
-    (post.noteUrl ? '<div style="margin-top:24px;"><a href="' + post.noteUrl + '" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:10px 20px;background:var(--accent);color:#fff;border-radius:6px;text-decoration:none;font-size:14px;font-weight:bold;">📝 Noteで全文を読む →</a></div>' : "");
+    (post.noteUrl ? '<div style="margin-top:24px;"><a href="' + post.noteUrl + '" target="_blank" rel="noopener noreferrer" style="display:inline-block;padding:10px 20px;background:var(--accent);color:#fff;border-radius:6px;text-decoration:none;font-size:14px;font-weight:bold;">📝 Noteで全文を読む →</a></div>' : "") +
+    '<div class="r1-helpful"><button type="button" id="r1Helpful" data-id="' + escAttr(post.id) + '" onclick="pressHelpful(this)"></button><small id="r1HelpfulMsg" role="status"></small></div>';
+  paintHelpful();
+}
+
+/* ══════════════════════════════════════
+   🫶 役に立った（11/28 オーナー：「ナレッジテキストのコンテンツにも役に立ったとか押せるようにして」）
+   数はだれでも見られる。押せるのはログインした人で、1つのコンテンツに1回（知識を読むと同じく取り消しは無し）。
+   記録するのはサーバー（backend/room1-helpful.js）。ログインの証は Emu（親）から借りる。
+   ══════════════════════════════════════ */
+var helpful = { counts: {}, mine: {}, busy: false };
+function escAttr(v) { return String(v == null ? "" : v).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+function helpfulAuth() {
+  try {
+    if (parent !== window && typeof parent.emuAuthHeaders === "function")
+      return Promise.resolve(parent.emuAuthHeaders(true, { interactive: false })).catch(function () { return {}; });
+  } catch (e) {}
+  return Promise.resolve({});
+}
+function loadHelpful() {
+  return helpfulAuth().then(function (h) {
+    return fetch(API_BASE + "/api/room1/helpful", { headers: h || {} });
+  }).then(function (r) { return r.json(); }).then(function (d) {
+    helpful.counts = (d && d.counts) || {};
+    helpful.mine = {};
+    ((d && d.mine) || []).forEach(function (id) { helpful.mine[id] = true; });
+    paintHelpful();
+    if (viewState === "list" && document.getElementById("detailList").innerHTML) renderHitList();
+  }).catch(function () {});
+}
+function paintHelpful() {
+  var b = document.getElementById("r1Helpful");
+  if (!b) return;
+  var id = b.getAttribute("data-id"), n = helpful.counts[id] || 0, done = !!helpful.mine[id];
+  b.disabled = done || helpful.busy;
+  b.className = done ? "done" : "";
+  b.textContent = (done ? "🫶 役に立った（押しました）" : "🫶 役に立った") + (n ? "　" + n : "");
+}
+function pressHelpful(btn) {
+  var id = btn.getAttribute("data-id"), msg = document.getElementById("r1HelpfulMsg");
+  if (helpful.busy || helpful.mine[id]) return;
+  helpful.busy = true; paintHelpful();
+  if (msg) msg.textContent = "";
+  helpfulAuth().then(function (h) {
+    if (!h || !h.Authorization) throw new Error("AUTH_REQUIRED");
+    return fetch(API_BASE + "/api/room1/contents/" + encodeURIComponent(id) + "/helpful", { method: "POST", headers: h });
+  }).then(function (r) {
+    return r.json().then(function (d) { if (!r.ok) throw new Error(d.error || "FAILED"); return d; });
+  }).then(function (d) {
+    helpful.mine[id] = true;
+    helpful.counts[id] = d.count || (helpful.counts[id] || 0) + (d.already ? 0 : 1);
+    if (msg) msg.textContent = d.already ? "もう押してあります。" : "届けました。ありがとう🫶";
+  }).catch(function (e) {
+    if (msg) msg.textContent = /AUTH/.test(String(e && e.message)) ? "ログインすると押せます。" : "押せませんでした。少し待って、もう一度押してください。";
+  }).then(function () { helpful.busy = false; paintHelpful(); });
 }
 
 function backToList() { currentBlueMain = ""; renderList(); }

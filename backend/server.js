@@ -2,6 +2,7 @@
 // Module import
 // =====================
 const express = require("express");
+const { createRoom1HelpfulRouter } = require("./room1-helpful");
 const http = require("http");
 const { Server } = require("socket.io");
 const { randomUUID } = require("crypto");
@@ -1409,6 +1410,9 @@ app.post("/api/room1/direct-add", requireRoom1Admin, async (req, res) => {
 });
 
 // ── お預かり箱：送信 ──
+// ── 役に立った（11/28。だれでも数を見られる・ログインした人が1回押せる）── backend/room1-helpful.js
+app.use("/api/room1", createRoom1HelpfulRouter({ express, db, firebaseAdmin, requireFirebaseUser, rateLimit }));
+
 app.post("/api/room1/submit", publicFormRateLimit, async (req, res) => {
   try {
     if (!db) return res.status(500).json({ error: "Firestore未接続" });

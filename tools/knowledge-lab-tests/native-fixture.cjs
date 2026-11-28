@@ -34,6 +34,8 @@ async function main(options={}){
     const roomStart=serverSource.indexOf('const ROOM1_CONTENTS_COL'),roomEnd=serverSource.indexOf('// ── 直接追加',roomStart);
     if(roomStart<0||roomEnd<=roomStart)throw Error('ROOM1_SOURCE_SECTION_MISSING');
     c.app=router;vm.runInContext(serverSource.slice(roomStart,roomEnd),c);
+    // 11/28 Knowledge Text の「役に立った」：本物の窓口を、手元の Auth/Firestore で動かす
+    router.use('/api/room1',require('../../backend/room1-helpful').createRoom1HelpfulRouter({express:require('../../backend/node_modules/express'),db,firebaseAdmin:c.firebaseAdmin,requireFirebaseUser:c.requireFirebaseUser,rateLimit:c.rateLimit}));
   }
   router.use('/api/emuer/v2',require('../../backend/emuer-v2/router').createEmuerV2Router({db,entitlement,requireFirebaseUser:c.requireFirebaseUser,requireOwnAddress:(req,res,next)=>{req.body=req.body||{};const claimed=String(req.body.address||'').toLowerCase();if(claimed&&claimed!==req.identity.walletAddress)return res.status(403).json({error:'ADDRESS_MISMATCH'});req.body.address=req.identity.walletAddress;next();},env:{EMUER_V2_ENABLED:'true',EMUER_V2_LAUNCH_HOLD:'false'}}).router);
   router.get('/api/user/name/:address',async(req,res)=>res.json({name:'エミュレーター検証ユーザー'}));

@@ -17,6 +17,7 @@ async function start(options={}){
  const actor=f.users.owner.account.walletAddress.toLowerCase();
  async function seed(collection,id,data){try{await f.db.collection(collection).doc(id).create(data);}catch(e){if(e.code!==6 && e.code!=='already-exists')throw e;}}
  await seed('sp_quests','unified-quest',{owner:actor,ownerName:'LOCAL 運営',title:'LOCAL 知識を試すクエスト',knowledge:'LOCAL 元の知識',hypothesis:'LOCAL 小さく試す',action:'LOCAL 一度試し、気づきを記録する',measure:'LOCAL 結果を確認する',intro:'隔離エミュレーターの導線検証専用です。',budget:'1000',budgetCurrency:'JPY',need:1,status:'OPEN',createdAt:Date.now(),closesAt:Date.parse('2026-12-31T00:00:00+09:00'),series:'general',questNumber:9,branch:0,stage:'入門',guildId:'learn'});
+ await seed('room1_contents','unified-text',{theme:'money',subTheme:'増やし方',summary:'LOCAL 積み立ての考え方',body:'LOCAL 隔離エミュレーターの教材です。',createdAt:'2026-11-01T00:00:00Z'});
  await seed('sp_wisdom','unified-wisdom',{questId:'unified-quest',questTitle:'LOCAL 知識を試すクエスト',author:actor,authorName:'LOCAL 運営',insight:'LOCAL 試した結果を、次の人が使える知恵として残す。',from:'LOCAL 公開知識',experiment:'LOCAL 実践記録',createdAt:Date.now(),tag:'Emu',cited:0});
  await seed('posts','unified-source',{title:'LOCAL 導線検証の知識',body:'LOCAL 隔離エミュレーターのテスト投稿です。本番利用者の記録ではありません。',address:f.users.alice.account.walletAddress.toLowerCase(),displayName:'LOCAL 検証',visibility:'public',tags:'経験',createdAt:Date.now(),updatedAt:Date.now(),goodCount:0,changeCount:0});
  // Every interaction run gets new local evidence without deleting earlier runs.
