@@ -1,4 +1,4 @@
-import { cityTime, CITY_TIME_LABEL } from './city-time.js';
+import { cityTime, CITY_TIME_LABEL, cityDay, citySeason } from './city-time.js';
 import { fetchRealWeather, WEATHER_KINDS, WEATHER_LABEL, WEATHER_ICON } from './city-weather.js';
 const esc = value => String(value ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const money = product => Number.isSafeInteger(product.priceJPY) ? '¥'+product.priceJPY.toLocaleString('ja-JP') : '価格は店舗でご確認ください';
@@ -21,6 +21,12 @@ const WISH_TEXT={
   day:{place:'願いのクリスタル',button:'💎 クリスタルに願いを書く',title:'願いのクリスタル',lead:'浮かぶクリスタルに願いを書くと、光になって空へのぼっていきます。',go:'🌠 願いを届ける'},
   night:{place:'やぐらの太鼓',button:'🥁 太鼓に願いを書く',title:'やぐらの太鼓',lead:'願いを書いて太鼓を叩くと、音とともに花火が上がります。',go:'🥁 太鼓を叩く'}
 };
+/* 12/31 は「年越しの願い」。夜は除夜の鐘を鳴らす（11/28 オーナー：12月の挑戦納めカレンダー） */
+const NEWYEAR_WISH={
+  morning:{place:'年越しの願いの泉',button:'⛲ 年越しの願いを書く',title:'年越しの願い',lead:'来年の願いを書くと、光になって空へのぼっていきます。今年もおつかれさまでした。',go:'🌠 願いを届ける'},
+  day:{place:'年越しの願いのクリスタル',button:'💎 年越しの願いを書く',title:'年越しの願い',lead:'来年の願いを書くと、光になって空へのぼっていきます。今年もおつかれさまでした。',go:'🌠 願いを届ける'},
+  night:{place:'除夜の鐘',button:'🔔 年越しの願いを書く',title:'年越しの願い・除夜の鐘',lead:'来年の願いを書いて鐘を鳴らすと、除夜の鐘とともに花火が上がります。今年もおつかれさまでした。',go:'🔔 鐘を鳴らす'}
+};
 const PLAYS=[['echo','ECHO FIELD','記憶・配置戦略・心理戦で遊ぶ。'],['ringo','林檎の方程式','手札のカードを使い、交渉を進める。'],['gods','日常の神々','神々のカードをCPUと同時に公開して勝負。'],['elevator','エレベーター','階を巡り、これまでの発見を続ける。']];
 export function openShopWorld({bridge,spots,wantedShop='',preview=false,onClose=()=>{},onMyCity=()=>{},onRecord=()=>{},onPlay=null}) {
   if(!document.querySelector('link[data-city-shop-style]')){
@@ -31,7 +37,8 @@ export function openShopWorld({bridge,spots,wantedShop='',preview=false,onClose=
   let world=null,shop=null,main=null,side=null,catalog=null,selected=null,closed=false,busy=false,request=0,loadNumber=0;
   /* その品がどの店のものか（公式店舗・となりのお店・街のお店） */
   function ownerOf(id){return (catalog?.shops||[]).find(s=>s.products?.some(p=>p.id===id))||null;}
-  const time=cityTime(),timeLabel=CITY_TIME_LABEL[time];
+  const time=cityTime(),timeLabel=CITY_TIME_LABEL[time],season=citySeason(cityDay());
+  const wishText=(season==='newyear'?NEWYEAR_WISH:WISH_TEXT)[time];
   root.id='city-explorer';root.dataset.time=time;root.setAttribute('role','dialog');root.setAttribute('aria-modal','true');root.setAttribute('aria-label','SchoolPark City 3Dショールーム');
   let viewPref=store.get('sp-city-view')==='first'?'first':'third';
   let weatherPref=WEATHER_KINDS.includes(store.get('sp-city-weather'))?store.get('sp-city-weather'):'real',realWeather=null;
@@ -42,13 +49,13 @@ export function openShopWorld({bridge,spots,wantedShop='',preview=false,onClose=
     <div class="cs-load" role="status"><span class="cs-spinner"></span>Cityの扉を開いています…</div>
     <div class="cs-aim" aria-hidden="true">+</div><button class="cs-pick" type="button" data-shop="pick" hidden></button>
     <button class="cs-arcade" type="button" data-shop="arcade" hidden>🎮 あそび場で遊ぶ</button>
-    <button class="cs-wish" type="button" data-shop="wish" hidden>${WISH_TEXT[time].button}</button>
+    <button class="cs-wish" type="button" data-shop="wish" hidden>${wishText.button}</button>
     <div class="cs-wish-msg" role="status" hidden></div>
     <div class="cs-toast" role="status" hidden></div>
     <nav class="cs-menu" id="cs-menu" aria-label="Cityのメニュー" hidden>
       <div class="cs-menu-row"><button type="button" data-shop="products">商品を見る</button>${onPlay&&!preview?'<button type="button" data-shop="plays">遊ぶ</button>':''}<button type="button" data-shop="help">歩き方</button></div>
       <p class="cs-menu-h">行き先</p>
-      <div class="cs-menu-grid"><button type="button" data-shop="waypoint" data-value="entrance">入店する ↗</button><button type="button" data-shop="waypoint" data-value="shelves">商品棚</button><button type="button" data-shop="waypoint" data-value="counter">カウンター</button>${onPlay&&!preview?'<button type="button" data-shop="waypoint" data-value="arcade">あそび場</button>':''}<button type="button" data-shop="waypoint" data-value="plaza">${timeLabel.plaza}</button><button type="button" data-shop="waypoint" data-value="wish">${WISH_TEXT[time].place}</button><button type="button" data-shop="waypoint" data-value="neighbor" hidden>となりのお店</button></div>
+      <div class="cs-menu-grid"><button type="button" data-shop="waypoint" data-value="entrance">入店する ↗</button><button type="button" data-shop="waypoint" data-value="shelves">商品棚</button><button type="button" data-shop="waypoint" data-value="counter">カウンター</button>${onPlay&&!preview?'<button type="button" data-shop="waypoint" data-value="arcade">あそび場</button>':''}<button type="button" data-shop="waypoint" data-value="plaza">${timeLabel.plaza}</button><button type="button" data-shop="waypoint" data-value="wish">${wishText.place}</button><button type="button" data-shop="waypoint" data-value="neighbor" hidden>となりのお店</button></div>
       <p class="cs-menu-h">天気 <small class="cs-weather-now"></small></p>
       <div class="cs-chips" data-group="weather">${WEATHER_KINDS.map(k=>chip('weather',k,WEATHER_ICON[k]+' '+WEATHER_LABEL[k],k===weatherPref)).join('')}</div>
       <p class="cs-menu-h">視点</p>
@@ -66,7 +73,7 @@ export function openShopWorld({bridge,spots,wantedShop='',preview=false,onClose=
   const wishButton=root.querySelector('.cs-wish'),wishMessage=root.querySelector('.cs-wish-msg');
   function showWish(){wishButton.hidden=!(nearWish&&panel.hidden&&!wishing&&!nearArcade);}
   function wishPanel(){
-    const w=WISH_TEXT[time];selected=null;request++;
+    const w=wishText;selected=null;request++;
     showPanel(`<p class="cs-kicker">WISH / 願いごと</p><h3>${esc(w.title)}</h3><p>${esc(w.lead)}</p>
       <textarea class="cs-wish-input" maxlength="60" rows="3" aria-label="願いごと" placeholder="願いごとを書いてね（60字まで）"></textarea>
       <p class="cs-caption">書いた願いは、この画面に映すだけです。どこにも送らず、残しません。</p>
@@ -80,7 +87,7 @@ export function openShopWorld({bridge,spots,wantedShop='',preview=false,onClose=
     closePanel();wishing=true;showWish();
     world.makeWish(text).then(ok=>{
       wishing=false;showWish();if(!ok||closed)return;
-      wishMessage.textContent='あなたの願いが\n叶いますように！';wishMessage.hidden=false;
+      wishMessage.textContent=season==='newyear'?'よいお年を！\nあなたの願いが叶いますように！':'あなたの願いが\n叶いますように！';wishMessage.hidden=false;
       clearTimeout(wishMessage._t);wishMessage._t=setTimeout(()=>{wishMessage.hidden=true;},4500);
     });
   }
@@ -91,6 +98,8 @@ export function openShopWorld({bridge,spots,wantedShop='',preview=false,onClose=
     weatherPref=WEATHER_KINDS.includes(kind)?kind:'real';store.set('sp-city-weather',weatherPref);markChips('weather',weatherPref);
     const now=root.querySelector('.cs-weather-now');
     if(weatherPref!=='real'){world?.setWeather(weatherPref);now.textContent='';return;}
+    /* 12/24・25 は、リアルを選んでいても City は雪（クリスマス） */
+    if(season==='xmas'){world?.setWeather('snow');now.textContent='🎄 クリスマスは City に雪が降ります';return;}
     world?.setWeather(realWeather?.kind||'clear');now.textContent=realWeather?`いまの${realWeather.place}：${WEATHER_LABEL[realWeather.kind]}${realWeather.temp==null?'':' '+realWeather.temp+'℃'}`:'福岡の天気を読み込み中…';
     const result=realWeather||await fetchRealWeather();
     if(closed||weatherPref!=='real')return;
@@ -263,13 +272,16 @@ export function openShopWorld({bridge,spots,wantedShop='',preview=false,onClose=
       if(module.status!=='fulfilled')throw module.reason;
       world=module.value.createWorld(canvas,{products:main.products,sideProducts:side?.products||[],
         mainSign:main.storeType==='schoolpark_virtual'?'SCHOOLPARK OFFICIAL STORE':main.name,sideSign:side?.name||'',
-        time,view:viewPref,plays:playable?PLAYS.map(([id,title])=>[id,title]):[],onSelect:productPanel,onFocus:id=>{
+        time,season,view:viewPref,plays:playable?PLAYS.map(([id,title])=>[id,title]):[],onSelect:productPanel,onFocus:id=>{
         focusedProduct=id;
         const game=playable&&playTitle(playOf(id));
         const p=game?null:ownerOf(id)?.products.find(p=>p.id===id);pick.hidden=!(p||game)||!panel.hidden;
         if(game)pick.textContent=game+' で遊ぶ ↗';else if(p)pick.textContent=p.name+' を見る ↗';
       },onNear:where=>{nearArcade=where==='arcade';nearWish=where==='wish';showArcade();showWish();},onLost:()=>{load.hidden=false;load.innerHTML='3D描画が中断しました。<button type="button" data-shop="retry">再開する</button>';}});
-      load.hidden=true;root.dataset.view=viewPref;setWeather(weatherPref);world.focus();
+      load.hidden=true;root.dataset.view=viewPref;root.dataset.season=season;setWeather(weatherPref);world.focus();
+      if(season==='toji')say('🌙 今日は冬至。願いの泉で、今年の挑戦をふり返ってみませんか。');
+      else if(season==='xmas')say('🎄 メリークリスマス！ お店の前にツリーが立っています。');
+      else if(season==='newyear')say('🎍 今日は大晦日。広場で年越しの願いを書けます。');
     }catch(_){load.innerHTML='この端末では3D表示を利用できません。<button type="button" data-shop="products">商品一覧をひらく</button><button type="button" data-shop="retry">3Dを再試行</button>';}
   }
   root.querySelector('[data-shop="close"]').focus({preventScroll:true});init();

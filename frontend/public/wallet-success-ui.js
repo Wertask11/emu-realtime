@@ -130,6 +130,19 @@ const wsDone=new Set();
    一覧（/rewards）には出てこない。毎日のぶんは押したときに作られるので、
    押す前は「待っている報酬」として存在しないため。
    だから一覧が空でも、ここは受け取れることがある。 */
+/* 12月の「挑戦納めカレンダー」（11/28）：今日のぶんの額はサーバーが返す（12月は日付で 2〜20 EMUER）。
+   ボタンの下に「今日は〇〇｜次は12/25に+10」を1行出す */
+let wsTodayAmount="1";
+function wsCalendarLine(cal){
+  const b=wsLoginBtn();if(!b)return;
+  let el=document.getElementById("wsCalendarLine");
+  if(!cal){if(el)el.hidden=true;return;}
+  if(!el){el=document.createElement("p");el.id="wsCalendarLine";el.style.cssText="margin:8px 0 0;padding:8px 12px;border-radius:10px;background:#fff4e3;color:#8a3a12;font-size:13px;line-height:1.7;font-weight:700";b.insertAdjacentElement("afterend",el);}
+  const md=d=>Number(d.slice(5,7))+"/"+Number(d.slice(8,10));
+  const today=cal.active?("🎄 挑戦納めカレンダー：今日は +"+cal.today.emuer+" EMUER"+(cal.today.special?"（"+cal.today.special+"）":"")):"🎄 12月は「挑戦納めカレンダー」。毎日のぶんが増えます";
+  el.textContent=today+(cal.next?"｜次は "+md(cal.next.date)+" に +"+cal.next.emuer+" EMUER（"+cal.next.special+"）":"");
+  el.hidden=false;
+}
 async function wsDaily(){
   const b=wsLoginBtn(); if(!b)return;
   if(!emuerV2Config||!emuerV2Config.enabled){b.hidden=true;return;}
@@ -141,16 +154,18 @@ async function wsDaily(){
     const d=await r.json().catch(()=>({}));
     if(!r.ok){b.hidden=true;return;}
     b.hidden=false;
+    wsTodayAmount=/^\d{1,3}$/.test(String(d.amount||""))?String(d.amount):"1";
+    wsCalendarLine(d.calendar||null);
     const app=wsLoginAppBtn();
     /* サーバーが返すのは claimedToday。claimed を見ていたので、
        受け取り済みでも「受け取れます」と出ていた。 */
     if(d.claimedToday){b.disabled=true;b.textContent="今日のぶんは受け取り済み";b.onclick=null;if(app)app.hidden=true;}
     else if(wsCanSign()&&app){
       /* ウォレットへ移せるところでは、どちらで受け取るかを選んでもらう */
-      b.disabled=false;b.textContent="今日のぶん +1 EMUER を実EMUERでウォレットへ";b.onclick=claimEmuV2LoginReward;
-      app.hidden=false;app.disabled=false;app.textContent="今日のぶん +1 EMUER をアプリ内EMUERで受け取る";app.onclick=claimEmuV2LoginRewardApp;
+      b.disabled=false;b.textContent="今日のぶん +"+wsTodayAmount+" EMUER を実EMUERでウォレットへ";b.onclick=claimEmuV2LoginReward;
+      app.hidden=false;app.disabled=false;app.textContent="今日のぶん +"+wsTodayAmount+" EMUER をアプリ内EMUERで受け取る";app.onclick=claimEmuV2LoginRewardApp;
     }
-    else{b.disabled=false;b.textContent="今日のぶん +1 EMUER を受け取る";b.onclick=claimEmuV2LoginReward;if(app)app.hidden=true;}
+    else{b.disabled=false;b.textContent="今日のぶん +"+wsTodayAmount+" EMUER を受け取る";b.onclick=claimEmuV2LoginReward;if(app)app.hidden=true;}
     wsChoiceNote();
   }catch(_){b.hidden=true;const app=wsLoginAppBtn();if(app)app.hidden=true;wsChoiceNote();}
 }
@@ -253,7 +268,7 @@ async function wsRecordLoginReward(b){
   b.disabled=true;b.textContent="今日のぶんは受け取り済み";b.onclick=null;
   const app=wsLoginAppBtn();if(app)app.hidden=true;wsChoiceNote();
   const st=document.getElementById("wsStatus");
-  if(st)st.textContent="1 EMUER を受け取りました。ウォレットに移す前のEMUERとしてたまり、City の公式ショップでそのまま使えます。";
+  if(st)st.textContent=(/^\d{1,3}$/.test(String(d.amount||""))?d.amount:wsTodayAmount)+" EMUER を受け取りました。ウォレットに移す前のEMUERとしてたまり、City の公式ショップでそのまま使えます。";
   try{if(typeof window.emuerV2RefreshBalance==="function")await window.emuerV2RefreshBalance();}catch(_){}
   if(typeof wsRenderBreakdown==="function")wsRenderBreakdown(true);
 }
@@ -285,7 +300,7 @@ async function claimEmuV2LoginReward(){
     await(await c.claimReward(x.claimId,x.totalAmount,x.deadline,x.authorization)).wait();
     b.disabled=true;b.textContent="今日のぶんは受け取り済み";b.onclick=null;
     const st=document.getElementById("wsStatus");
-    if(st)st.textContent="1 EMUER を受け取りました";
+    if(st)st.textContent=(/^\d{1,3}$/.test(String(d.amount||""))?d.amount:wsTodayAmount)+" EMUER を受け取りました";
     /* 毎日のぶんは、押したときに「待っている報酬」として作られる。
        受け取ったあともサーバーの一覧にしばらく残るので、こちらで外す。
        外さないと、すぐ下の一覧に同じものが出て、押すと鎖が
@@ -296,7 +311,7 @@ async function claimEmuV2LoginReward(){
     await wsRewards();
   }catch(e){
     /* 断った・失敗したときは、2つの選び方をもう一度出す */
-    try{await wsDaily();}catch(_){const b=wsLoginBtn();if(b){b.disabled=false;b.textContent="今日のぶん +1 EMUER を受け取る";b.onclick=claimEmuV2LoginReward;}}
+    try{await wsDaily();}catch(_){const b=wsLoginBtn();if(b){b.disabled=false;b.textContent="今日のぶん +"+wsTodayAmount+" EMUER を受け取る";b.onclick=claimEmuV2LoginReward;}}
     alert(e.message||"ログイン報酬の受取に失敗しました");
   }
 }

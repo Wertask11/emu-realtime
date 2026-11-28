@@ -71,6 +71,26 @@ async function open(api, context) {
   return { page, calls, errors, alerts, context, close: () => context.close() };
 }
 
+/* 11/28 オーナー：12月の「挑戦納めカレンダー」。今日のぶんの額はサーバーが返し（12/25 は +10）、ボタンの下に今日と次の特別な日を出す */
+test('12月のカレンダー：今日のぶんの額をサーバーの値で出し、今日と次の特別な日を1行で出す', async () => {
+  let claimed = false;
+  const cal = { name: '挑戦納めカレンダー', active: true, today: { date: '2026-12-25', emuer: 10, special: 'クリスマス' }, next: { date: '2026-12-31', emuer: 20, special: '挑戦納め' } };
+  const w = await open({
+    'GET /daily/login/status': () => ({ json: { claimedToday: claimed, amount: '10', calendar: cal } }),
+    'POST /daily/login': () => { claimed = true; return { json: { ok: true, recorded: true, amount: '10' } }; },
+    'GET /rewards': () => ({ json: { rewards: [] } })
+  });
+  try {
+    await w.page.evaluate(() => window.wsOpenRewards());
+    await w.page.waitForFunction(() => document.getElementById('wsLogin').textContent === '今日のぶん +10 EMUER を受け取る');
+    assert.equal(await w.page.locator('#wsCalendarLine').innerText(), '🎄 挑戦納めカレンダー：今日は +10 EMUER（クリスマス）｜次は 12/31 に +20 EMUER（挑戦納め）');
+    await w.page.locator('#wsLogin').click();
+    await w.page.waitForFunction(() => document.getElementById('wsLogin').textContent === '今日のぶんは受け取り済み');
+    assert.match(await w.page.locator('#wsStatus').innerText(), /^10 EMUER を受け取りました。/);
+    assert.deepEqual(w.errors, []);
+  } finally { await w.close(); }
+});
+
 test('MetaMask が無いとき：今日のぶんは「作るだけ」で受け取り、公式ショップで使えると伝える', async () => {
   let claimed = false;
   const w = await open({

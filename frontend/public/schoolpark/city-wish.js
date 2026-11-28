@@ -6,7 +6,7 @@
 export const WISH_NEAR = 6.2;
 export const WISH_MAX = 60;
 
-export function createWish(T, { scene, disposables, texture, at, mode = 'day', viewCamera }) {
+export function createWish(T, { scene, disposables, texture, at, mode = 'day', viewCamera, bell = false }) {
   const reduced = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
   const keep = (x) => { disposables.add(x); return x; };
   const noRay = (o) => { o.raycast = () => {}; o.castShadow = false; o.receiveShadow = false; return o; };
@@ -69,6 +69,8 @@ export function createWish(T, { scene, disposables, texture, at, mode = 'day', v
     g.gain.setValueAtTime(gain, when); g.gain.exponentialRampToValueAtTime(.0001, when + length);
     o.connect(g).connect(a.destination); o.start(when); o.stop(when + length + .05);
   }
+  /* 12/31：除夜の鐘（低い音が長く残る） */
+  function bellSound() { const a = ctx(); if (!a) return; const t = a.currentTime; tone(a, t, 110, 108, 4.5, .7); tone(a, t, 276, 272, 3.2, .22); tone(a, t, 452, 447, 2.2, .1, 'triangle'); noise(a, t, .08, 500, .25); }
   function drumSound() { const a = ctx(); if (!a) return; const t = a.currentTime; tone(a, t, 120, 42, .9, .9); tone(a, t, 240, 90, .25, .25, 'triangle'); noise(a, t, .18, 900, .35); }
   function fireworkSound(delay) { const a = ctx(); if (!a) return; const t = a.currentTime + delay; tone(a, t - .9, 500, 1400, .8, .05, 'triangle'); noise(a, t, 1.2, 2400, .5); noise(a, t + .05, .9, 600, .6); }
   function chimeSound() { const a = ctx(); if (!a) return; const t = a.currentTime; [[880, 0], [1318.5, .12], [1760, .24], [2637, .4]].forEach(([f, d]) => tone(a, t + d, f, f * .998, 1.6, .12)); }
@@ -82,7 +84,7 @@ export function createWish(T, { scene, disposables, texture, at, mode = 'day', v
     if (!wish) return Promise.resolve(false);
     makeCard(wish);
     root.visible = true;
-    if (night) drumSound(); else chimeSound();
+    if (bell) bellSound(); else if (night) drumSound(); else chimeSound();
     if (night) fireworkSound(1.25);
     return new Promise((resolve) => { run = { start: -1, wish, resolve }; });
   }

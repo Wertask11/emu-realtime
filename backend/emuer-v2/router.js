@@ -9,6 +9,7 @@
  * transfer and it never stores a private key in Firestore.
  */
 const policy = require("./policy");
+const calendar = require("./calendar");
 const { enabled } = require("./flags");
 
 const CONTRACT = "0x9c102cC3016C70767082b60196565878D9314864";
@@ -385,7 +386,10 @@ function createEmuerV2Router(deps) {
       /* date は「その日」を返す欄。key は JSON の配列（["emuer-v2",...]）で
          コロンを含まないので、split(":") では切れず、鍵がまるごと出ていた。
          鍵は中の作りなので、外に出してはいけない。日付だけを返す。 */
-      return res.json({ claimedToday: reward.exists, date: policy.dayKey(Date.now()) });
+      /* 12月は、今日の額と次の特別な日も返す（受け取る画面とホームのカレンダーに出す） */
+      const today = policy.dayKey(Date.now());
+      return res.json({ claimedToday: reward.exists, date: today, amount: reward.exists ? String((reward.data() || {}).amount || "1") : String(calendar.loginAmountFor(today)),
+        calendar: calendar.info(today) });
     } catch (error) {
       console.error("EMUER v2 login status error:", error.message);
       return res.status(500).json({ error: "REWARD_STATUS_FAILED" });
@@ -1020,9 +1024,11 @@ function createEmuerV2Router(deps) {
       await db.runTransaction(async tx => {
         const previous = await tx.get(ref);
         if (previous.exists) { row = previous.data(); return; }
+        /* 12月の挑戦納めカレンダー（calendar.js）：日付で額が変わる。12月以外は 1 EMUER */
+        const loginEmuer = calendar.loginAmountFor(policy.dayKey(Date.now()));
         row = {
           schema: "emuer-v2-reward-v1", kind: "login", key, claimId: id,
-          uid: req.identity.uid, recipient, amountWei: policy.UNIT.toString(), amount: "1",
+          uid: req.identity.uid, recipient, amountWei: (BigInt(loginEmuer) * policy.UNIT).toString(), amount: String(loginEmuer),
           status: "pending", createdAt: new Date(), updatedAt: new Date()
         };
         tx.create(ref, row);
@@ -1031,7 +1037,7 @@ function createEmuerV2Router(deps) {
       if (recordOnly) return res.json({ ok: true, recorded: true, amount: String(row.amount || "1"), status: row.status || "pending" });
       const reserved = await reserveAuthorization(ref, recipient);
       const authorization = await signReward(reserved.row, reserved.deadline);
-      return res.json({ ok: true, alreadyCreated: !!row.createdAt && row.key === key, reward: authorization });
+      return res.json({ ok: true, alreadyCreated: !!row.createdAt && row.key === key, amount: String(row.amount || "1"), reward: authorization });
     } catch (error) {
       if (["REWARD_SPENT", "REWARD_BUNDLED"].includes(String(error.message || ""))) return res.status(409).json({ error: String(error.message) });
       console.error("EMUER v2 login reward error:", error.message);
