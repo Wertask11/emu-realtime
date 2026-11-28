@@ -13769,6 +13769,9 @@ postForm.addEventListener("submit", async function (e) {
   /* 詳しく整理する（任意）。この投稿の1回にだけ使う（次の投稿へ持ち越さない） */
   const knowledgeLabDetails = postForm._knowledgeLab || null;
   postForm._knowledgeLab = null;
+  /* 11/27 引用・返信（知識を読むから来たときだけ）。持ち越さない */
+  const knowledgeLink = postForm._knowledgeLink || null;
+  postForm._knowledgeLink = null;
   const finishKnowledgeRequest = (ok, error) => {
     if (!knowledgeRequestId) return;
     window.dispatchEvent(new CustomEvent("emu-post-save-result", {
@@ -13889,6 +13892,24 @@ const editingId = editingPostId;
       editMode = null;
     } else {
       // 【新規モード】
+      /* 11/27 引用・返信。本当にある投稿かを確かめてから付ける（消えた投稿にはつながない）。
+         返信は、スレッドの最初の投稿（threadRootId）も付ける。返信への返信も、同じスレッドに並ぶ。
+         どれもあとから変えられない（ルールの update の changedOnly に無い）。 */
+      if (knowledgeLink && (knowledgeLink.quotePostId || knowledgeLink.replyToPostId)) {
+        const target = await window.EmuPostLinks.get(knowledgeLink.replyToPostId || knowledgeLink.quotePostId);
+        const gone = () => Object.assign(new Error('引用元（返信先）の投稿が見つかりませんでした。消されたかもしれません。引用・返信を外すと、そのまま投稿できます。'), { emuUserMessage: true });
+        if (!target) throw gone();
+        const t = target.rows[0];
+        if (knowledgeLink.replyToPostId) {
+          postData.replyToPostId = t.id;
+          postData.threadRootId = t.threadRootId || t.id;
+        }
+        if (knowledgeLink.quotePostId) {
+          const q = knowledgeLink.replyToPostId ? await window.EmuPostLinks.get(knowledgeLink.quotePostId) : target;
+          if (!q) throw gone();
+          postData.quotePostId = q.rows[0].id;
+        }
+      }
       postData.createdAt = new Date();
       postData.goodCount = 0;
       postData.changeCount = 0;
@@ -30405,7 +30426,9 @@ async function sendEmuFeedback() {
      控えに投稿が無いと0件のまま「読み直しました」になり、総数は171件なのに一覧は「該当する知識がありません」だった。
      そのときはこちらで読む。画像（1枚で最大1MB）は重いので欄に入れない（次の読み直しで SDK が読めれば出る）。 */
   const KNOWLEDGE_REST_FIELDS = ['title', 'body', 'tags', 'address', 'displayName', 'userType', 'goodCount', 'changeCount',
-    'acceptedChangeCount', 'goodUsers', 'changeUsers', 'facets', 'knowledgeLab', 'createdAt'];
+    'acceptedChangeCount', 'goodUsers', 'changeUsers', 'facets', 'knowledgeLab', 'createdAt',
+    /* 11/27 引用・スレッド（emu-post-links.js） */
+    'quotePostId', 'replyToPostId', 'threadRootId'];
   async function readKnowledgePageRest(cursor) {
     const query = {
       from: [{ collectionId: 'posts' }],
@@ -30842,9 +30865,69 @@ async function sendEmuFeedback() {
       changeUsers: Array.isArray(data.changeUsers) ? data.changeUsers : [],
       /* 11/18：知識を読むの「分類で絞る」用。Knowledge Lab で付けた分類（分野・業種など）の ID だけを渡す */
       facets: knowledgeFacetIds(data),
+      /* 11/27 オーナー：「Xみたいに投稿の引用を。スレッド機能とか」。引用した投稿・返信先・スレッドの最初の投稿（どれも投稿のID） */
+      /* IDの形の確かめ（emuPostLinkId と同じ）は、ここに書く。この関数だけを取り出して使う試験があるため */
+      quotePostId: /^[A-Za-z0-9_-]{1,80}$/.test(String(data.quotePostId || '')) ? String(data.quotePostId) : '',
+      replyToPostId: /^[A-Za-z0-9_-]{1,80}$/.test(String(data.replyToPostId || '')) ? String(data.replyToPostId) : '',
+      threadRootId: /^[A-Za-z0-9_-]{1,80}$/.test(String(data.threadRootId || '')) ? String(data.threadRootId) : '',
       createdAt: created
     };
   }
+  function emuPostLinkId(v) { const s = String(v || ''); return /^[A-Za-z0-9_-]{1,80}$/.test(s) ? s : ''; }
+  /* 引用・スレッドの読み口（知識を読むの emu-post-links.js から使う）。
+     posts は誰でも読める（ルール allow read: if true）。SDK が答えなければ普通の通信で読む。 */
+  async function emuPostLinksRows(docs) {
+    const rows = docs.filter(d => !(d.data().knowledgeLab && d.data().knowledgeLab.tombstone)).map(d => plainKnowledgePost(d));
+    const addrs = knowledgeAuthorAddrs(rows);
+    /* 書き手の名前と写真（一覧と同じ読み口）。待つのは2.5秒まで。読めなければ投稿に残った名前で出す */
+    try { if (addrs.length && typeof window.emuProfileOf === 'function') await _spSoon(Promise.all(addrs.map(a => window.emuProfileOf(a).catch(() => null))), 2500); } catch (e) {}
+    return { rows, authors: knowledgeAuthorsKnown(addrs) };
+  }
+  window.EmuPostLinks = {
+    /* 1件（引用の札・返信先に出す）。無ければ null */
+    get: async function (id) {
+      id = emuPostLinkId(id);
+      if (!id) return null;
+      try {
+        const got = await _spSoon(window.fbLib.getDoc(window.fbLib.doc(window.db, 'posts', id)), 8000);
+        if (got.ok && !(got.value.metadata && got.value.metadata.fromCache)) {
+          if (!got.value.exists()) return null;
+          const one = await emuPostLinksRows([got.value]);
+          return one.rows.length ? one : null;
+        }
+      } catch (e) {}
+      const data = await _spRestDoc('posts/' + encodeURIComponent(id), false).catch(() => null);
+      if (!data) return null;
+      const out = await emuPostLinksRows([{ id, data: () => data }]);
+      return out.rows.length ? out : null;
+    },
+    /* スレッド：最初の投稿についた返信（古い順・50件まで） */
+    thread: async function (rootId) {
+      rootId = emuPostLinkId(rootId);
+      if (!rootId) return { rows: [], authors: {} };
+      const fb = window.fbLib;
+      let docs = null;
+      try {
+        const got = await _spSoon(fb.getDocs(fb.query(fb.collection(window.db, 'posts'), fb.where('threadRootId', '==', rootId), fb.limit(50))), 8000);
+        if (got.ok && !(got.value.metadata && got.value.metadata.fromCache)) docs = got.value.docs;
+      } catch (e) {}
+      if (!docs) {
+        const j = await _spRestGet(':runQuery', false, true, { structuredQuery: {
+          from: [{ collectionId: 'posts' }],
+          where: { fieldFilter: { field: { fieldPath: 'threadRootId' }, op: 'EQUAL', value: { stringValue: rootId } } },
+          limit: 50 } });
+        docs = (Array.isArray(j) ? j : []).filter(x => x && x.document).map(x => {
+          const raw = x.document.fields || {}, data = _spRestFields(raw);
+          const at = raw.createdAt && raw.createdAt.timestampValue;
+          data.createdAt = at ? new Date(at).toISOString() : '';
+          return { id: decodeURIComponent(String(x.document.name || '').split('/').pop()), data: () => data };
+        });
+      }
+      const out = await emuPostLinksRows(docs);
+      out.rows.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+      return out;
+    }
+  };
   function knowledgeFacetIds(data) {
     const raw = (data.knowledgeLab && data.knowledgeLab.facets) || data.facets || {};
     const out = {};
@@ -31502,6 +31585,10 @@ async function sendEmuFeedback() {
       postTitleInput.disabled = false;
       postForm._knowledgeImageDataUrl = String(payload.imageUrl || '');
       postForm._knowledgeLab = _emuLabDetails(payload.lab);
+      /* 11/27 引用・返信。IDの形だけここで見て、本当にある投稿かは公開するときに確かめる */
+      postForm._knowledgeLink = (payload.quotePostId || payload.replyToPostId) ? {
+        quotePostId: emuPostLinkId(payload.quotePostId), replyToPostId: emuPostLinkId(payload.replyToPostId)
+      } : null;
       postForm._knowledgeRequestId = String(message.requestId || Date.now());
       if (payload.draftId) knowledgePublishDrafts.set(postForm._knowledgeRequestId, { id:String(payload.draftId), source:payload.draftSource === 'lab' ? 'lab' : 'emu' });
       /* Lab の下書きから公開するとき、画像がまだ画面に届いていなければ、下書きの画像を読んで一緒に公開する */
