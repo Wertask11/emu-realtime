@@ -9,9 +9,16 @@
     const tab = document.getElementById("tab-schoolpark");
     if (!tab) return;
     tab.insertAdjacentHTML("afterbegin", '<div id="jpycGiftsPanel" class="card">'
-      + '<h3>12月の JPYC（挑戦納めカレンダー）：まとめて送る一覧</h3>'
+      + '<h3>12月の挑戦納めカレンダー（ログインボーナス・JPYC）</h3>'
+      + '<div class="row"><span>12月の通常日</span><span>ログインボーナス 2 EMUER</span></div>'
+      + '<div class="row"><span>12/5（土）週末のクエストDay・12/15（火）知識シェアDay</span><span>5 EMUER ＋ 10 JPYC</span></div>'
+      + '<div class="row"><span>12/22（火）冬至（City にひとこと）</span><span>2 EMUER</span></div>'
+      + '<div class="row"><span>12/25（金）クリスマス（City に雪とツリー）</span><span>10 EMUER ＋ 30 JPYC</span></div>'
+      + '<div class="row"><span>12/31（木）挑戦納め（年越しの願い・除夜の鐘）</span><span>20 EMUER ＋ 50 JPYC</span></div>'
+      + '<p class="empty" style="text-align:left;margin:6px 0 10px">EMUER は「報酬を受け取る」でその場で受け取れます（1日1回）。1/1 からはふだんの 1 EMUER に戻ります。額を変えるときは backend/emuer-v2/calendar.js と jpyc-gifts.js を書き換えます。</p>'
+      + '<h3 style="margin-top:14px">JPYC：まとめて送る一覧</h3>'
       + '<p class="empty" style="text-align:left;margin:0 0 10px">特別な日にログインボーナスを受け取った人へ送る JPYC です（12/5・15 は 10、12/25 は 30、12/31 は 50。12月の合計は 10,000 JPYC まで）。'
-      + 'ウォレットから送ったら、その取引ID（0x から始まる66文字）を入れて「送り済み」にしてください。同じ人への分は「送る先ごとの合計」で1回にまとめて送れます。</p>'
+      + '<b>送るのは 1月中旬</b>（利用者にはそう伝えています）。ウォレットから送ったら、その取引ID（0x から始まる66文字）を入れて「送り済み」にしてください。同じ人への分は「送る先ごとの合計」で1回にまとめて送れます。</p>'
       + '<div class="actions"><button class="act neutral" id="jpycLoad">読み込む</button><button class="act neutral" id="jpycCopy" disabled>送る先ごとの合計をコピー</button></div>'
       + '<div id="jpycResult" class="empty" style="text-align:left"></div></div>');
     document.getElementById("jpycLoad").onclick = load;

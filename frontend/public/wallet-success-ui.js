@@ -152,7 +152,7 @@ function wsJpycSaid(j){
   if(j.soldOut)return" 今月の JPYC は予定の数に達したので、配り終わりました。";
   if(!j.amountJpyc)return"";
   return j.needsAddress?" 🎁 さらに "+j.amountJpyc+" JPYC を受け取れます。下で、JPYC を受け取るウォレットのアドレスを登録してください。"
-    :" 🎁 さらに "+j.amountJpyc+" JPYC を受け取る予定に入れました。運営がまとめてウォレット（"+j.address+"）へ送ります。";
+    :" 🎁 さらに "+j.amountJpyc+" JPYC を受け取る予定に入れました。1月中旬に、運営がまとめてウォレット（"+j.address+"）へ送ります。";
 }
 async function wsJpycPanel(){
   const b=wsLoginBtn();if(!b)return;
@@ -169,6 +169,7 @@ async function wsJpycPanel(){
     const p=document.createElement("p");p.style.margin="0";p.style.fontWeight="700";
     p.textContent="🎁 12月の JPYC："+(wait?"送る予定 "+wait+" JPYC":"")+(need?(wait?"・":"")+"アドレス待ち "+need+" JPYC":"")+(sent?((wait||need)?"・":"")+"送り済み "+sent+" JPYC":"");
     el.appendChild(p);
+    const when=document.createElement("p");when.style.margin="2px 0 0";when.textContent="JPYC は 1月中旬に、運営がまとめてウォレットへ送ります。";el.appendChild(when);
     if(need){
       const t=document.createElement("p");t.style.margin="4px 0";t.textContent="LINE・Google で入ったアドレスには JPYC を送れません。JPYC を受け取る自分のウォレット（Polygon）のアドレスを入れてください。";el.appendChild(t);
       const f=document.createElement("div");f.style.cssText="display:flex;gap:6px;flex-wrap:wrap";
