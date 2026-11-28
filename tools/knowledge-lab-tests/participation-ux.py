@@ -137,9 +137,10 @@ with sync_playwright() as p:
         results.append({'width':width,'accountMenuAndKeyboard':True,'questHub':True,'browseDoesNotJoin':True,'guildJoinSupportAndUndo':True,'questJoinAndLeave':True,'existingStageFilter':True,'backAndSession':True,'noNewRewardOrNotification':True})
         print('PASS width',width,flush=True)
     # Emu remains four tabs; reading never forces participation.
-    g.evaluate('showEmuRequests()');g.locator('.emu-practice-entry').wait_for()
-    assert '見るだけでは参加になりません' in g.locator('.emu-practice-entry').inner_text()
-    g.locator('.emu-practice-entry button').click();g.locator('#spLoadingOverlay').wait_for(state='hidden',timeout=30000)
+    # 11/28 オーナー：知識を探すの上の「知識を試す →」の札は外した。知識を試すは下のメニューから開く
+    g.evaluate('showEmuRequests()');g.locator('#emuRequestsPage .emu-knowledge-pair').wait_for()
+    assert g.locator('.emu-practice-entry').count()==0
+    g.evaluate('showEmuPractice()');g.locator('#spLoadingOverlay').wait_for(state='hidden',timeout=30000)
     g.wait_for_function('document.getElementById("spDaoFrame").contentWindow.app?.tourRenderedScreen==="experiments"')
     # 761px 以上の「知識を読む」では右上の冷蔵庫くんは出さない（左の列にある）。右上に出ている拠点の画面で開く
     # 冷蔵庫くんは、まず「聞く」の窓を1つだけ開く（reizo/mode-switch.js）。チュートリアルの進み具合は変えない
