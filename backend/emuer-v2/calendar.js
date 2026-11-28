@@ -15,6 +15,7 @@ const SPECIAL = Object.freeze({
   '2026-12-31': { emuer: 20, name: '挑戦納め' }
 });
 const MONTH = '2026-12';
+const { DAYS: JPYC_DAYS } = require('./jpyc-gifts');
 function inCalendar(day) { return typeof day === 'string' && day.slice(0, 7) === MONTH; }
 /* その日のログインボーナスの額（EMUER の整数） */
 function loginAmountFor(day) {
@@ -28,8 +29,8 @@ function info(day) {
   return {
     name: '挑戦納めカレンダー',
     active: inCalendar(day),
-    today: { date: day, emuer: inCalendar(day) ? loginAmountFor(day) : 1, special: SPECIAL[day] ? SPECIAL[day].name : '' },
-    next: next ? { date: next, emuer: SPECIAL[next].emuer, special: SPECIAL[next].name } : null
+    today: { date: day, emuer: inCalendar(day) ? loginAmountFor(day) : 1, jpyc: JPYC_DAYS[day] || 0, special: SPECIAL[day] ? SPECIAL[day].name : '' },
+    next: next ? { date: next, emuer: SPECIAL[next].emuer, jpyc: JPYC_DAYS[next] || 0, special: SPECIAL[next].name } : null
   };
 }
 module.exports = { SPECIAL, MONTH, loginAmountFor, info };

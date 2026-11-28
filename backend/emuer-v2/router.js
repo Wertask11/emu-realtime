@@ -10,6 +10,7 @@
  */
 const policy = require("./policy");
 const calendar = require("./calendar");
+const { createJpycGifts } = require("./jpyc-gifts");
 const { enabled } = require("./flags");
 
 const CONTRACT = "0x9c102cC3016C70767082b60196565878D9314864";
@@ -48,6 +49,8 @@ function createEmuerV2Router(deps) {
   const identity = deps.identity || require('../identity').createIdentity({ db, ethers });
   const env = deps.env || process.env;
   const isEnabled = () => enabled(env);
+  /* 12月の挑戦納めカレンダーの JPYC（jpyc-gifts.js）。記録だけして、運営があとでまとめて送る */
+  const jpyc = createJpycGifts({ db });
   const operatorAddresses = new Set(String(env.EMUER_V2_OPERATOR_ADDRESSES || TREASURY)
     .split(",").map(value => String(value || "").trim().toLowerCase()).filter(validAddress));
   const rpcUrl = env.POLYGON_RPC_URL || "https://polygon-bor-rpc.publicnode.com";
@@ -389,7 +392,7 @@ function createEmuerV2Router(deps) {
       /* 12月は、今日の額と次の特別な日も返す（受け取る画面とホームのカレンダーに出す） */
       const today = policy.dayKey(Date.now());
       return res.json({ claimedToday: reward.exists, date: today, amount: reward.exists ? String((reward.data() || {}).amount || "1") : String(calendar.loginAmountFor(today)),
-        calendar: calendar.info(today) });
+        calendar: calendar.info(today), jpycToday: require("./jpyc-gifts").amountFor(today) });
     } catch (error) {
       console.error("EMUER v2 login status error:", error.message);
       return res.status(500).json({ error: "REWARD_STATUS_FAILED" });
@@ -1020,10 +1023,13 @@ function createEmuerV2Router(deps) {
       const key = rewardKey(req.identity.uid, Date.now());
       const id = claimId(key);
       const ref = db.collection("emuer_v2_rewards").doc(id);
-      let row;
+      let row, jpycResult = null;
+      const today = policy.dayKey(Date.now());
       await db.runTransaction(async tx => {
         const previous = await tx.get(ref);
         if (previous.exists) { row = previous.data(); return; }
+        /* 特別な日は JPYC も（読むのは書く前に） */
+        const gift = await jpyc.prepare(tx, { uid: req.identity.uid, identity: req.identity, day: today });
         /* 12月の挑戦納めカレンダー（calendar.js）：日付で額が変わる。12月以外は 1 EMUER */
         const loginEmuer = calendar.loginAmountFor(policy.dayKey(Date.now()));
         row = {
@@ -1032,12 +1038,13 @@ function createEmuerV2Router(deps) {
           status: "pending", createdAt: new Date(), updatedAt: new Date()
         };
         tx.create(ref, row);
+        if (gift) { gift.write(); jpycResult = gift.result; }
       });
       if (String(row.recipient || "").toLowerCase() !== recipient) return res.status(409).json({ error: "REWARD_BOUND_TO_ANOTHER_WALLET" });
-      if (recordOnly) return res.json({ ok: true, recorded: true, amount: String(row.amount || "1"), status: row.status || "pending" });
+      if (recordOnly) return res.json({ ok: true, recorded: true, amount: String(row.amount || "1"), status: row.status || "pending", jpyc: jpycResult });
       const reserved = await reserveAuthorization(ref, recipient);
       const authorization = await signReward(reserved.row, reserved.deadline);
-      return res.json({ ok: true, alreadyCreated: !!row.createdAt && row.key === key, amount: String(row.amount || "1"), reward: authorization });
+      return res.json({ ok: true, alreadyCreated: !!row.createdAt && row.key === key, amount: String(row.amount || "1"), jpyc: jpycResult, reward: authorization });
     } catch (error) {
       if (["REWARD_SPENT", "REWARD_BUNDLED"].includes(String(error.message || ""))) return res.status(409).json({ error: String(error.message) });
       console.error("EMUER v2 login reward error:", error.message);
@@ -1045,6 +1052,8 @@ function createEmuerV2Router(deps) {
     }
   });
 
+  /* 運営の一覧と「送り済み」は、ほかの EMUER v2 の運営画面と同じく、運営ウォレットだけ */
+  jpyc.routes(router, { requireFirebaseUser, requireOwnAddress, requireOwner: (req, res, next) => requireFirebaseUser(req, res, () => requireOperator(req, res, next)) });
   return { router, isEnabled, signerReady, contractAddress: CONTRACT };
 }
 

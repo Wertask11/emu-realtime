@@ -110,7 +110,7 @@ test("12月のカレンダー：日付で今日のぶんの額が変わる。12�
 
 test("12月のカレンダー：受け取る画面に出す、今日の額と次の特別な日（日本時間）", () => {
   assert.deepEqual(calendar.info("2026-12-24"), { name: "挑戦納めカレンダー", active: true,
-    today: { date: "2026-12-24", emuer: 2, special: "" }, next: { date: "2026-12-25", emuer: 10, special: "クリスマス" } });
+    today: { date: "2026-12-24", emuer: 2, jpyc: 0, special: "" }, next: { date: "2026-12-25", emuer: 10, jpyc: 30, special: "クリスマス" } });
   assert.equal(calendar.info("2026-12-31").next, null);
   assert.equal(calendar.info("2026-11-29").active, false, "前の日から予告だけ出す");
   assert.equal(calendar.info("2026-11-29").next.date, "2026-12-05");
