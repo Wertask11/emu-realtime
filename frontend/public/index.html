@@ -5432,7 +5432,7 @@ html[data-sp-time="night"] .ches-btn-email { background:rgba(255,255,255,.06); b
   <div class="esn-foot">
     <div class="esn-foot-row">
       <span class="esn-foot-label">EMUER</span>
-      <span class="esn-foot-val" id="esnBalance">0</span>
+      <span class="esn-foot-val" id="esnBalance">—</span>
     </div>
     <div class="esn-user" role="button" tabindex="0" title="SchoolPark パスポートを見る"
          onclick="openSpPassport()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();openSpPassport();}">
@@ -5509,7 +5509,7 @@ html[data-sp-time="night"] .ches-btn-email { background:rgba(255,255,255,.06); b
        開く入口は無く、どの幅でも CSS で隠している。
        要素を残しているのは、残高の欄（#emuTodayBalance）を左の EMUER 表示（#esnBalance）と
        EMUER v2（emuer-v2-public-copy.js）が使っているため。EMUER 側は今回変えない。 -->
-  <div id="emuBalanceState" hidden><span id="emuTodayBalance">0</span><span id="emuBalanceHint"></span></div>
+  <div id="emuBalanceState" hidden><span id="emuTodayBalance">—</span><span id="emuBalanceHint"></span></div>
 
   <section class="eth-profile" id="emuValueProfile">
     <!-- パスポートの PAGE 3 から開いたときだけ出す。もと居たページへ戻すための口。
@@ -5526,14 +5526,14 @@ html[data-sp-time="night"] .ches-btn-email { background:rgba(255,255,255,.06); b
       <h2 data-i18n="profile.title">あなたが渡した価値</h2>
       <p data-i18n="profile.desc">日常の記録ではなく、誰かへ届き、改善され、学びになった価値だけを残します。</p>
       <div class="eth-metric-list">
-        <div class="eth-metric"><span data-i18n="profile.helpedPeople">役に立った人</span><strong id="emuHelpedPeople">0</strong></div>
-        <div class="eth-metric"><span data-i18n="profile.helpfulCount">役に立った回数</span><strong id="emuHelpfulCount">0</strong></div>
-        <div class="eth-metric"><span data-i18n="profile.acceptedChange">採用したChange</span><strong id="emuAcceptedChangeCount">0</strong></div>
-        <div class="eth-metric"><span data-i18n="profile.changeGiven">改善に参加</span><strong id="emuChangeGivenCount">0</strong></div>
-        <div class="eth-metric"><span data-i18n="profile.changeAccepted">採用された改善</span><strong id="emuChangeAcceptedCount">0</strong></div>
-        <div class="eth-metric"><span data-i18n="profile.learned">受け取った学び</span><strong id="emuLearnedCount">0</strong></div>
-        <div class="eth-metric"><span data-i18n="profile.delivered">募集へ届けた知識</span><strong id="emuKnowledgeDeliveredCount">0</strong></div>
-        <div class="eth-metric"><span data-i18n="profile.elevated">学びへ昇華</span><strong id="emuElevatedCount" data-i18n="profile.noRecord">記録なし</strong></div>
+        <div class="eth-metric"><span data-i18n="profile.helpedPeople">役に立った人</span><strong id="emuHelpedPeople">—</strong></div>
+        <div class="eth-metric"><span data-i18n="profile.helpfulCount">役に立った回数</span><strong id="emuHelpfulCount">—</strong></div>
+        <div class="eth-metric"><span data-i18n="profile.acceptedChange">採用したChange</span><strong id="emuAcceptedChangeCount">—</strong></div>
+        <div class="eth-metric"><span data-i18n="profile.changeGiven">改善に参加</span><strong id="emuChangeGivenCount">—</strong></div>
+        <div class="eth-metric"><span data-i18n="profile.changeAccepted">採用された改善</span><strong id="emuChangeAcceptedCount">—</strong></div>
+        <div class="eth-metric"><span data-i18n="profile.learned">受け取った学び</span><strong id="emuLearnedCount">—</strong></div>
+        <div class="eth-metric"><span data-i18n="profile.delivered">募集へ届けた知識</span><strong id="emuKnowledgeDeliveredCount">—</strong></div>
+        <div class="eth-metric"><span data-i18n="profile.elevated">学びへ昇華</span><strong id="emuElevatedCount">—</strong></div>
       </div>
     </aside>
     <div class="eth-profile-main">
@@ -5563,7 +5563,7 @@ html[data-sp-time="night"] .ches-btn-email { background:rgba(255,255,255,.06); b
         <div class="eth-wallet-badges" id="emuWalletBadges"></div>
         <div class="eth-wallet-balance">
           <span class="eth-wallet-label" data-i18n="wallet.label">使えるEMUER</span>
-          <div class="eth-wallet-amount"><strong id="emuWalletBalance">0</strong><span data-i18n="unit.emuer">EMUER</span></div>
+          <div class="eth-wallet-amount"><strong id="emuWalletBalance">—</strong><span data-i18n="unit.emuer">EMUER</span></div>
           <!-- 数値や住所を含む文は語順が言語ごとに変わるため、JS側で emuT() を使って組み立てる -->
           <p class="eth-wallet-pending" id="emuWalletPendingLine"><b id="emuWalletPending" hidden>0</b></p>
           <p class="eth-wallet-pending" id="emuWalletConvertNote"></p>
@@ -15056,7 +15056,8 @@ function _setEmuHomeTab(activeId) {
 function emuSideNavSync() {
   const from = function (id) { const el = document.getElementById(id); return el ? el.textContent.trim() : ''; };
   const set  = function (id, v) { const el = document.getElementById(id); if (el && el.textContent !== v) el.textContent = v; };
-  set('esnBalance', from('emuTodayBalance') || '0');
+  /* 11/28 オーナー：「読み込めてないとき0はやめて」。読めていないあいだは「—」 */
+  set('esnBalance', from('emuTodayBalance') || '—');
   /* 名前は #emuAccountName から取っていたが、あそこはアカウントメニューを
      開いたときにしか埋まらない。開くまで「ゲスト」のままになっていた。
      名前はパスポート（ches_accounts）を元にする。 */
@@ -16010,23 +16011,28 @@ const EMUER_DISTRIBUTOR_ADDRESS = '0x1C156b6a8CaA6772430edA2cBB0d20CF41B9CFE4';
 async function _emuReadBalancePair() {
   const addr = window.connectedAccount || localStorage.getItem('emuWallet') || '';
   const isChes = _emuIsChesWallet();
-  let real = 0;
+  let real = 0, realKnown = false;
   if (addr && !isChes) {
     const onchain = await _emuOnchainBalance(addr);
-    if (onchain !== null) real = onchain;
+    if (onchain !== null) { real = onchain; realKnown = true; }
     else {
       const cached = parseFloat(localStorage.getItem(_EMU_ONCHAIN_BAL_KEY + addr.toLowerCase()));
       real = isNaN(cached) ? 0 : cached;
+      realKnown = !isNaN(cached);
     }
   }
   let unconverted = await _emuOffchainBalance(addr);
   if (unconverted === null) unconverted = Math.max(0, Number(pendingEmuer) || 0);
-  return { real: real, unconverted: unconverted, isChes: isChes };
+  /* 実EMUERを鎖からも控えからも読めなかったときは、分からない（0 ではない） */
+  const failed = !addr || (!isChes && !realKnown);
+  return { real: real, unconverted: unconverted, isChes: isChes, failed: failed };
 }
 
 /* 「220（50）」形式。かっこ内はまだ実EMUERに換えていない分。0 のときは省略。
    かっこは日本語・中国語では全角、それ以外は半角にする。 */
 function _emuFormatBalancePair(pair) {
+  /* 読めなかったときは 0 と出さない（0 だと、EMUERが消えたように見える）。11/28 */
+  if (pair && pair.failed) return '—';
   const locale = typeof emuLocaleTag === 'function' ? emuLocaleTag() : 'ja-JP';
   const lang = typeof getEmuLang === 'function' ? getEmuLang() : 'ja';
   const wide = (lang === 'ja' || lang === 'zh');
@@ -24101,7 +24107,7 @@ async function loadEmuWalletCard() {
       pendingLine.textContent = emuT('wallet.pendingLine', { n: amount });
       pendingLine.style.display = pair.unconverted > 0 ? '' : 'none';
     }
-  } catch (e) { balanceEl.textContent = '0'; }
+  } catch (e) { balanceEl.textContent = '—'; }
 
   // 実EMUERの配布元アドレス（説明用）と、CHESアドレスの表示
   const convertNote = document.getElementById('emuWalletConvertNote');
@@ -24614,13 +24620,16 @@ async function loadEmuValueProfile() {
       const changeSnap = await window.fbLib.getDocs(changeQ);
       changeSnap.forEach(function(doc) { changesGiven.push(doc.data()); });
     } catch (changeError) {
+      changesGiven = null;
       console.warn('価値プロフィール: Change履歴取得失敗', changeError.message);
     }
+    /* 読めなかったときは「—」（0 ではない）。11/28 */
     const givenEl = document.getElementById('emuChangeGivenCount');
-    if (givenEl) givenEl.textContent = emuT('unit.times', { n: changesGiven.length });
-    const acceptedGiven = changesGiven.filter(function(change) { return change.status === 'accepted'; });
+    if (givenEl) givenEl.textContent = changesGiven ? emuT('unit.times', { n: changesGiven.length }) : '—';
+    const acceptedGiven = (changesGiven || []).filter(function(change) { return change.status === 'accepted'; });
     const acceptedGivenEl = document.getElementById('emuChangeAcceptedCount');
-    if (acceptedGivenEl) acceptedGivenEl.textContent = emuT('unit.items', { n: acceptedGiven.length });
+    if (acceptedGivenEl) acceptedGivenEl.textContent = changesGiven ? emuT('unit.items', { n: acceptedGiven.length }) : '—';
+    changesGiven = changesGiven || [];
 
     let learnedPosts = [];
     try {
@@ -24635,10 +24644,12 @@ async function loadEmuValueProfile() {
         learnedPosts.push({ title:p.title || emuT('value.untitled'), tags:p.tags || '' });
       });
     } catch (learnedError) {
+      learnedPosts = null;
       console.warn('価値プロフィール: 学び履歴取得失敗', learnedError.message);
     }
     const learnedEl = document.getElementById('emuLearnedCount');
-    if (learnedEl) learnedEl.textContent = emuT('unit.items', { n: learnedPosts.length });
+    if (learnedEl) learnedEl.textContent = learnedPosts ? emuT('unit.items', { n: learnedPosts.length }) : '—';
+    learnedPosts = learnedPosts || [];
 
     let deliveredKnowledge = [];
     try {
@@ -24650,10 +24661,12 @@ async function loadEmuValueProfile() {
       const answerSnap = await window.fbLib.getDocs(answerQ);
       answerSnap.forEach(function(doc) { deliveredKnowledge.push(doc.data()); });
     } catch (answerError) {
+      deliveredKnowledge = null;
       console.warn('価値プロフィール: 募集回答履歴取得失敗', answerError.message);
     }
     const deliveredEl = document.getElementById('emuKnowledgeDeliveredCount');
-    if (deliveredEl) deliveredEl.textContent = emuT('unit.items', { n: deliveredKnowledge.length });
+    if (deliveredEl) deliveredEl.textContent = deliveredKnowledge ? emuT('unit.items', { n: deliveredKnowledge.length }) : '—';
+    deliveredKnowledge = deliveredKnowledge || [];
 
     /* 返り道（11/9）：自分の知識が SchoolPark で実際に試された記録。いちばん上に出す。
        数はサーバーがまとめて数えたもの（Firestore は読まない）。6秒で返らなければ出さない。 */

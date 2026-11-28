@@ -661,22 +661,22 @@ if (window.top === window.self) window.location.replace('/');
               <sc-if value="{{ cur.showSteps }}">
                 <div style="background:#FBF9F3; border:1px solid rgba(20,19,16,.12); border-radius:12px; padding:{{ L.cardPad }}; display:flex; flex-direction:column; gap:14px">
                   <div style="font-size:15px; font-weight:700">完走までの手順</div>
-                  <div style="display:grid; grid-template-columns:28px 1fr; gap:10px; font-size:13px; line-height:1.85">
-                    <div style="font-family:Inter,sans-serif; font-size:11px; color:var(--emu-brand-strong); padding-top:2px">1</div>
-                    <div style="color:#3B382F"><b>このクエストを受ける</b></div>
+                  <div style="display:grid; grid-template-columns:28px 1fr; gap:10px; font-size:13px; line-height:1.85; padding:6px 8px; margin:0 -8px; border-radius:8px; background:{{ cur.stepTake.rowBg }}">
+                    <div style="display:grid; place-items:center; width:24px; height:24px; border-radius:50%; font-family:Inter,sans-serif; font-size:11px; font-weight:700; background:{{ cur.stepTake.numBg }}; color:{{ cur.stepTake.numFg }}; border:1px solid {{ cur.stepTake.numFg }}">{{ cur.stepTake.num }}</div>
+                    <div style="color:#3B382F"><b>このクエストを受ける</b> <span style="display:{{ cur.stepTake.markShow }}; font-size:11px; color:#2F7D4F; font-weight:700; margin-left:6px">{{ cur.stepTake.mark }}</span><span style="display:{{ cur.stepTake.nextShow }}; font-size:11px; color:#C2703D; font-weight:700; margin-left:6px">← 次はここ</span></div>
                   </div>
                   <sc-for list="{{ cur.reportSteps }}" as="s" hint-placeholder-count="4">
-                    <div style="display:grid; grid-template-columns:28px 1fr; gap:10px; font-size:13px; line-height:1.85">
-                      <div style="font-family:Inter,sans-serif; font-size:11px; color:var(--emu-brand-strong); padding-top:2px">{{ s.no }}</div>
+                    <div style="display:grid; grid-template-columns:28px 1fr; gap:10px; font-size:13px; line-height:1.85; padding:6px 8px; margin:0 -8px; border-radius:8px; background:{{ s.rowBg }}">
+                      <div style="display:grid; place-items:center; width:24px; height:24px; border-radius:50%; font-family:Inter,sans-serif; font-size:11px; font-weight:700; background:{{ s.numBg }}; color:{{ s.numFg }}; border:1px solid {{ s.numFg }}">{{ s.num }}</div>
                       <div style="display:flex; flex-direction:column; gap:2px; min-width:0">
-                        <div style="color:#3B382F"><b>{{ s.head }}</b> <span style="display:{{ s.markShow }}; font-size:11px; color:var(--emu-brand-strong); font-weight:700; margin-left:6px">{{ s.mark }}</span></div>
+                        <div style="color:#3B382F"><b>{{ s.head }}</b> <span style="display:{{ s.markShow }}; font-size:11px; color:#2F7D4F; font-weight:700; margin-left:6px">{{ s.mark }}</span><span style="display:{{ s.nextShow }}; font-size:11px; color:#C2703D; font-weight:700; margin-left:6px">← 次はここ</span></div>
                         <div style="color:#6E695C; white-space:pre-wrap; overflow-wrap:anywhere">{{ s.ask }}</div>
                       </div>
                     </div>
                   </sc-for>
-                  <div style="display:grid; grid-template-columns:28px 1fr; gap:10px; font-size:13px; line-height:1.85">
-                    <div style="font-family:Inter,sans-serif; font-size:11px; color:var(--emu-brand-strong); padding-top:2px">4</div>
-                    <div style="color:#3B382F"><b>運営が確認して完走</b></div>
+                  <div style="display:grid; grid-template-columns:28px 1fr; gap:10px; font-size:13px; line-height:1.85; padding:6px 8px; margin:0 -8px; border-radius:8px; background:{{ cur.stepDone.rowBg }}">
+                    <div style="display:grid; place-items:center; width:24px; height:24px; border-radius:50%; font-family:Inter,sans-serif; font-size:11px; font-weight:700; background:{{ cur.stepDone.numBg }}; color:{{ cur.stepDone.numFg }}; border:1px solid {{ cur.stepDone.numFg }}">{{ cur.stepDone.num }}</div>
+                    <div style="color:#3B382F"><b>運営が確認して完走</b> <span style="display:{{ cur.stepDone.markShow }}; font-size:11px; color:{{ cur.stepDone.markColor }}; font-weight:700; margin-left:6px">{{ cur.stepDone.mark }}</span><span style="display:{{ cur.stepDone.nextShow }}; font-size:11px; color:#C2703D; font-weight:700; margin-left:6px">← 次はここ</span></div>
                   </div>
                   <div style="font-size:12px; line-height:1.8; color:#6E695C; padding-top:10px; border-top:1px solid rgba(20,19,16,.1)">出すのは2回です。はじめに「① 何をやるか」、終わったら「② つまずいたところと学び」。②を出すと知恵カードも一緒に置かれます。</div>
                 </div>
@@ -2300,6 +2300,27 @@ class Component extends DCLogic {
       tryOne: () => { try { window.parent.openSpTryForm(e.id, this); } catch (err) {} },
       /* 完走までの手順。#000（原点）には報告も完走も無いので出さない。 */
       showSteps: !e.isFounder && !!(e.reportSteps && e.reportSteps.length),
+      /* 11/28 オーナー：「受けたときとかもチェック出して、わかりやすいようにして。他のクエストでもね」。
+         手順の4つ（受ける・①・②・完走）すべてに ✓ を付け、次にやるところに「次はここ」を出す。どのクエストも同じ */
+      ...((() => {
+        const rs = e.reportSteps || [];
+        const done = [!!e.iTook].concat(rs.map(x => x.markShow === 'inline'), [!!e.iDone]);
+        const next = done.findIndex(x => !x);
+        const look = (i, no) => ({
+          num: done[i] ? '✓' : no,
+          numBg: done[i] ? '#2F7D4F' : i === next ? '#C2703D' : 'transparent',
+          numFg: done[i] || i === next ? '#fff' : 'var(--emu-brand-strong)',
+          rowBg: i === next ? 'rgba(194,112,61,.09)' : done[i] ? 'rgba(47,125,79,.06)' : 'transparent',
+          nextShow: i === next ? 'inline' : 'none'
+        });
+        const last = done.length - 1, waiting = !e.iDone && done.slice(1, last).every(Boolean) && rs.length > 0;
+        return {
+          reportSteps: rs.map((x, i) => Object.assign({}, x, look(i + 1, x.no))),
+          stepTake: Object.assign(look(0, '1'), { mark: '✓ 受けた', markShow: done[0] ? 'inline' : 'none' }),
+          stepDone: Object.assign(look(last, String(last + 1)), { mark: e.iDone ? '✓ 完走' : '運営の確認待ち', markShow: e.iDone || waiting ? 'inline' : 'none',
+            markColor: e.iDone ? '#2F7D4F' : '#9A6A2B' })
+        };
+      })()),
       logLead: e.logLead || '今日やったことを書く',
       /* 1枚で出せるクエストでは、こちらは「1つずつ書く」入口。日を分けて出すクエストでは、こちらが本来の入口 */
       logSplitLead: e.oneSheet === false ? 'はじめに ① 何をやるかを書き、終わったら ② つまずいたところと学びを出します' : '分けて出す（画像を添えるときも）：' + (e.logLead || '今日やったことを書く'),

@@ -235,30 +235,35 @@
     }
     var res = job.result || {}, items = (res.results || []).slice(0, 5);
     if (!items.length) { say('見つからなかったよ🧊（作り話の候補は出さないよ）言い方を変えて、もう一度頼んでみてね。'); return; }
-    var msg = say('持ってきたよ🧊');
+    /* 11/28 オーナー：「イマイチ」。前は全部のカードに同じ決まり文句（AIが…選んだ公開資料です）を出し、
+       「次にやること」で同じ資料をもう一度並べていた。いまは：
+       - カードごとに、その資料の種類（Knowledge Lab など）と、その資料の要約を出す
+       - 次にやることは、同じ資料のカードの中に1行で添える（同じカードを2回出さない）
+       - 決まり文句は最後に1回だけ（AIは候補を選ぶだけで、文は作らない。作り話を出さないため） */
+    var KIND = { knowledge: 'Knowledge Lab', knowledge_lab: 'Knowledge Lab', knowledge_research: 'Knowledge Lab', knowledge_text: 'Knowledge Text',
+      guild: 'ギルド', quest: 'クエスト', service_guide: '使い方', city_product: 'City', emuer_guide: 'EMUER', passport_guide: 'Passport', activity_guide: '遊び' };
+    var keyOf = function (x) { return String(x.kind || '') + ':' + String(x.id || ''); };
+    var stepFor = {};
+    (res.steps || []).forEach(function (s) { (s.references || []).forEach(function (k) { if (!stepFor[k]) stepFor[k] = s.text; }); });
+    var short = function (v, n) { v = String(v || '').replace(/\s+/g, ' ').trim(); return v.length > n ? v.slice(0, n) + '…' : v; };
+    var msg = say(items.length + 'つ持ってきたよ🧊');
     var b = bubbleOf(msg);
     items.forEach(function (r) {
       var card = document.createElement('div'); card.className = 'rq-card';
+      if (KIND[r.kind]) { var k = document.createElement('span'); k.className = 'rq-kind'; k.textContent = KIND[r.kind]; card.appendChild(k); }
       var t = document.createElement('b'); t.textContent = r.title || '';
-      var p = document.createElement('div'); p.className = 'rq-why'; p.textContent = r.reason || '';
-      card.appendChild(t); card.appendChild(p);
+      card.appendChild(t);
+      var sum = short(r.evidence, 90);
+      if (sum) { var p = document.createElement('div'); p.className = 'rq-why'; p.textContent = sum; card.appendChild(p); }
+      var next = stepFor[keyOf(r)];
+      if (next) { var n = document.createElement('div'); n.className = 'rq-next'; n.textContent = '次にやること：' + next; card.appendChild(n); }
       if (r.target && window.ReizoRequestTargets && window.ReizoRequestTargets.allowed(r.target))
         card.appendChild(button('開く →', 'rq-open', function () { openTarget(r.target); }));
       b.appendChild(card);
     });
-    var steps = (res.steps || []).slice(0, 3);
-    if (steps.length) {
-      var h = document.createElement('div'); h.className = 'rq-head'; h.textContent = '次にやること'; b.appendChild(h);
-      steps.forEach(function (s) {
-        var card = document.createElement('div'); card.className = 'rq-card';
-        var t = document.createElement('b'); t.textContent = s.title || '';
-        var p = document.createElement('div'); p.className = 'rq-why'; p.textContent = s.text || '';
-        card.appendChild(t); card.appendChild(p);
-        if (s.target && window.ReizoRequestTargets && window.ReizoRequestTargets.allowed(s.target))
-          card.appendChild(button('開く →', 'rq-open', function () { openTarget(s.target); }));
-        b.appendChild(card);
-      });
-    }
+    var note = document.createElement('div'); note.className = 'rq-note';
+    note.textContent = 'AIは、頼まれた目的に近い公開資料を選ぶだけで、文は作らないよ（作り話を出さないため）。中身は開いて確かめてね。';
+    b.appendChild(note);
     scroll();
   }
 
@@ -276,7 +281,9 @@
     '.rq-card b{display:block;color:#f4d27a}',
     '.rq-why{margin-top:2px;font-size:13px;line-height:1.6;white-space:pre-wrap}',
     '.rq-card .rq-open{margin-top:6px;width:auto;padding:4px 12px;font-size:12px}',
-    '.rq-head{margin-top:12px;font-weight:800;color:#f4d27a}'
+    '.rq-head{margin-top:12px;font-weight:800;color:#f4d27a}',
+    '.rq-kind{display:inline-block;margin-bottom:3px;padding:1px 8px;border-radius:999px;border:1px solid rgba(212,168,67,.45);font-size:11px;color:#e8c46a}',
+    '.rq-next{margin-top:4px;font-size:12px;line-height:1.6;color:#d9c79a}'
   ].join('\n');
   (document.head || document.documentElement).appendChild(st);
 
