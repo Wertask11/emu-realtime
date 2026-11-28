@@ -64,9 +64,11 @@
         var card = document.querySelector(c[0]);
         if (card && root.contains(card)) slot(card, 'spi-card-art', c[1], card.querySelector('h3'));
       });
+      /* 11/28 オーナー：知識を探すの下の帯の絵は要らない（上の「知識を試す →」の札も外したので、そのワンポイントも出さない） */
       if (kind === 'search') {
-        var entry = root.querySelector('.emu-practice-entry');
-        if (entry) slot(entry, 'spi-onepoint', 'onepoint-try', entry.firstChild);
+        var old = root.querySelector(':scope > .spi-band');
+        if (old) old.remove();
+        return;
       }
       band(root, kind);
     });

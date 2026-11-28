@@ -36,6 +36,9 @@
     }, function () { delete cache[id]; });
   }
   function snippet(text, n) { var t = String(text || '').replace(/\s+/g, ' ').trim(); return t.length > n ? t.slice(0, n) + '…' : t; }
+  /* 11/28 オーナー：「引用の時はタイトルいらない」。題名の欄は出さない。一覧・検索のために、本文の1行目（40字まで）を題名として残し、
+     カードでは出さない（題名が本文の1行目と同じなら隠す） */
+  function autoTitle(body) { var first = String(body || '').split('\n').map(function (l) { return l.trim(); }).filter(Boolean)[0] || ''; return first.length > 40 ? first.slice(0, 40) + '…' : first; }
 
   /* ── カードに足す ── */
   function quoteBox(id) {
@@ -55,6 +58,7 @@
       var id = postIdOf(card);
       if (!id) return;
       var p = inList(id) || {};
+      if (p.quotePostId && p.title && p.title === autoTitle(p.body)) { var h = card.querySelector('h3'); if (h && !h.hidden) h.hidden = true; }
       if (!card.hasAttribute('data-links-ready')) {
         card.setAttribute('data-links-ready', '');
         var actions = card.querySelector('.actions');
@@ -85,6 +89,9 @@
     var form = document.getElementById('composeForm');
     if (!form) return;
     var box = form.querySelector('[data-link-preview]');
+    var title = document.getElementById('title'), field = title && title.closest ? title.closest('.field') : null;
+    if (title) title.required = !link;
+    if (field) field.hidden = !!link;
     if (!link) { if (box) box.remove(); return; }
     if (!box) {
       box = document.createElement('div'); box.setAttribute('data-link-preview', ''); box.className = 'lk-preview';
@@ -104,7 +111,7 @@
     if (!composer || !composer.classList.contains('open')) { if (typeof resetComposer === 'function') resetComposer(); openComposer(); }
     link = { id: p.id, title: p.title || '', name: nameOf(p) };
     preview();
-    var focus = document.getElementById('title');
+    var focus = document.getElementById('body');
     if (focus) setTimeout(function () { try { focus.focus(); } catch (_) {} }, 60);
   }
   function clearLink() { link = null; preview(); }
@@ -114,7 +121,10 @@
     var basePayload = window.payload;
     window.payload = function () {
       var d = basePayload.apply(this, arguments);
-      if (link && d) d.quotePostId = link.id;
+      if (link && d) {
+        d.quotePostId = link.id;
+        if (!d.title) d.title = autoTitle(d.body);
+      }
       return d;
     };
   }

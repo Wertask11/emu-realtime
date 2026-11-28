@@ -40,7 +40,8 @@ test('公開するとき：引用元が本当にある投稿かを確かめて�
 test('知識を読む：引用のボタンで、送る中身に引用元の ID が付く。閉じたら外れる。ログインしていなければ付けない', () => {
   assert.ok(KNOW.includes('<script src="/emu-post-links.js" defer></script>'));
   const els = {};
-  const el = (id) => els[id] || (els[id] = { id, value: '', required: true, placeholder: '題名', dataset: {}, classList: { contains: () => false }, focus() {} });
+  const field = { hidden: false };
+  const el = (id) => els[id] || (els[id] = { id, value: '', required: true, placeholder: '題名', dataset: {}, classList: { contains: () => false }, focus() {}, closest: () => field });
   const ctx = {
     state: { posts: [{ id: 'p1', title: '元の知識', body: '本文', address: '0xa' }], account: '0xme', authors: {} },
     author: (p) => ({ name: p.id === 'p1' ? 'たろう' : '?' }),
@@ -61,9 +62,15 @@ test('知識を読む：引用のボタンで、送る中身に引用元の ID �
   vm.runInNewContext(LINKS, ctx);
   const click = (attr, id) => ctx.onClick({ preventDefault() {}, target: { closest: (sel) => sel === '[' + attr + ']' ? { getAttribute: () => id } : null } });
   click('data-link-quote', 'p1');
-  assert.deepEqual(JSON.parse(JSON.stringify(ctx.payload())), { title: '', body: '返信の本文', quotePostId: 'p1' });
+  /* 11/28 オーナー：「引用の時はタイトルいらない」。題名の欄は隠し、本文の1行目を題名として残す（カードでは出さない） */
+  assert.equal(field.hidden, true, '題名の欄は出さない');
+  assert.equal(el('title').required, false);
+  assert.deepEqual(JSON.parse(JSON.stringify(ctx.payload())), { title: '返信の本文', body: '返信の本文', quotePostId: 'p1' });
+  assert.ok(LINKS.includes("if (p.quotePostId && p.title && p.title === autoTitle(p.body))"), 'カードでは自動の題名を隠す');
   ctx.resetComposer();
   assert.equal(ctx.payload().quotePostId, undefined, '書く画面を閉じたら外れる');
+  assert.equal(field.hidden, false, '外したら題名の欄が戻る');
+  assert.equal(el('title').required, true);
   ctx.state.account = '';
   click('data-link-quote', 'p1');
   assert.equal(ctx.payload().quotePostId, undefined, 'ログインしていなければ付けない');
